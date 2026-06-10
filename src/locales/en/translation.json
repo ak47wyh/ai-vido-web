@@ -1,0 +1,64 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "characters": "Characters",
+    "backgrounds": "Backgrounds",
+    "workbench": "Story Workbench"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "welcome": "Welcome to AI Video Studio",
+    "getStarted": "Get Started",
+    "description": "Start by defining your Characters and Backgrounds. Then head over to the Story Workbench to split your script into segments and generate video clips."
+  },
+  "character": {
+    "title": "Character Management",
+    "subtitle": "Define actors for your video segments",
+    "newBtn": "New Character",
+    "createTitle": "Create New Character",
+    "nameLabel": "Character Name (Used to match in story text)",
+    "namePlaceholder": "e.g. John Doe",
+    "appearanceLabel": "Appearance Prompt",
+    "appearancePlaceholder": "A tall man with dark hair...",
+    "personalityLabel": "Personality Prompt",
+    "personalityPlaceholder": "Brave, always smiling...",
+    "imageLabel": "Reference Image URL (Optional)",
+    "imagePlaceholder": "https://...",
+    "saveBtn": "Save Character",
+    "cancelBtn": "Cancel",
+    "appearance": "Appearance:",
+    "empty": "No characters created yet."
+  },
+  "background": {
+    "title": "Background Management",
+    "subtitle": "Create stunning environments for your stories",
+    "newBtn": "New Background",
+    "createTitle": "Create New Background",
+    "nameLabel": "Background Name (Identifier)",
+    "namePlaceholder": "e.g. Cyberpunk City",
+    "envLabel": "Environment Prompt",
+    "envPlaceholder": "Neon lights, raining, dark alleyway...",
+    "imageLabel": "Reference Image URL (Optional)",
+    "imagePlaceholder": "https://...",
+    "saveBtn": "Save Background",
+    "cancelBtn": "Cancel",
+    "environment": "Environment:",
+    "empty": "No backgrounds created yet."
+  },
+  "workbench": {
+    "newStory": "New Story",
+    "storyTitlePlaceholder": "Story Title",
+    "storyContentPlaceholder": "Paste your long story here...",
+    "splitBtn": "Split into Segments",
+    "splitting": "Splitting...",
+    "yourStories": "Your Stories",
+    "status": "Status",
+    "segmentsTitle": "Story Segments",
+    "selectStory": "Select a story to view its segments.",
+    "noSegments": "No segments found for this story.",
+    "selectBg": "-- Select Background --",
+    "generateBtn": "Generate Video",
+    "generating": "Generating...",
+    "splitFailed": "Failed to split story."
+  }
+}

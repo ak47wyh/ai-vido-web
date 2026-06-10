@@ -1,0 +1,64 @@
+{
+  "nav": {
+    "dashboard": "控制台",
+    "characters": "角色库",
+    "backgrounds": "背景库",
+    "workbench": "故事工作台"
+  },
+  "dashboard": {
+    "title": "控制台",
+    "welcome": "欢迎来到 AI 视频创作工作室",
+    "getStarted": "开始使用",
+    "description": "首先定义你的角色和背景。然后前往“故事工作台”，将你的剧本拆分为多个片段并生成视频短片。"
+  },
+  "character": {
+    "title": "角色管理",
+    "subtitle": "为你的视频分镜定义演员",
+    "newBtn": "新建角色",
+    "createTitle": "创建新角色",
+    "nameLabel": "角色名称 (用于在故事文本中匹配)",
+    "namePlaceholder": "例如：张三",
+    "appearanceLabel": "外貌提示词",
+    "appearancePlaceholder": "一个留着黑发的高个子男人...",
+    "personalityLabel": "性格提示词",
+    "personalityPlaceholder": "勇敢，总是面带微笑...",
+    "imageLabel": "参考图片 URL (可选)",
+    "imagePlaceholder": "https://...",
+    "saveBtn": "保存角色",
+    "cancelBtn": "取消",
+    "appearance": "外貌：",
+    "empty": "暂无角色。"
+  },
+  "background": {
+    "title": "背景管理",
+    "subtitle": "为你的故事创造震撼的环境",
+    "newBtn": "新建背景",
+    "createTitle": "创建新背景",
+    "nameLabel": "背景名称 (标识符)",
+    "namePlaceholder": "例如：赛博朋克城市",
+    "envLabel": "环境提示词",
+    "envPlaceholder": "霓虹灯，下着雨，黑暗的小巷...",
+    "imageLabel": "参考图片 URL (可选)",
+    "imagePlaceholder": "https://...",
+    "saveBtn": "保存背景",
+    "cancelBtn": "取消",
+    "environment": "环境：",
+    "empty": "暂无背景。"
+  },
+  "workbench": {
+    "newStory": "新建故事",
+    "storyTitlePlaceholder": "故事标题",
+    "storyContentPlaceholder": "在此粘贴长篇故事...",
+    "splitBtn": "拆分为分镜",
+    "splitting": "拆分中...",
+    "yourStories": "我的故事",
+    "status": "状态",
+    "segmentsTitle": "故事分镜",
+    "selectStory": "选择一个故事以查看其分镜。",
+    "noSegments": "该故事暂无分镜。",
+    "selectBg": "-- 选择背景 --",
+    "generateBtn": "生成视频",
+    "generating": "生成中...",
+    "splitFailed": "拆分故事失败。"
+  }
+}
