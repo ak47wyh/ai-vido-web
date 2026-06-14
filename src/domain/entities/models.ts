@@ -1,14 +1,24 @@
+export interface StorySpace {
+  id: string;
+  name: string;
+  description: string;
+  createdAt: number;
+}
+
 export interface Character {
   id: string;
+  spaceId: string;
   name: string;
   appearancePrompt: string;
   personalityPrompt: string;
+  characterBackground: string;
   referenceImageUrl?: string;
   createdAt: number;
 }
 
 export interface Background {
   id: string;
+  spaceId: string;
   name: string;
   environmentPrompt: string;
   referenceImageUrl?: string;
@@ -19,6 +29,7 @@ export type StoryStatus = 'DRAFT' | 'SPLIT';
 
 export interface Story {
   id: string;
+  spaceId: string;
   title: string;
   originalText: string;
   status: StoryStatus;
@@ -30,7 +41,7 @@ export interface StorySegment {
   storyId: string;
   sequenceOrder: number;
   content: string;
-  mentionedCharacters: string[]; // Array of Character IDs
+  mentionedCharacters: string[];
   selectedBackgroundId?: string;
 }
 

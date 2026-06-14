@@ -1,10 +1,10 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { VideoTask } from '../entities/models';
-import type { 
-  IVideoTaskRepository, 
-  IVideoGeneratorPort, 
-  IStorySegmentRepository, 
-  ICharacterRepository, 
+import type {
+  IVideoTaskRepository,
+  IVideoGeneratorPort,
+  IStorySegmentRepository,
+  ICharacterRepository,
   IBackgroundRepository,
   VideoPromptContext
 } from '../ports/OutboundPorts';
@@ -15,6 +15,8 @@ export class VideoGenerationService {
   characterRepo: ICharacterRepository;
   backgroundRepo: IBackgroundRepository;
   videoGeneratorPort: IVideoGeneratorPort;
+
+  private activePollers = new Map<string, ReturnType<typeof setInterval>>();
 
   constructor(
     videoTaskRepo: IVideoTaskRepository,
@@ -30,11 +32,11 @@ export class VideoGenerationService {
     this.videoGeneratorPort = videoGeneratorPort;
   }
 
-
   async generateVideo(segmentId: string, storyId: string, targetPlatform: string = 'MINIMAX'): Promise<VideoTask> {
     const segments = await this.segmentRepo.findByStoryId(storyId);
     const segment = segments.find(s => s.id === segmentId);
     if (!segment) throw new Error('Segment not found');
+    if (!segment.selectedBackgroundId) throw new Error('Please select a background for this segment before generating video');
 
     const task: VideoTask = {
       id: uuidv4(),
@@ -62,54 +64,72 @@ export class VideoGenerationService {
       actionContent: segment.content,
       characters,
       background,
-      videoStyle: 'default' // could be dynamic
+      videoStyle: 'default'
     };
 
-    // Note: In a real system, you might dispatch an event to a queue or background worker.
-    // Here in Local-First, we just trigger it asynchronously.
     this.processTask(task, context).catch(console.error);
 
     return task;
+  }
+
+  async getLatestTaskForSegment(segmentId: string): Promise<VideoTask | null> {
+    return this.videoTaskRepo.findLatestBySegmentId(segmentId);
+  }
+
+  /** Cancel all active polling intervals (call on app teardown) */
+  cancelAllPolling(): void {
+    for (const [taskId, interval] of this.activePollers) {
+      clearInterval(interval);
+      this.activePollers.delete(taskId);
+    }
   }
 
   private async processTask(task: VideoTask, context: VideoPromptContext) {
     try {
       await this.videoTaskRepo.updateStatus(task.id, 'PROCESSING');
       const externalTaskId = await this.videoGeneratorPort.submitVideoTask(context);
-      
-      // Save external task ID
+
       task.externalTaskId = externalTaskId;
       await this.videoTaskRepo.save(task);
 
-      // Start polling
       this.pollTaskStatus(task.id, externalTaskId);
-
-    } catch (error: any) {
-      await this.videoTaskRepo.updateStatus(task.id, 'FAILED', undefined, error.message || 'Submit failed');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Submit failed';
+      await this.videoTaskRepo.updateStatus(task.id, 'FAILED', undefined, message);
     }
   }
 
-  private async pollTaskStatus(taskId: string, externalTaskId: string) {
+  private pollTaskStatus(taskId: string, externalTaskId: string) {
+    // Clear any existing poller for this task
+    const existing = this.activePollers.get(taskId);
+    if (existing) clearInterval(existing);
+
     const pollInterval = 3000;
-    const maxRetries = 60; // 3 mins
+    const maxRetries = 60;
     let retries = 0;
 
     const interval = setInterval(async () => {
       try {
         retries++;
         const result = await this.videoGeneratorPort.queryTaskStatus(externalTaskId);
-        
+
         if (result.status === 'SUCCESS' || result.status === 'FAILED') {
           clearInterval(interval);
+          this.activePollers.delete(taskId);
           await this.videoTaskRepo.updateStatus(taskId, result.status, result.videoUrl, result.errorMessage);
         } else if (retries >= maxRetries) {
           clearInterval(interval);
+          this.activePollers.delete(taskId);
           await this.videoTaskRepo.updateStatus(taskId, 'FAILED', undefined, 'Polling timeout');
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Poll failed';
         clearInterval(interval);
-        await this.videoTaskRepo.updateStatus(taskId, 'FAILED', undefined, error.message || 'Poll failed');
+        this.activePollers.delete(taskId);
+        await this.videoTaskRepo.updateStatus(taskId, 'FAILED', undefined, message);
       }
     }, pollInterval);
+
+    this.activePollers.set(taskId, interval);
   }
 }

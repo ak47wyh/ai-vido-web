@@ -1,29 +1,47 @@
 import { v4 as uuidv4 } from 'uuid';
-import type { Story, StorySegment } from '../entities/models';
-import type { IStoryRepository, IStorySegmentRepository, ITextSplitterPort, ICharacterRepository } from '../ports/OutboundPorts';
+import type { Story, StorySegment, Character, Background } from '../entities/models';
+import type {
+  IStoryRepository,
+  IStorySegmentRepository,
+  ITextSplitterPort,
+  ICharacterRepository,
+  IVideoTaskRepository,
+  IBackgroundRepository,
+  IStoryBreakdownPort,
+  StoryBreakdownResult
+} from '../ports/OutboundPorts';
 
 export class StoryService {
   storyRepo: IStoryRepository;
   segmentRepo: IStorySegmentRepository;
   characterRepo: ICharacterRepository;
+  backgroundRepo: IBackgroundRepository;
   textSplitterPort: ITextSplitterPort;
+  storyBreakdownPort: IStoryBreakdownPort;
+  videoTaskRepo: IVideoTaskRepository;
 
   constructor(
     storyRepo: IStoryRepository,
     segmentRepo: IStorySegmentRepository,
     characterRepo: ICharacterRepository,
-    textSplitterPort: ITextSplitterPort
+    backgroundRepo: IBackgroundRepository,
+    textSplitterPort: ITextSplitterPort,
+    storyBreakdownPort: IStoryBreakdownPort,
+    videoTaskRepo: IVideoTaskRepository
   ) {
     this.storyRepo = storyRepo;
     this.segmentRepo = segmentRepo;
     this.characterRepo = characterRepo;
+    this.backgroundRepo = backgroundRepo;
     this.textSplitterPort = textSplitterPort;
+    this.storyBreakdownPort = storyBreakdownPort;
+    this.videoTaskRepo = videoTaskRepo;
   }
 
-
-  async createStory(title: string, originalText: string): Promise<Story> {
+  async createStory(title: string, originalText: string, spaceId: string): Promise<Story> {
     const story: Story = {
       id: uuidv4(),
+      spaceId,
       title,
       originalText,
       status: 'DRAFT',
@@ -37,14 +55,12 @@ export class StoryService {
     const story = await this.storyRepo.findById(storyId);
     if (!story) throw new Error('Story not found');
 
-    const characters = await this.characterRepo.findAll();
+    const characters = await this.characterRepo.findBySpaceId(story.spaceId);
     const characterNames = characters.map(c => c.name);
 
-    // Call LLM to split
     const drafts = await this.textSplitterPort.splitStoryToSegments(story.originalText, characterNames);
 
     const segments: StorySegment[] = drafts.map((draft, index) => {
-      // Map character names back to IDs
       const mentionedCharacterIds = draft.mentionedCharacters
         .map(name => characters.find(c => c.name === name)?.id)
         .filter((id): id is string => !!id);
@@ -58,8 +74,13 @@ export class StoryService {
       };
     });
 
-    // Save segments
-    await this.segmentRepo.deleteByStoryId(story.id);
+    const existingSegments = await this.segmentRepo.findByStoryId(story.id);
+    if (existingSegments.length > 0) {
+      const existingSegmentIds = existingSegments.map(s => s.id);
+      await this.videoTaskRepo.deleteBySegmentIds(existingSegmentIds);
+      await this.segmentRepo.deleteByStoryId(story.id);
+    }
+
     for (const segment of segments) {
       await this.segmentRepo.save(segment);
     }
@@ -68,6 +89,76 @@ export class StoryService {
     await this.storyRepo.save(story);
 
     return segments;
+  }
+
+  async breakdownStory(storyId: string): Promise<StoryBreakdownResult & { savedCharacterIds: string[]; savedBackgroundIds: string[] }> {
+    const story = await this.storyRepo.findById(storyId);
+    if (!story) throw new Error('Story not found');
+
+    const result = await this.storyBreakdownPort.breakdownStory(story.originalText);
+
+    const savedCharacterIds: string[] = [];
+    const characterNameToId = new Map<string, string>();
+    for (const draft of result.characters) {
+      const character: Character = {
+        id: uuidv4(),
+        spaceId: story.spaceId,
+        name: draft.name,
+        appearancePrompt: draft.appearancePrompt,
+        personalityPrompt: draft.personalityPrompt,
+        characterBackground: draft.characterBackground,
+        createdAt: Date.now()
+      };
+      await this.characterRepo.save(character);
+      savedCharacterIds.push(character.id);
+      characterNameToId.set(draft.name, character.id);
+    }
+
+    const savedBackgroundIds: string[] = [];
+    const backgroundNameToId = new Map<string, string>();
+    for (const draft of result.backgrounds) {
+      const background: Background = {
+        id: uuidv4(),
+        spaceId: story.spaceId,
+        name: draft.name,
+        environmentPrompt: draft.environmentPrompt,
+        createdAt: Date.now()
+      };
+      await this.backgroundRepo.save(background);
+      savedBackgroundIds.push(background.id);
+      backgroundNameToId.set(draft.name, background.id);
+    }
+
+    const existingSegments = await this.segmentRepo.findByStoryId(story.id);
+    if (existingSegments.length > 0) {
+      const existingSegmentIds = existingSegments.map(s => s.id);
+      await this.videoTaskRepo.deleteBySegmentIds(existingSegmentIds);
+      await this.segmentRepo.deleteByStoryId(story.id);
+    }
+
+    for (let i = 0; i < result.segments.length; i++) {
+      const draft = result.segments[i];
+      const mentionedCharacterIds = draft.mentionedCharacterNames
+        .map(name => characterNameToId.get(name))
+        .filter((id): id is string => !!id);
+
+      const selectedBackgroundId = backgroundNameToId.get(draft.suggestedBackgroundName);
+
+      const segment: StorySegment = {
+        id: uuidv4(),
+        storyId: story.id,
+        sequenceOrder: i,
+        content: draft.content,
+        mentionedCharacters: mentionedCharacterIds,
+        selectedBackgroundId
+      };
+      await this.segmentRepo.save(segment);
+    }
+
+    story.status = 'SPLIT';
+    await this.storyRepo.save(story);
+
+    return { ...result, savedCharacterIds, savedBackgroundIds };
   }
 
   async getSegments(storyId: string): Promise<StorySegment[]> {
@@ -82,5 +173,17 @@ export class StoryService {
       segment.selectedBackgroundId = backgroundId;
       await this.segmentRepo.save(segment);
     }
+  }
+
+  async deleteStory(storyId: string): Promise<void> {
+    const segments = await this.segmentRepo.findByStoryId(storyId);
+    const segmentIds = segments.map(s => s.id);
+    await this.videoTaskRepo.deleteBySegmentIds(segmentIds);
+    await this.segmentRepo.deleteByStoryId(storyId);
+    await this.storyRepo.delete(storyId);
+  }
+
+  async getAllStories(): Promise<Story[]> {
+    return this.storyRepo.findAll();
   }
 }

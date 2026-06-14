@@ -1,12 +1,21 @@
 import React from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { LayoutDashboard, Users, Image as ImageIcon, BookOpen } from 'lucide-react';
+import { LayoutDashboard, Users, Image as ImageIcon, BookOpen, Settings, FolderOpen } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../../adapters/outbound/repositories/DexieDatabase';
+import { useSpace } from '../contexts/SpaceContext';
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
 import './MainLayout.css';
 
 export const MainLayout: React.FC = () => {
   const { t } = useTranslation();
+  const spaces = useLiveQuery(() => db.storySpaces.toArray());
+  const { currentSpaceId, setCurrentSpaceId } = useSpace();
+
+  const handleSpaceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setCurrentSpaceId(e.target.value || null);
+  };
 
   return (
     <div className="layout-container">
@@ -14,6 +23,18 @@ export const MainLayout: React.FC = () => {
         <div className="sidebar-header">
           <div className="logo-glow"></div>
           <h2>AI Video Studio</h2>
+        </div>
+        <div style={{ marginBottom: '1.5rem' }}>
+          <select
+            className="form-select"
+            value={currentSpaceId ?? ''}
+            onChange={handleSpaceChange}
+            style={{ width: '100%' }}
+          >
+            {spaces?.map(space => (
+              <option key={space.id} value={space.id}>{space.name}</option>
+            ))}
+          </select>
         </div>
         <nav className="sidebar-nav" style={{ flex: 1 }}>
           <NavLink to="/" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} end>
@@ -32,9 +53,19 @@ export const MainLayout: React.FC = () => {
             <BookOpen size={20} />
             <span>{t('nav.workbench')}</span>
           </NavLink>
+          <NavLink to="/spaces" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+            <FolderOpen size={20} />
+            <span>{t('nav.spaces')}</span>
+          </NavLink>
         </nav>
-        <div style={{ marginTop: 'auto', paddingTop: '2rem' }}>
-          <LanguageSwitcher />
+        <div style={{ paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
+          <NavLink to="/settings" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+            <Settings size={20} />
+            <span>{t('nav.settings')}</span>
+          </NavLink>
+          <div style={{ marginTop: '0.5rem' }}>
+            <LanguageSwitcher />
+          </div>
         </div>
       </aside>
       <main className="main-content">

@@ -76,7 +76,8 @@ p {
   box-shadow: var(--shadow-md);
 }
 
-.glass-panel:hover {
+/* Only interactive panels should have hover effect */
+.glass-panel.interactive:hover {
   background: var(--bg-panel-hover);
   border-color: rgba(255, 255, 255, 0.2);
 }
@@ -203,4 +204,15 @@ p {
 #root {
   display: flex;
   min-height: 100vh;
+}
+
+/* Animations */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
