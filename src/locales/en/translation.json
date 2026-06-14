@@ -111,7 +111,17 @@
     "generateNarration": "Generate Narration",
     "generatingNarration": "Generating narration...",
     "narrationGenerated": "Narration generated",
-    "narrationFailed": "Narration generation failed"
+    "narrationFailed": "Narration generation failed",
+    "designVoice": "AI Design Voice",
+    "voiceDesignPromptLabel": "Voice Description",
+    "voiceDesignPromptPlaceholder": "e.g. Gentle female voice, slightly husky",
+    "voiceDesignPromptHint": "Describe the voice characteristics you want",
+    "voiceDesignPreviewLabel": "Preview Text",
+    "designVoiceBtn": "Design Voice",
+    "designingVoice": "Designing...",
+    "designVoiceSuccess": "Voice designed successfully",
+    "designVoiceFailed": "Voice design failed",
+    "previewVoice": "Preview"
   },
   "background": {
     "title": "Background Management",
@@ -297,7 +307,31 @@
     "getTokenLink": "Get your API key from MiniMax Platform →",
     "anthropicBaseUrlLabel": "Anthropic Compatible Endpoint URL",
     "anthropicBaseUrlPlaceholder": "https://api.minimaxi.com/anthropic",
-    "anthropicBaseUrlHint": "Used for text generation active caching, supports cache_control to reduce costs"
+    "anthropicBaseUrlHint": "Used for text generation active caching, supports cache_control to reduce costs",
+    "fileManagement": "File Management",
+    "loadFilesBtn": "Load File List",
+    "fileName": "Filename",
+    "filePurpose": "Purpose",
+    "fileSize": "Size",
+    "fileAction": "Action",
+    "fileDeleted": "File deleted",
+    "fileDeleteFailed": "File delete failed",
+    "noFiles": "Click the button above to load file list"
+  },
+  "models": {
+    "title": "Available Models",
+    "refreshBtn": "Refresh Models",
+    "refreshing": "Refreshing...",
+    "refreshSuccess": "Model list updated",
+    "refreshFailed": "Refresh failed",
+    "noModels": "No models available. Please check your API Key.",
+    "textModels": "Text Generation Models",
+    "videoModels": "Video Generation Models",
+    "imageModels": "Image Generation Models",
+    "musicModels": "Music Generation Models",
+    "dynamic": "Dynamic",
+    "static": "Static",
+    "cachedAt": "Cached at: {{time}}"
   },
   "music": {
     "title": "Background Music",

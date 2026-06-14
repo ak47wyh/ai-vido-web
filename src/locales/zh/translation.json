@@ -111,7 +111,17 @@
     "generateNarration": "生成旁白",
     "generatingNarration": "旁白生成中...",
     "narrationGenerated": "旁白已生成",
-    "narrationFailed": "旁白生成失败"
+    "narrationFailed": "旁白生成失败",
+    "designVoice": "AI 设计音色",
+    "voiceDesignPromptLabel": "音色描述",
+    "voiceDesignPromptPlaceholder": "例如：温柔女声，略带沙哑",
+    "voiceDesignPromptHint": "用文字描述你想要的音色特征",
+    "voiceDesignPreviewLabel": "试听文本",
+    "designVoiceBtn": "设计音色",
+    "designingVoice": "设计中...",
+    "designVoiceSuccess": "音色设计成功",
+    "designVoiceFailed": "音色设计失败",
+    "previewVoice": "试听"
   },
   "background": {
     "title": "背景管理",
@@ -297,7 +307,31 @@
     "getTokenLink": "前往 MiniMax 平台获取 API Key →",
     "anthropicBaseUrlLabel": "Anthropic 兼容端点 URL",
     "anthropicBaseUrlPlaceholder": "https://api.minimaxi.com/anthropic",
-    "anthropicBaseUrlHint": "用于文本生成主动缓存，支持 cache_control 参数降低成本"
+    "anthropicBaseUrlHint": "用于文本生成主动缓存，支持 cache_control 参数降低成本",
+    "fileManagement": "文件管理",
+    "loadFilesBtn": "加载文件列表",
+    "fileName": "文件名",
+    "filePurpose": "用途",
+    "fileSize": "大小",
+    "fileAction": "操作",
+    "fileDeleted": "文件已删除",
+    "fileDeleteFailed": "文件删除失败",
+    "noFiles": "点击上方按钮加载文件列表"
+  },
+  "models": {
+    "title": "可用模型",
+    "refreshBtn": "刷新模型列表",
+    "refreshing": "刷新中...",
+    "refreshSuccess": "模型列表已更新",
+    "refreshFailed": "刷新失败",
+    "noModels": "暂无可用模型，请检查 API Key",
+    "textModels": "文本生成模型",
+    "videoModels": "视频生成模型",
+    "imageModels": "图片生成模型",
+    "musicModels": "音乐生成模型",
+    "dynamic": "动态获取",
+    "static": "静态配置",
+    "cachedAt": "缓存时间：{{time}}"
   },
   "music": {
     "title": "背景音乐",

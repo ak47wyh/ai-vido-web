@@ -1462,39 +1462,47 @@ export const StoryWorkbench: React.FC = () => {
                         }
                         setNarrationStatuses(prev => ({ ...prev, [seg.id]: 'running' }));
                         try {
-                          const taskId = await voiceService.generateNarrationAudio(seg.content, charWithVoice.voiceId);
-                          let pollRetries = 0;
-                          const maxPollRetries = 60;
-                          const pollInterval = setInterval(async () => {
-                            try {
-                              pollRetries++;
-                              const result = await voiceService.queryNarrationStatus(taskId);
-                              if (result.status === 'done') {
-                                clearInterval(pollInterval);
-                                narrationPollersRef.current.delete(seg.id);
-                                setNarrationStatuses(prev => ({ ...prev, [seg.id]: 'done' }));
-                                if (result.audioUrl) {
-                                  setNarrationUrls(prev => ({ ...prev, [seg.id]: result.audioUrl! }));
+                          const result = await voiceService.generateNarrationAudio(seg.content, charWithVoice.voiceId);
+                          if (result.audioUrl) {
+                            // Sync T2A — instant result for short text
+                            setNarrationStatuses(prev => ({ ...prev, [seg.id]: 'done' }));
+                            setNarrationUrls(prev => ({ ...prev, [seg.id]: result.audioUrl! }));
+                            showToast('success', t('character.narrationGenerated'));
+                          } else if (result.taskId) {
+                            // Async T2A — poll for long text
+                            let pollRetries = 0;
+                            const maxPollRetries = 60;
+                            const pollInterval = setInterval(async () => {
+                              try {
+                                pollRetries++;
+                                const pollResult = await voiceService.queryNarrationStatus(result.taskId!);
+                                if (pollResult.status === 'done') {
+                                  clearInterval(pollInterval);
+                                  narrationPollersRef.current.delete(seg.id);
+                                  setNarrationStatuses(prev => ({ ...prev, [seg.id]: 'done' }));
+                                  if (pollResult.audioUrl) {
+                                    setNarrationUrls(prev => ({ ...prev, [seg.id]: pollResult.audioUrl! }));
+                                  }
+                                  showToast('success', t('character.narrationGenerated'));
+                                } else if (pollResult.status === 'failed') {
+                                  clearInterval(pollInterval);
+                                  narrationPollersRef.current.delete(seg.id);
+                                  setNarrationStatuses(prev => ({ ...prev, [seg.id]: 'failed' }));
+                                  showToast('error', pollResult.errorMessage || t('character.narrationFailed'));
+                                } else if (pollRetries >= maxPollRetries) {
+                                  clearInterval(pollInterval);
+                                  narrationPollersRef.current.delete(seg.id);
+                                  setNarrationStatuses(prev => ({ ...prev, [seg.id]: 'failed' }));
+                                  showToast('error', t('character.narrationFailed'));
                                 }
-                                showToast('success', t('character.narrationGenerated'));
-                              } else if (result.status === 'failed') {
+                              } catch {
                                 clearInterval(pollInterval);
                                 narrationPollersRef.current.delete(seg.id);
                                 setNarrationStatuses(prev => ({ ...prev, [seg.id]: 'failed' }));
-                                showToast('error', result.errorMessage || t('character.narrationFailed'));
-                              } else if (pollRetries >= maxPollRetries) {
-                                clearInterval(pollInterval);
-                                narrationPollersRef.current.delete(seg.id);
-                                setNarrationStatuses(prev => ({ ...prev, [seg.id]: 'failed' }));
-                                showToast('error', t('character.narrationFailed'));
                               }
-                            } catch {
-                              clearInterval(pollInterval);
-                              narrationPollersRef.current.delete(seg.id);
-                              setNarrationStatuses(prev => ({ ...prev, [seg.id]: 'failed' }));
-                            }
-                          }, 3000);
-                          narrationPollersRef.current.set(seg.id, pollInterval);
+                            }, 3000);
+                            narrationPollersRef.current.set(seg.id, pollInterval);
+                          }
                         } catch (e: unknown) {
                           setNarrationStatuses(prev => ({ ...prev, [seg.id]: 'failed' }));
                           showToast('error', getErrorMessage(e, t('character.narrationFailed')));

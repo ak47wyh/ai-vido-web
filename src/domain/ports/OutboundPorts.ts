@@ -196,6 +196,8 @@ export interface IImageGeneratorPort {
 
 // --- Voice ---
 
+export type T2ASyncModel = 'speech-2.8-hd' | 'speech-2.8-turbo' | 'speech-2.6-hd' | 'speech-2.6-turbo';
+
 export interface VoiceCloneContext {
   fileId: string;
   voiceId: string;
@@ -232,6 +234,50 @@ export interface T2AAsyncStatus {
   errorMessage?: string;
 }
 
+export interface T2ASyncContext {
+  model?: T2ASyncModel;
+  text: string;
+  voiceId: string;
+  speed?: number;
+  volume?: number;
+  pitch?: number;
+  emotion?: string;
+  audioFormat?: string;
+  sampleRate?: number;
+  stream?: boolean;
+  outputFormat?: 'hex' | 'url';
+  languageBoost?: string;
+  aigcWatermark?: boolean;
+}
+
+export interface T2ASyncResult {
+  audioHex?: string;
+  audioUrl?: string;
+  audioLength?: number;
+  audioSize?: number;
+  usageCharacters?: number;
+}
+
+export interface VoiceDesignResult {
+  voiceId: string;
+  trialAudioHex: string;
+}
+
+export type VoiceType = 'system' | 'voice_cloning' | 'voice_generation' | 'all';
+
+export interface VoiceInfo {
+  voiceId: string;
+  description: string;
+  voiceName: string;
+  createdTime?: string;
+}
+
+export interface VoiceListResult {
+  systemVoices?: VoiceInfo[];
+  clonedVoices?: VoiceInfo[];
+  designedVoices?: VoiceInfo[];
+}
+
 export interface FileUploadResult {
   fileId: string;
 }
@@ -242,6 +288,10 @@ export interface IVoicePort {
   createT2ATask(context: T2AAsyncContext): Promise<T2AAsyncResult>;
   queryT2ATask(taskId: string): Promise<T2AAsyncStatus>;
   getFileUrl(fileId: string): string;
+  synthesizeSpeechSync(context: T2ASyncContext): Promise<T2ASyncResult>;
+  designVoice(prompt: string, previewText: string, voiceId?: string): Promise<VoiceDesignResult>;
+  getAvailableVoices(voiceType: VoiceType): Promise<VoiceListResult>;
+  deleteVoice(voiceType: 'voice_cloning' | 'voice_generation', voiceId: string): Promise<void>;
 }
 
 // --- Music Generation ---
@@ -362,4 +412,45 @@ export interface RefineResult {
 
 export interface ITextGenerationPort {
   chatCompletion(context: TextGenerationContext): Promise<TextGenerationResult>;
+}
+
+// --- Model Management ---
+
+export interface ModelInfo {
+  id: string;
+  createdAt: string;
+  displayName: string;
+  type: string;
+}
+
+export interface ModelListResult {
+  models: ModelInfo[];
+  firstId?: string;
+  lastId?: string;
+  hasMore: boolean;
+}
+
+export interface IModelManagementPort {
+  listModels(limit?: number, afterId?: string): Promise<ModelListResult>;
+  retrieveModel(modelId: string): Promise<ModelInfo>;
+}
+
+// --- File Management ---
+
+export interface FileItem {
+  fileId: string;
+  filename: string;
+  bytes: number;
+  purpose: string;
+  createdAt: number;
+}
+
+export interface FileListResult {
+  files: FileItem[];
+  hasMore: boolean;
+}
+
+export interface IFileManagementPort {
+  listFiles(purpose?: string, limit?: number): Promise<FileListResult>;
+  deleteFile(fileId: string): Promise<void>;
 }

@@ -1,5 +1,8 @@
-import type { IVoicePort, T2AAsyncContext } from '../ports/OutboundPorts';
+import type { IVoicePort, T2AAsyncContext, T2ASyncContext, T2ASyncResult, VoiceDesignResult, VoiceType, VoiceListResult } from '../ports/OutboundPorts';
 import type { ICharacterRepository } from '../ports/OutboundPorts';
+
+/** Max text length for synchronous T2A (short text = instant response) */
+const SYNC_T2A_MAX_LENGTH = 500;
 
 export class VoiceService {
   voicePort: IVoicePort;
@@ -91,7 +94,44 @@ export class VoiceService {
     await this.characterRepo.save(character);
   }
 
-  async generateNarrationAudio(text: string, voiceId: string): Promise<string> {
+  /**
+   * Smart narration generation: short text uses sync T2A (instant),
+   * long text uses async T2A (polling required).
+   * Returns { taskId } for async, or { audioUrl } for sync.
+   */
+  async generateNarrationAudio(text: string, voiceId: string): Promise<{ taskId?: string; audioUrl?: string }> {
+    if (text.length <= SYNC_T2A_MAX_LENGTH) {
+      const result = await this.synthesizeSync(text, voiceId);
+      return { audioUrl: result.audioUrl };
+    }
+
+    const taskId = await this.createAsyncTask(text, voiceId);
+    return { taskId };
+  }
+
+  /**
+   * Synchronous T2A — instant response, best for short text (≤500 chars).
+   */
+  async synthesizeSync(text: string, voiceId: string, model?: 'speech-2.8-hd' | 'speech-2.8-turbo' | 'speech-2.6-hd' | 'speech-2.6-turbo'): Promise<T2ASyncResult> {
+    const context: T2ASyncContext = {
+      model: model || 'speech-2.8-turbo',
+      text,
+      voiceId,
+      speed: 1,
+      volume: 1,
+      audioFormat: 'mp3',
+      sampleRate: 32000,
+      outputFormat: 'url',
+      languageBoost: 'auto',
+    };
+
+    return this.voicePort.synthesizeSpeechSync(context);
+  }
+
+  /**
+   * Async T2A — create task, then poll for result.
+   */
+  async createAsyncTask(text: string, voiceId: string): Promise<string> {
     const context: T2AAsyncContext = {
       text,
       voiceId,
@@ -107,5 +147,53 @@ export class VoiceService {
 
   async queryNarrationStatus(taskId: string) {
     return this.voicePort.queryT2ATask(taskId);
+  }
+
+  /**
+   * Design a new voice using text description.
+   * Returns voiceId + trial audio hex for preview.
+   */
+  async designVoice(prompt: string, previewText: string, voiceId?: string): Promise<VoiceDesignResult> {
+    return this.voicePort.designVoice(prompt, previewText, voiceId);
+  }
+
+  /**
+   * Design a voice and bind it to a character.
+   */
+  async designVoiceForCharacter(characterId: string, prompt: string, previewText: string): Promise<string> {
+    const character = await this.characterRepo.findById(characterId);
+    if (!character) throw new Error('Character not found');
+
+    const voiceId = `design_${Date.now()}`;
+    const result = await this.voicePort.designVoice(prompt, previewText, voiceId);
+
+    character.voiceId = result.voiceId;
+    await this.characterRepo.save(character);
+
+    return result.voiceId;
+  }
+
+  /**
+   * Get available voices from the API.
+   */
+  async getAvailableVoices(voiceType: VoiceType): Promise<VoiceListResult> {
+    return this.voicePort.getAvailableVoices(voiceType);
+  }
+
+  /**
+   * Delete a cloned or designed voice.
+   * Also unbinds it from any character currently using it.
+   */
+  async deleteVoice(voiceType: 'voice_cloning' | 'voice_generation', voiceId: string): Promise<void> {
+    await this.voicePort.deleteVoice(voiceType, voiceId);
+
+    // Unbind from any character using this voice
+    const allCharacters = await this.characterRepo.findAll();
+    for (const char of allCharacters) {
+      if (char.voiceId === voiceId) {
+        char.voiceId = undefined;
+        await this.characterRepo.save(char);
+      }
+    }
   }
 }

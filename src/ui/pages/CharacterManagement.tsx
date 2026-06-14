@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../adapters/outbound/repositories/DexieDatabase';
 import { characterRepo, storyService, storySpaceService, imageGenerationService, imageAdapter, voiceService, textGenerationService } from '../../dependencies';
 import { v4 as uuidv4 } from 'uuid';
-import { Pencil, Plus, Trash2, Copy, Users, ChevronDown, ChevronUp, Sparkles, RefreshCw, Mic, Upload, Volume2, Wand2 } from 'lucide-react';
+import { Pencil, Plus, Trash2, Copy, Users, ChevronDown, ChevronUp, Sparkles, RefreshCw, Mic, Upload, Volume2, Wand2, Palette, Play } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { Character } from '../../domain/entities/models';
 import { useSpace } from '../contexts/SpaceContext';
@@ -37,6 +37,10 @@ export const CharacterManagement: React.FC = () => {
   const { copyingId, copyTargetSpaceId, setCopyTargetSpaceId, startCopy, finishCopy } = useCopyToSpace();
   const [expandedFields, setExpandedFields] = useState<Set<string>>(new Set());
   const [refiningField, setRefiningField] = useState<'appearance' | 'personality' | null>(null);
+  const [isDesigningVoice, setIsDesigningVoice] = useState(false);
+  const [voiceDesignPrompt, setVoiceDesignPrompt] = useState('');
+  const [voiceDesignPreviewText, setVoiceDesignPreviewText] = useState('你好，很高兴认识你');
+  const [designPreviewAudioUrl, setDesignPreviewAudioUrl] = useState<string | null>(null);
 
   const toggleExpand = useCallback((key: string) => {
     setExpandedFields(prev => {
@@ -285,6 +289,65 @@ export const CharacterManagement: React.FC = () => {
               {isCloning ? <RefreshCw size={14} className="spin" /> : <Upload size={14} />}
               {isCloning ? t('character.cloneVoiceCloning') : t('character.cloneVoiceBtn')}
             </button>
+          </div>
+
+          {/* Voice Design */}
+          <div className="form-group" style={{ border: '1px solid rgba(168,85,247,0.2)', borderRadius: 'var(--radius-md)', padding: '0.75rem' }}>
+            <label className="form-label" style={{ fontSize: '0.8rem', color: '#a855f7' }}>
+              <Palette size={14} style={{ verticalAlign: 'middle', marginRight: '0.3rem' }} />
+              {t('character.designVoice')}
+            </label>
+            <div className="form-group" style={{ marginBottom: '0.5rem' }}>
+              <label className="form-label" style={{ fontSize: '0.75rem' }}>{t('character.voiceDesignPromptLabel')}</label>
+              <input className="form-input" value={voiceDesignPrompt} onChange={e => setVoiceDesignPrompt(e.target.value)} placeholder={t('character.voiceDesignPromptPlaceholder')} />
+              <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{t('character.voiceDesignPromptHint')}</p>
+            </div>
+            <div className="form-group" style={{ marginBottom: '0.5rem' }}>
+              <label className="form-label" style={{ fontSize: '0.75rem' }}>{t('character.voiceDesignPreviewLabel')}</label>
+              <input className="form-input" value={voiceDesignPreviewText} onChange={e => setVoiceDesignPreviewText(e.target.value)} />
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                disabled={isDesigningVoice || !voiceDesignPrompt.trim()}
+                onClick={async () => {
+                  if (!voiceDesignPrompt.trim()) return;
+                  setIsDesigningVoice(true);
+                  setDesignPreviewAudioUrl(null);
+                  try {
+                    const result = await voiceService.designVoice(voiceDesignPrompt, voiceDesignPreviewText);
+                    setSelectedVoiceId(result.voiceId);
+                    if (result.trialAudioHex) {
+                      const audioData = `data:audio/mp3;base64,${result.trialAudioHex}`;
+                      setDesignPreviewAudioUrl(audioData);
+                    }
+                    showToast('success', t('character.designVoiceSuccess'));
+                  } catch (e: unknown) {
+                    showToast('error', getErrorMessage(e, t('character.designVoiceFailed')));
+                  } finally {
+                    setIsDesigningVoice(false);
+                  }
+                }}
+              >
+                {isDesigningVoice ? <RefreshCw size={14} className="spin" /> : <Palette size={14} />}
+                {isDesigningVoice ? t('character.designingVoice') : t('character.designVoiceBtn')}
+              </button>
+              {designPreviewAudioUrl && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                  onClick={() => {
+                    const audio = new Audio(designPreviewAudioUrl);
+                    audio.play().catch(() => {});
+                  }}
+                >
+                  <Play size={12} /> {t('character.previewVoice')}
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="form-group">

@@ -5,6 +5,11 @@ import type {
   T2AAsyncContext,
   T2AAsyncResult,
   T2AAsyncStatus,
+  T2ASyncContext,
+  T2ASyncResult,
+  VoiceDesignResult,
+  VoiceType,
+  VoiceListResult,
   FileUploadResult
 } from '../../../domain/ports/OutboundPorts';
 import { ApiConfigStore } from '../config/ApiConfigStore';
@@ -195,5 +200,210 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
     const config = ApiConfigStore.load();
     const baseUrl = config.minimaxBaseUrl.replace(/\/+$/, '');
     return `${baseUrl}/files/retrieve_content?file_id=${fileId}`;
+  }
+
+  // --- Synchronous T2A ---
+
+  async synthesizeSpeechSync(context: T2ASyncContext): Promise<T2ASyncResult> {
+    const config = ApiConfigStore.load();
+    if (!config.minimaxApiKey) {
+      throw new Error('API Key not configured — cannot synthesize speech');
+    }
+
+    const baseUrl = config.minimaxBaseUrl.replace(/\/+$/, '');
+
+    const payload: Record<string, unknown> = {
+      model: context.model || 'speech-2.8-turbo',
+      text: context.text,
+      voice_setting: {
+        voice_id: context.voiceId,
+        speed: context.speed ?? 1,
+        vol: context.volume ?? 1,
+        pitch: context.pitch ?? 0,
+      },
+      audio_setting: {
+        audio_sample_rate: context.sampleRate ?? 32000,
+        bitrate: 128000,
+        format: context.audioFormat || 'mp3',
+        channel: 1,
+      },
+      output_format: context.outputFormat || 'url',
+      ...(context.languageBoost ? { language_boost: context.languageBoost } : { language_boost: 'auto' }),
+      ...(context.aigcWatermark !== undefined ? { aigc_watermark: context.aigcWatermark } : {}),
+    };
+
+    console.log('[MiniMaxVoiceAdapter] Sync T2A, voice:', context.voiceId, 'text length:', context.text.length);
+
+    const response = await axios.post(`${baseUrl}/t2a_v2`, payload, {
+      headers: {
+        Authorization: `Bearer ${config.minimaxApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      params: config.minimaxGroupId ? { group_id: config.minimaxGroupId } : undefined,
+    });
+
+    const data = response.data;
+
+    const statusCode = data?.base_resp?.status_code;
+    const error = getMiniMaxErrorMessage(statusCode, data?.base_resp?.status_msg, 'MiniMax Sync T2A error');
+    if (error) throw new Error(error);
+
+    const audioUrl = data?.data?.audio_url;
+    const audioHex = data?.data?.audio;
+    const extraInfo = data?.extra_info;
+
+    return {
+      audioUrl,
+      audioHex,
+      audioLength: extraInfo?.audio_length,
+      audioSize: extraInfo?.audio_size,
+      usageCharacters: extraInfo?.usage_characters,
+    };
+  }
+
+  // --- Voice Design ---
+
+  async designVoice(prompt: string, previewText: string, voiceId?: string): Promise<VoiceDesignResult> {
+    const config = ApiConfigStore.load();
+    if (!config.minimaxApiKey) {
+      throw new Error('API Key not configured — cannot design voice');
+    }
+
+    const baseUrl = config.minimaxBaseUrl.replace(/\/+$/, '');
+
+    const payload: Record<string, unknown> = {
+      prompt,
+      preview_text: previewText,
+      model: 'speech-02-turbo',
+    };
+
+    if (voiceId) {
+      payload.voice_id = voiceId;
+    }
+
+    console.log('[MiniMaxVoiceAdapter] Designing voice, prompt:', prompt.substring(0, 50));
+
+    const response = await axios.post(`${baseUrl}/voice_design`, payload, {
+      headers: {
+        Authorization: `Bearer ${config.minimaxApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      params: config.minimaxGroupId ? { group_id: config.minimaxGroupId } : undefined,
+    });
+
+    const data = response.data;
+
+    const statusCode = data?.base_resp?.status_code;
+    const error = getMiniMaxErrorMessage(statusCode, data?.base_resp?.status_msg, 'MiniMax Voice Design error');
+    if (error) throw new Error(error);
+
+    const resultVoiceId = data?.data?.voice_id || data?.voice_id;
+    const trialAudioHex = data?.data?.trial_audio || data?.trial_audio;
+
+    if (!resultVoiceId) {
+      console.error('[MiniMaxVoiceAdapter] Voice Design response:', JSON.stringify(data));
+      throw new Error('Voice Design failed — no voice_id returned');
+    }
+
+    return {
+      voiceId: resultVoiceId,
+      trialAudioHex: trialAudioHex || '',
+    };
+  }
+
+  // --- Get Available Voices ---
+
+  async getAvailableVoices(voiceType: VoiceType): Promise<VoiceListResult> {
+    const config = ApiConfigStore.load();
+    if (!config.minimaxApiKey) {
+      throw new Error('API Key not configured — cannot get voices');
+    }
+
+    const baseUrl = config.minimaxBaseUrl.replace(/\/+$/, '');
+
+    const payload: Record<string, unknown> = {
+      voice_type: voiceType,
+    };
+
+    console.log('[MiniMaxVoiceAdapter] Getting available voices, type:', voiceType);
+
+    const response = await axios.post(`${baseUrl}/get_voice`, payload, {
+      headers: {
+        Authorization: `Bearer ${config.minimaxApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      params: config.minimaxGroupId ? { group_id: config.minimaxGroupId } : undefined,
+    });
+
+    const data = response.data;
+
+    const statusCode = data?.base_resp?.status_code;
+    const error = getMiniMaxErrorMessage(statusCode, data?.base_resp?.status_msg, 'MiniMax Get Voice error');
+    if (error) throw new Error(error);
+
+    const result: VoiceListResult = {};
+
+    const systemVoices = data?.data?.system_voice || data?.system_voice;
+    if (systemVoices && Array.isArray(systemVoices)) {
+      result.systemVoices = systemVoices.map((v: Record<string, unknown>) => ({
+        voiceId: v.voice_id as string,
+        description: (v.description || v.voice_desc || '') as string,
+        voiceName: (v.voice_name || v.name || v.voice_id) as string,
+      }));
+    }
+
+    const clonedVoices = data?.data?.voice_cloning || data?.voice_cloning;
+    if (clonedVoices && Array.isArray(clonedVoices)) {
+      result.clonedVoices = clonedVoices.map((v: Record<string, unknown>) => ({
+        voiceId: v.voice_id as string,
+        description: (v.description || v.voice_desc || '') as string,
+        voiceName: (v.voice_name || v.name || v.voice_id) as string,
+        createdTime: (v.created_time || v.create_time) as string | undefined,
+      }));
+    }
+
+    const designedVoices = data?.data?.voice_generation || data?.voice_generation;
+    if (designedVoices && Array.isArray(designedVoices)) {
+      result.designedVoices = designedVoices.map((v: Record<string, unknown>) => ({
+        voiceId: v.voice_id as string,
+        description: (v.description || v.voice_desc || '') as string,
+        voiceName: (v.voice_name || v.name || v.voice_id) as string,
+        createdTime: (v.created_time || v.create_time) as string | undefined,
+      }));
+    }
+
+    return result;
+  }
+
+  // --- Delete Voice ---
+
+  async deleteVoice(voiceType: 'voice_cloning' | 'voice_generation', voiceId: string): Promise<void> {
+    const config = ApiConfigStore.load();
+    if (!config.minimaxApiKey) {
+      throw new Error('API Key not configured — cannot delete voice');
+    }
+
+    const baseUrl = config.minimaxBaseUrl.replace(/\/+$/, '');
+
+    const payload = {
+      voice_type: voiceType,
+      voice_id: voiceId,
+    };
+
+    console.log('[MiniMaxVoiceAdapter] Deleting voice:', voiceId, 'type:', voiceType);
+
+    const response = await axios.post(`${baseUrl}/delete_voice`, payload, {
+      headers: {
+        Authorization: `Bearer ${config.minimaxApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      params: config.minimaxGroupId ? { group_id: config.minimaxGroupId } : undefined,
+    });
+
+    const data = response.data;
+
+    const statusCode = data?.base_resp?.status_code;
+    const error = getMiniMaxErrorMessage(statusCode, data?.base_resp?.status_msg, 'MiniMax Delete Voice error');
+    if (error) throw new Error(error);
   }
 }
