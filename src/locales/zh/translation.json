@@ -291,7 +291,10 @@
     "liveBadge": "真实模式",
     "mockHint": "未配置 API Key，视频生成将使用模拟响应。",
     "liveHint": "已配置 API Key，视频生成将调用真实 MiniMax API。",
-    "getTokenLink": "前往 MiniMax 平台获取 API Key →"
+    "getTokenLink": "前往 MiniMax 平台获取 API Key →",
+    "anthropicBaseUrlLabel": "Anthropic 兼容端点 URL",
+    "anthropicBaseUrlPlaceholder": "https://api.minimaxi.com/anthropic",
+    "anthropicBaseUrlHint": "用于文本生成主动缓存，支持 cache_control 参数降低成本"
   },
   "music": {
     "title": "背景音乐",
@@ -321,5 +324,41 @@
     "noBGM": "暂无背景音乐",
     "playBGM": "播放",
     "removeBGMBtn": "移除"
+  },
+  "textAI": {
+    "refinePrompt": "AI 润色",
+    "refiningPrompt": "润色中...",
+    "promptRefined": "描述已润色",
+    "promptRefineFailed": "润色失败",
+    "refineText": "润色文本",
+    "refiningText": "润色中...",
+    "textRefined": "文本已润色",
+    "suggestBGMStyle": "AI 推荐风格",
+    "suggestingBGMStyle": "推荐中...",
+    "bgmStyleSuggested": "风格已推荐",
+    "optimizeVideoPrompt": "优化提示词",
+    "optimizingVideoPrompt": "优化中...",
+    "videoPromptOptimized": "提示词已优化",
+    "cacheHitInfo": "缓存命中 {{tokens}} tokens，节省约 {{percent}}%",
+    "refineCharAppearance": "润色外貌",
+    "refineCharPersonality": "润色性格"
+  },
+  "video": {
+    "modeT2V": "文生视频",
+    "modeFL2V": "首尾帧",
+    "modeS2V": "主体参考",
+    "promptOptimizer": "优化提示词",
+    "modelHailuo23": "Hailuo 2.3",
+    "modelHailuo02": "Hailuo 02",
+    "modelDirector": "T2V-01 Director",
+    "modelT2V01": "T2V-01",
+    "modelS2V01": "S2V-01",
+    "resolution720": "720P",
+    "resolution768": "768P",
+    "resolution1080": "1080P",
+    "duration6s": "6秒",
+    "duration10s": "10秒",
+    "downloadVideo": "下载视频",
+    "videoInfo": "{{width}}x{{height}} · {{duration}}s"
   }
 }

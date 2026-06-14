@@ -52,6 +52,10 @@ export interface StorySegment {
 
 export type VideoTaskStatus = 'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAILED';
 
+export type VideoModel = 'MiniMax-Hailuo-2.3' | 'MiniMax-Hailuo-02' | 'T2V-01-Director' | 'T2V-01' | 'S2V-01';
+export type VideoResolution = '720P' | '768P' | '1080P';
+export type VideoGenerationMode = 't2v' | 'fl2v' | 's2v';
+
 export interface VideoTask {
   id: string;
   segmentId: string;
@@ -61,4 +65,15 @@ export interface VideoTask {
   errorMessage?: string;
   externalTaskId?: string;
   createdAt: number;
+  // New fields for extended video generation
+  mode?: VideoGenerationMode;
+  model?: VideoModel;
+  resolution?: VideoResolution;
+  duration?: 6 | 10;
+  fileId?: string;
+  videoWidth?: number;
+  videoHeight?: number;
+  promptOptimizer?: boolean;
+  firstFrameImage?: string;
+  lastFrameImage?: string;
 }

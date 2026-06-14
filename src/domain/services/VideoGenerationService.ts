@@ -6,9 +6,22 @@ import type {
   IStorySegmentRepository,
   ICharacterRepository,
   IBackgroundRepository,
-  VideoPromptContext
+  VideoPromptContext,
+  VideoGenerationMode,
+  VideoModel,
+  VideoResolution
 } from '../ports/OutboundPorts';
 import { getErrorMessage } from '../../ui/utils/errorUtils';
+
+export interface VideoGenerationOptions {
+  mode?: VideoGenerationMode;
+  model?: VideoModel;
+  resolution?: VideoResolution;
+  duration?: 6 | 10;
+  promptOptimizer?: boolean;
+  firstFrameImage?: string;
+  lastFrameImage?: string;
+}
 
 export class VideoGenerationService {
   videoTaskRepo: IVideoTaskRepository;
@@ -33,18 +46,34 @@ export class VideoGenerationService {
     this.videoGeneratorPort = videoGeneratorPort;
   }
 
-  async generateVideo(segmentId: string, storyId: string, targetPlatform: string = 'MINIMAX'): Promise<VideoTask> {
+  async generateVideo(
+    segmentId: string,
+    storyId: string,
+    targetPlatform: string = 'MINIMAX',
+    options?: VideoGenerationOptions
+  ): Promise<VideoTask> {
     const segments = await this.segmentRepo.findByStoryId(storyId);
     const segment = segments.find(s => s.id === segmentId);
     if (!segment) throw new Error('Segment not found');
-    if (!segment.selectedBackgroundId) throw new Error('Please select a background for this segment before generating video');
+    if (!segment.selectedBackgroundId && !options?.firstFrameImage) {
+      throw new Error('Please select a background for this segment before generating video');
+    }
+
+    const mode = options?.mode || 't2v';
 
     const task: VideoTask = {
       id: uuidv4(),
       segmentId,
       targetPlatform,
       status: 'PENDING',
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      mode,
+      model: options?.model,
+      resolution: options?.resolution,
+      duration: options?.duration,
+      promptOptimizer: options?.promptOptimizer,
+      firstFrameImage: options?.firstFrameImage,
+      lastFrameImage: options?.lastFrameImage,
     };
     await this.videoTaskRepo.save(task);
 
@@ -68,13 +97,52 @@ export class VideoGenerationService {
       }
     }
 
+    // Build subject reference for S2V mode
+    let subjectReference;
+    if (mode === 's2v') {
+      const charImages = characters
+        .filter(c => c.referenceImageUrl)
+        .map(c => c.referenceImageUrl!);
+      if (charImages.length > 0) {
+        subjectReference = [{ type: 'character', image: charImages }];
+      }
+    }
+
+    // Build prompt
+    const promptParts: string[] = [];
+    if (characters.length > 0) {
+      const charDescs = characters.map(c => {
+        let desc = c.appearancePrompt;
+        if (c.personalityPrompt) desc += `, ${c.personalityPrompt}`;
+        return desc;
+      });
+      promptParts.push(charDescs.join(' and '));
+    }
+    if (background) {
+      promptParts.push(`in ${background.environmentPrompt}`);
+    }
+    promptParts.push(segment.content);
+    const prompt = promptParts.join(', ') + '.';
+
     const context: VideoPromptContext = {
+      mode,
+      model: options?.model,
+      prompt,
+      promptOptimizer: options?.promptOptimizer,
+      duration: options?.duration,
+      resolution: options?.resolution,
+      // FL2V fields
+      firstFrameImage: options?.firstFrameImage,
+      lastFrameImage: options?.lastFrameImage,
+      // S2V fields
+      subjectReference,
+      // Voice and BGM
+      characterVoiceIds: Object.keys(characterVoiceIds).length > 0 ? characterVoiceIds : undefined,
+      bgmAudioUrl: segment.bgmAudioUrl,
+      // Legacy fields for backward compatibility
       actionContent: segment.content,
       characters,
       background,
-      videoStyle: 'default',
-      characterVoiceIds: Object.keys(characterVoiceIds).length > 0 ? characterVoiceIds : undefined,
-      bgmAudioUrl: segment.bgmAudioUrl,
     };
 
     this.processTask(task, context).catch(console.error);

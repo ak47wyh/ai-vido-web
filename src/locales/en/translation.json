@@ -291,7 +291,10 @@
     "liveBadge": "Live Mode",
     "mockHint": "No API key set — video generation will use simulated responses.",
     "liveHint": "API key configured — video generation will call the real MiniMax API.",
-    "getTokenLink": "Get your API key from MiniMax Platform →"
+    "getTokenLink": "Get your API key from MiniMax Platform →",
+    "anthropicBaseUrlLabel": "Anthropic Compatible Endpoint URL",
+    "anthropicBaseUrlPlaceholder": "https://api.minimaxi.com/anthropic",
+    "anthropicBaseUrlHint": "Used for text generation active caching, supports cache_control to reduce costs"
   },
   "music": {
     "title": "Background Music",
@@ -321,5 +324,41 @@
     "noBGM": "No background music",
     "playBGM": "Play",
     "removeBGMBtn": "Remove"
+  },
+  "textAI": {
+    "refinePrompt": "AI Refine",
+    "refiningPrompt": "Refining...",
+    "promptRefined": "Prompt refined",
+    "promptRefineFailed": "Refine failed",
+    "refineText": "Refine Text",
+    "refiningText": "Refining...",
+    "textRefined": "Text refined",
+    "suggestBGMStyle": "AI Suggest Style",
+    "suggestingBGMStyle": "Suggesting...",
+    "bgmStyleSuggested": "Style suggested",
+    "optimizeVideoPrompt": "Optimize Prompt",
+    "optimizingVideoPrompt": "Optimizing...",
+    "videoPromptOptimized": "Prompt optimized",
+    "cacheHitInfo": "Cache hit {{tokens}} tokens, saved ~{{percent}}%",
+    "refineCharAppearance": "Refine Appearance",
+    "refineCharPersonality": "Refine Personality"
+  },
+  "video": {
+    "modeT2V": "Text-to-Video",
+    "modeFL2V": "First-Last Frame",
+    "modeS2V": "Subject Ref",
+    "promptOptimizer": "Optimize Prompt",
+    "modelHailuo23": "Hailuo 2.3",
+    "modelHailuo02": "Hailuo 02",
+    "modelDirector": "T2V-01 Director",
+    "modelT2V01": "T2V-01",
+    "modelS2V01": "S2V-01",
+    "resolution720": "720P",
+    "resolution768": "768P",
+    "resolution1080": "1080P",
+    "duration6s": "6s",
+    "duration10s": "10s",
+    "downloadVideo": "Download Video",
+    "videoInfo": "{{width}}x{{height}} · {{duration}}s"
   }
 }

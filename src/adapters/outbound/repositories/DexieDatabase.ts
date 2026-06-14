@@ -71,6 +71,15 @@ export class AiVideoDatabase extends Dexie {
       segments: 'id, storyId, sequenceOrder',
       videoTasks: 'id, segmentId, status, createdAt'
     });
+    // Version 6: Add video generation mode/model/resolution/duration fields to videoTasks (non-indexed)
+    this.version(6).stores({
+      storySpaces: 'id, name, createdAt',
+      characters: 'id, spaceId, name, createdAt',
+      backgrounds: 'id, spaceId, name, createdAt',
+      stories: 'id, spaceId, status, createdAt',
+      segments: 'id, storyId, sequenceOrder',
+      videoTasks: 'id, segmentId, status, createdAt'
+    });
   }
 }
 

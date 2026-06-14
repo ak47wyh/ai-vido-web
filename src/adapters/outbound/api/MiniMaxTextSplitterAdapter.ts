@@ -27,7 +27,7 @@ export class MiniMaxTextSplitterAdapter implements ITextSplitterPort {
   async splitStoryToSegments(text: string, knownCharacterNames: string[]): Promise<SegmentDraft[]> {
     try {
       const result = await this.textPort.chatCompletion({
-        model: 'MiniMax-M2.7-highspeed',
+        model: 'MiniMax-M2.5-highspeed',
         messages: [
           { role: 'system', content: SPLIT_SYSTEM_PROMPT },
           { role: 'user', content: text },

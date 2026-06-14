@@ -1,9 +1,9 @@
 import React, { useState, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../adapters/outbound/repositories/DexieDatabase';
-import { backgroundRepo, storyService, storySpaceService, imageGenerationService, imageAdapter } from '../../dependencies';
+import { backgroundRepo, storyService, storySpaceService, imageGenerationService, imageAdapter, textGenerationService } from '../../dependencies';
 import { v4 as uuidv4 } from 'uuid';
-import { Pencil, Plus, Trash2, Copy, Image as ImageIcon, ChevronDown, ChevronUp, Sparkles, RefreshCw } from 'lucide-react';
+import { Pencil, Plus, Trash2, Copy, Image as ImageIcon, ChevronDown, ChevronUp, Sparkles, RefreshCw, Wand2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { Background } from '../../domain/entities/models';
 import { useSpace } from '../contexts/SpaceContext';
@@ -28,6 +28,7 @@ export const BackgroundManagement: React.FC = () => {
   const { imageInputMode, imageUrl, imageUploadError, isGenerating, setImageUrl, handleImageUpload, switchImageMode, resetImageState } = useImageUpload('background');
   const { copyingId, copyTargetSpaceId, setCopyTargetSpaceId, startCopy, finishCopy } = useCopyToSpace();
   const [expandedFields, setExpandedFields] = useState<Set<string>>(new Set());
+  const [refiningEnv, setRefiningEnv] = useState(false);
 
   const toggleExpand = useCallback((key: string) => {
     setExpandedFields(prev => {
@@ -145,6 +146,27 @@ export const BackgroundManagement: React.FC = () => {
           <div className="form-group">
             <label className="form-label">{t('background.envLabel')}</label>
             <textarea className="form-textarea" value={environmentPrompt} onChange={e => setEnvironmentPrompt(e.target.value)} placeholder={t('background.envPlaceholder')} />
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', marginTop: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#f472b6' }}
+              disabled={!environmentPrompt.trim() || refiningEnv}
+              onClick={async () => {
+                setRefiningEnv(true);
+                try {
+                  const result = await textGenerationService.refinePrompt(environmentPrompt, 'background');
+                  setEnvironmentPrompt(result.content);
+                  showToast('success', t('textAI.promptRefined'));
+                } catch (e) {
+                  showToast('error', getErrorMessage(e, t('textAI.promptRefineFailed')));
+                } finally {
+                  setRefiningEnv(false);
+                }
+              }}
+            >
+              {refiningEnv ? <RefreshCw size={12} className="spin" /> : <Wand2 size={12} />}
+              {refiningEnv ? t('textAI.refiningPrompt') : t('textAI.refinePrompt')}
+            </button>
           </div>
           <div className="form-group">
             <label className="form-label">{t('background.imageSourceLabel')}</label>

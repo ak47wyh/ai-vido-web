@@ -1,9 +1,9 @@
 import React, { useState, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../adapters/outbound/repositories/DexieDatabase';
-import { characterRepo, storyService, storySpaceService, imageGenerationService, imageAdapter, voiceService } from '../../dependencies';
+import { characterRepo, storyService, storySpaceService, imageGenerationService, imageAdapter, voiceService, textGenerationService } from '../../dependencies';
 import { v4 as uuidv4 } from 'uuid';
-import { Pencil, Plus, Trash2, Copy, Users, ChevronDown, ChevronUp, Sparkles, RefreshCw, Mic, Upload, Volume2 } from 'lucide-react';
+import { Pencil, Plus, Trash2, Copy, Users, ChevronDown, ChevronUp, Sparkles, RefreshCw, Mic, Upload, Volume2, Wand2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { Character } from '../../domain/entities/models';
 import { useSpace } from '../contexts/SpaceContext';
@@ -36,6 +36,7 @@ export const CharacterManagement: React.FC = () => {
   const { imageInputMode, imageUrl, imageUploadError, isGenerating, setImageUrl, handleImageUpload, switchImageMode, resetImageState } = useImageUpload('character');
   const { copyingId, copyTargetSpaceId, setCopyTargetSpaceId, startCopy, finishCopy } = useCopyToSpace();
   const [expandedFields, setExpandedFields] = useState<Set<string>>(new Set());
+  const [refiningField, setRefiningField] = useState<'appearance' | 'personality' | null>(null);
 
   const toggleExpand = useCallback((key: string) => {
     setExpandedFields(prev => {
@@ -164,10 +165,52 @@ export const CharacterManagement: React.FC = () => {
           <div className="form-group">
             <label className="form-label">{t('character.appearanceLabel')}</label>
             <textarea className="form-textarea" value={appearance} onChange={e => setAppearance(e.target.value)} placeholder={t('character.appearancePlaceholder')} />
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', marginTop: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#a78bfa' }}
+              disabled={!appearance.trim() || refiningField === 'appearance'}
+              onClick={async () => {
+                setRefiningField('appearance');
+                try {
+                  const result = await textGenerationService.refinePrompt(appearance, 'character_appearance');
+                  setAppearance(result.content);
+                  showToast('success', t('textAI.promptRefined'));
+                } catch (e) {
+                  showToast('error', getErrorMessage(e, t('textAI.promptRefineFailed')));
+                } finally {
+                  setRefiningField(null);
+                }
+              }}
+            >
+              {refiningField === 'appearance' ? <RefreshCw size={12} className="spin" /> : <Wand2 size={12} />}
+              {refiningField === 'appearance' ? t('textAI.refiningPrompt') : t('textAI.refineCharAppearance')}
+            </button>
           </div>
           <div className="form-group">
             <label className="form-label">{t('character.personalityLabel')}</label>
             <textarea className="form-textarea" value={personality} onChange={e => setPersonality(e.target.value)} placeholder={t('character.personalityPlaceholder')} />
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', marginTop: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#a78bfa' }}
+              disabled={!personality.trim() || refiningField === 'personality'}
+              onClick={async () => {
+                setRefiningField('personality');
+                try {
+                  const result = await textGenerationService.refinePrompt(personality, 'character_personality');
+                  setPersonality(result.content);
+                  showToast('success', t('textAI.promptRefined'));
+                } catch (e) {
+                  showToast('error', getErrorMessage(e, t('textAI.promptRefineFailed')));
+                } finally {
+                  setRefiningField(null);
+                }
+              }}
+            >
+              {refiningField === 'personality' ? <RefreshCw size={12} className="spin" /> : <Wand2 size={12} />}
+              {refiningField === 'personality' ? t('textAI.refiningPrompt') : t('textAI.refineCharPersonality')}
+            </button>
           </div>
           <div className="form-group">
             <label className="form-label">{t('character.backgroundLabel')}</label>

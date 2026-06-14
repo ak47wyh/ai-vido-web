@@ -1,4 +1,4 @@
-import type { ITextGenerationPort } from '../ports/OutboundPorts';
+import type { ITextGenerationPort, RefineResult } from '../ports/OutboundPorts';
 
 export class TextGenerationService {
   textPort: ITextGenerationPort;
@@ -14,7 +14,7 @@ export class TextGenerationService {
   async refinePrompt(
     rawPrompt: string,
     type: 'character_appearance' | 'character_personality' | 'background'
-  ): Promise<string> {
+  ): Promise<RefineResult> {
     const typeLabels: Record<string, string> = {
       character_appearance: '角色外貌',
       character_personality: '角色性格',
@@ -22,7 +22,7 @@ export class TextGenerationService {
     };
 
     const result = await this.textPort.chatCompletion({
-      model: 'MiniMax-M2.7-highspeed',
+      model: 'MiniMax-M2.5-highspeed',
       messages: [
         {
           role: 'system',
@@ -36,22 +36,28 @@ export class TextGenerationService {
 - 包含视觉元素：光线、色彩、构图、氛围
 - 长度控制在 50-200 个英文单词
 - 只输出润色后的提示词，不要其他内容`,
+          cache_control: { type: 'ephemeral' },
         },
         { role: 'user', content: rawPrompt },
       ],
       temperature: 0.7,
       maxTokens: 512,
+      useAnthropicEndpoint: true,
     });
 
-    return result.content.trim();
+    return {
+      content: result.content.trim(),
+      cachedTokens: result.usage?.cachedTokens,
+      totalTokens: result.usage ? result.usage.promptTokens + result.usage.completionTokens : undefined,
+    };
   }
 
   /**
    * Refine story text to be more cinematic and visual.
    */
-  async refineText(rawText: string): Promise<string> {
+  async refineText(rawText: string): Promise<RefineResult> {
     const result = await this.textPort.chatCompletion({
-      model: 'MiniMax-M2.7-highspeed',
+      model: 'MiniMax-M2.5-highspeed',
       messages: [
         {
           role: 'system',
@@ -65,22 +71,28 @@ export class TextGenerationService {
 - 适当增加环境描写和人物动作细节
 - 语言简洁有力，适合旁白朗读
 - 只输出润色后的文本，不要其他内容`,
+          cache_control: { type: 'ephemeral' },
         },
         { role: 'user', content: rawText },
       ],
       temperature: 0.6,
       maxTokens: 4096,
+      useAnthropicEndpoint: true,
     });
 
-    return result.content.trim();
+    return {
+      content: result.content.trim(),
+      cachedTokens: result.usage?.cachedTokens,
+      totalTokens: result.usage ? result.usage.promptTokens + result.usage.completionTokens : undefined,
+    };
   }
 
   /**
    * Suggest a BGM style description based on segment content.
    */
-  async suggestBGMStyle(segmentContent: string): Promise<string> {
+  async suggestBGMStyle(segmentContent: string): Promise<RefineResult> {
     const result = await this.textPort.chatCompletion({
-      model: 'MiniMax-M2.7-highspeed',
+      model: 'MiniMax-M2.5-highspeed',
       messages: [
         {
           role: 'system',
@@ -94,14 +106,20 @@ export class TextGenerationService {
 - 格式示例："Cinematic, Epic, Orchestral, Dark, Tension, Strings and Brass"
 - 长度控制在 10-50 个英文单词
 - 只输出风格描述，不要其他内容`,
+          cache_control: { type: 'ephemeral' },
         },
         { role: 'user', content: segmentContent },
       ],
       temperature: 0.8,
       maxTokens: 128,
+      useAnthropicEndpoint: true,
     });
 
-    return result.content.trim();
+    return {
+      content: result.content.trim(),
+      cachedTokens: result.usage?.cachedTokens,
+      totalTokens: result.usage ? result.usage.promptTokens + result.usage.completionTokens : undefined,
+    };
   }
 
   /**
@@ -112,7 +130,7 @@ export class TextGenerationService {
     segmentContent: string,
     characterDescriptions: string[],
     backgroundDescription?: string
-  ): Promise<string> {
+  ): Promise<RefineResult> {
     const contextParts = [
       `段落内容：${segmentContent}`,
       characterDescriptions.length > 0
@@ -124,7 +142,7 @@ export class TextGenerationService {
     ].filter(Boolean).join('\n');
 
     const result = await this.textPort.chatCompletion({
-      model: 'MiniMax-M2.7-highspeed',
+      model: 'MiniMax-M2.5',
       messages: [
         {
           role: 'system',
@@ -138,13 +156,19 @@ export class TextGenerationService {
 - 确保提示词能生成与故事内容一致的视频
 - 长度控制在 50-300 个英文单词
 - 只输出提示词，不要其他内容`,
+          cache_control: { type: 'ephemeral' },
         },
         { role: 'user', content: contextParts },
       ],
       temperature: 0.6,
       maxTokens: 512,
+      useAnthropicEndpoint: true,
     });
 
-    return result.content.trim();
+    return {
+      content: result.content.trim(),
+      cachedTokens: result.usage?.cachedTokens,
+      totalTokens: result.usage ? result.usage.promptTokens + result.usage.completionTokens : undefined,
+    };
   }
 }

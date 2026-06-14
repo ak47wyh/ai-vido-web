@@ -65,7 +65,7 @@ export class MiniMaxStoryBreakdownAdapter implements IStoryBreakdownPort {
   async breakdownStory(text: string): Promise<StoryBreakdownResult> {
     try {
       const result = await this.textPort.chatCompletion({
-        model: 'MiniMax-M2.7',
+        model: 'MiniMax-M2.5',
         messages: [
           { role: 'system', content: BREAKDOWN_SYSTEM_PROMPT },
           { role: 'user', content: text },

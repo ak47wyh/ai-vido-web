@@ -1,12 +1,12 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../adapters/outbound/repositories/DexieDatabase';
-import { storyService, videoGenerationService, imageAdapter, voiceService, musicService } from '../../dependencies';
-import { Play, Spline, Trash2, RefreshCw, Users, PlayCircle, AlertTriangle, ImagePlus, Sparkles, Pencil, BookOpen, Download, Check, CheckCircle2, Volume2, Music } from 'lucide-react';
+import { storyService, videoGenerationService, imageAdapter, voiceService, musicService, textGenerationService } from '../../dependencies';
+import { Play, Spline, Trash2, RefreshCw, Users, PlayCircle, AlertTriangle, ImagePlus, Sparkles, Pencil, BookOpen, Download, Check, CheckCircle2, Volume2, Music, Wand2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { VideoTask, Character } from '../../domain/entities/models';
-import type { CharacterDraft, BackgroundDraft, BreakdownSegmentDraft, ImageGenerationContext } from '../../domain/ports/OutboundPorts';
+import type { CharacterDraft, BackgroundDraft, BreakdownSegmentDraft, ImageGenerationContext, VideoModel, VideoResolution, VideoGenerationMode } from '../../domain/ports/OutboundPorts';
 import { useSpace } from '../contexts/SpaceContext';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -54,6 +54,19 @@ export const StoryWorkbench: React.FC = () => {
   const [editingStoryId, setEditingStoryId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editOriginalText, setEditOriginalText] = useState('');
+
+  // AI refine state
+  const [refiningDraftCharField, setRefiningDraftCharField] = useState<{ index: number; field: string } | null>(null);
+  const [refiningDraftBgField, setRefiningDraftBgField] = useState<{ index: number; field: string } | null>(null);
+  const [refiningStoryText, setRefiningStoryText] = useState(false);
+  const [suggestingBGMStyle, setSuggestingBGMStyle] = useState(false);
+
+  // Video generation config state
+  const [videoMode, setVideoMode] = useState<VideoGenerationMode>('t2v');
+  const [videoModel, setVideoModel] = useState<VideoModel>('T2V-01-Director');
+  const [videoResolution, setVideoResolution] = useState<VideoResolution>('768P');
+  const [videoDuration, setVideoDuration] = useState<6 | 10>(6);
+  const [videoPromptOptimizer, setVideoPromptOptimizer] = useState(true);
 
   // Track active narration polling intervals for cleanup
   const narrationPollersRef = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map());
@@ -395,7 +408,13 @@ export const StoryWorkbench: React.FC = () => {
   const handleGenerateVideo = async (segmentId: string) => {
     if (!selectedStoryId) return;
     try {
-      await videoGenerationService.generateVideo(segmentId, selectedStoryId, 'MINIMAX');
+      await videoGenerationService.generateVideo(segmentId, selectedStoryId, 'MINIMAX', {
+        mode: videoMode,
+        model: videoModel,
+        resolution: videoResolution,
+        duration: videoDuration,
+        promptOptimizer: videoPromptOptimizer,
+      });
     } catch (e: unknown) {
       const message = getErrorMessage(e);
       showToast('error', message);
@@ -432,7 +451,13 @@ export const StoryWorkbench: React.FC = () => {
       }
 
       for (const seg of eligible) {
-        await videoGenerationService.generateVideo(seg.id, selectedStoryId, 'MINIMAX');
+        await videoGenerationService.generateVideo(seg.id, selectedStoryId, 'MINIMAX', {
+          mode: videoMode,
+          model: videoModel,
+          resolution: videoResolution,
+          duration: videoDuration,
+          promptOptimizer: videoPromptOptimizer,
+        });
       }
       if (eligible.length > 0) {
         showToast('info', t('workbench.batchStarted', { count: eligible.length }));
@@ -595,6 +620,28 @@ export const StoryWorkbench: React.FC = () => {
           </div>
           <div className="form-group">
             <textarea className="form-textarea" placeholder={t('workbench.storyContentPlaceholder')} value={originalText} onChange={e => setOriginalText(e.target.value)} />
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+            <button
+              className="btn btn-secondary"
+              style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#a78bfa' }}
+              disabled={refiningStoryText || !originalText.trim()}
+              onClick={async () => {
+                setRefiningStoryText(true);
+                try {
+                  const result = await textGenerationService.refineText(originalText);
+                  setOriginalText(result.content);
+                  showToast('success', t('textAI.textRefined'));
+                } catch (e) {
+                  showToast('error', getErrorMessage(e, t('textAI.promptRefineFailed')));
+                } finally {
+                  setRefiningStoryText(false);
+                }
+              }}
+            >
+              {refiningStoryText ? <RefreshCw size={14} className="spin" /> : <Wand2 size={14} />}
+              {refiningStoryText ? t('textAI.refiningText') : t('textAI.refineText')}
+            </button>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button
@@ -835,13 +882,55 @@ export const StoryWorkbench: React.FC = () => {
                         onChange={e => updateDraftCharacter(i, 'appearancePrompt', e.target.value)}
                         placeholder={t('workbench.draftAppearancePlaceholder')}
                       />
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.2rem', color: '#a78bfa' }}
+                        disabled={!c.appearancePrompt || (refiningDraftCharField?.index === i && refiningDraftCharField?.field === 'appearance')}
+                        onClick={async () => {
+                          setRefiningDraftCharField({ index: i, field: 'appearance' });
+                          try {
+                            const result = await textGenerationService.refinePrompt(c.appearancePrompt, 'character_appearance');
+                            updateDraftCharacter(i, 'appearancePrompt', result.content);
+                            showToast('success', t('textAI.promptRefined'));
+                          } catch (e) {
+                            showToast('error', getErrorMessage(e, t('textAI.promptRefineFailed')));
+                          } finally {
+                            setRefiningDraftCharField(null);
+                          }
+                        }}
+                      >
+                        {refiningDraftCharField?.index === i && refiningDraftCharField?.field === 'appearance' ? <RefreshCw size={10} className="spin" /> : <Wand2 size={10} />}
+                        {refiningDraftCharField?.index === i && refiningDraftCharField?.field === 'appearance' ? t('textAI.refiningPrompt') : t('textAI.refineCharAppearance')}
+                      </button>
                       <textarea
                         className="form-textarea"
-                        style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem', minHeight: '40px', width: '100%' }}
+                        style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem', minHeight: '40px', width: '100%', marginBottom: '0.3rem' }}
                         value={c.personalityPrompt}
                         onChange={e => updateDraftCharacter(i, 'personalityPrompt', e.target.value)}
                         placeholder={t('workbench.draftPersonalityPlaceholder')}
                       />
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.2rem', color: '#a78bfa' }}
+                        disabled={!c.personalityPrompt || (refiningDraftCharField?.index === i && refiningDraftCharField?.field === 'personality')}
+                        onClick={async () => {
+                          setRefiningDraftCharField({ index: i, field: 'personality' });
+                          try {
+                            const result = await textGenerationService.refinePrompt(c.personalityPrompt, 'character_personality');
+                            updateDraftCharacter(i, 'personalityPrompt', result.content);
+                            showToast('success', t('textAI.promptRefined'));
+                          } catch (e) {
+                            showToast('error', getErrorMessage(e, t('textAI.promptRefineFailed')));
+                          } finally {
+                            setRefiningDraftCharField(null);
+                          }
+                        }}
+                      >
+                        {refiningDraftCharField?.index === i && refiningDraftCharField?.field === 'personality' ? <RefreshCw size={10} className="spin" /> : <Wand2 size={10} />}
+                        {refiningDraftCharField?.index === i && refiningDraftCharField?.field === 'personality' ? t('textAI.refiningPrompt') : t('textAI.refineCharPersonality')}
+                      </button>
                       <button
                         type="button"
                         className="btn btn-secondary"
@@ -959,11 +1048,32 @@ export const StoryWorkbench: React.FC = () => {
                       </div>
                       <textarea
                         className="form-textarea"
-                        style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem', minHeight: '50px', width: '100%' }}
+                        style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem', minHeight: '50px', width: '100%', marginBottom: '0.3rem' }}
                         value={bg.environmentPrompt}
                         onChange={e => updateDraftBackground(i, 'environmentPrompt', e.target.value)}
                         placeholder={t('workbench.draftEnvPlaceholder')}
                       />
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.2rem', color: '#f472b6' }}
+                        disabled={!bg.environmentPrompt || (refiningDraftBgField?.index === i && refiningDraftBgField?.field === 'environment')}
+                        onClick={async () => {
+                          setRefiningDraftBgField({ index: i, field: 'environment' });
+                          try {
+                            const result = await textGenerationService.refinePrompt(bg.environmentPrompt, 'background');
+                            updateDraftBackground(i, 'environmentPrompt', result.content);
+                            showToast('success', t('textAI.promptRefined'));
+                          } catch (e) {
+                            showToast('error', getErrorMessage(e, t('textAI.promptRefineFailed')));
+                          } finally {
+                            setRefiningDraftBgField(null);
+                          }
+                        }}
+                      >
+                        {refiningDraftBgField?.index === i && refiningDraftBgField?.field === 'environment' ? <RefreshCw size={10} className="spin" /> : <Wand2 size={10} />}
+                        {refiningDraftBgField?.index === i && refiningDraftBgField?.field === 'environment' ? t('textAI.refiningPrompt') : t('textAI.refinePrompt')}
+                      </button>
                       <button
                         type="button"
                         className="btn btn-secondary"
@@ -1149,7 +1259,7 @@ export const StoryWorkbench: React.FC = () => {
                       </div>
                     )}
 
-                    <div className="flex gap-4 items-center">
+                    <div className="flex gap-4 items-center flex-wrap">
                       <select
                         className="form-select"
                         style={{ width: '200px' }}
@@ -1161,6 +1271,72 @@ export const StoryWorkbench: React.FC = () => {
                           <option key={bg.id} value={bg.id}>{bg.name}</option>
                         ))}
                       </select>
+
+                      {/* Video generation config */}
+                      <select
+                        className="form-select"
+                        style={{ width: '110px', fontSize: '0.75rem' }}
+                        value={videoMode}
+                        onChange={e => {
+                          const mode = e.target.value as VideoGenerationMode;
+                          setVideoMode(mode);
+                          // Auto-select default model for mode
+                          if (mode === 'fl2v') setVideoModel('MiniMax-Hailuo-02');
+                          else if (mode === 's2v') setVideoModel('S2V-01');
+                          else setVideoModel('T2V-01-Director');
+                        }}
+                      >
+                        <option value="t2v">{t('video.modeT2V')}</option>
+                        <option value="fl2v">{t('video.modeFL2V')}</option>
+                        <option value="s2v">{t('video.modeS2V')}</option>
+                      </select>
+
+                      {videoMode === 't2v' && (
+                        <select
+                          className="form-select"
+                          style={{ width: '160px', fontSize: '0.75rem' }}
+                          value={videoModel}
+                          onChange={e => setVideoModel(e.target.value as VideoModel)}
+                        >
+                          <option value="MiniMax-Hailuo-2.3">Hailuo 2.3</option>
+                          <option value="MiniMax-Hailuo-02">Hailuo 02</option>
+                          <option value="T2V-01-Director">T2V-01 Director</option>
+                          <option value="T2V-01">T2V-01</option>
+                        </select>
+                      )}
+
+                      <select
+                        className="form-select"
+                        style={{ width: '80px', fontSize: '0.75rem' }}
+                        value={videoResolution}
+                        onChange={e => setVideoResolution(e.target.value as VideoResolution)}
+                      >
+                        {(videoMode === 't2v' && (videoModel === 'T2V-01-Director' || videoModel === 'T2V-01')) && (
+                          <option value="720P">720P</option>
+                        )}
+                        <option value="768P">768P</option>
+                        <option value="1080P">1080P</option>
+                      </select>
+
+                      <select
+                        className="form-select"
+                        style={{ width: '65px', fontSize: '0.75rem' }}
+                        value={videoDuration}
+                        onChange={e => setVideoDuration(Number(e.target.value) as 6 | 10)}
+                      >
+                        <option value={6}>6s</option>
+                        <option value={10}>10s</option>
+                      </select>
+
+                      <label style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '0.2rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={videoPromptOptimizer}
+                          onChange={e => setVideoPromptOptimizer(e.target.checked)}
+                          style={{ width: '12px', height: '12px' }}
+                        />
+                        {t('video.promptOptimizer')}
+                      </label>
 
                       <button
                         className="btn btn-primary"
@@ -1334,6 +1510,28 @@ export const StoryWorkbench: React.FC = () => {
                                 {t(`music.style${preset.key.charAt(0).toUpperCase() + preset.key.slice(1)}`)}
                               </button>
                             ))}
+                            <button
+                              className="btn btn-secondary"
+                              style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem', display: 'flex', alignItems: 'center', gap: '0.2rem', color: '#f472b6' }}
+                              disabled={suggestingBGMStyle}
+                              onClick={async () => {
+                                const seg = sortedSegments.find(s => s.id === bgmSegmentId);
+                                if (!seg?.content) return;
+                                setSuggestingBGMStyle(true);
+                                try {
+                                  const result = await textGenerationService.suggestBGMStyle(seg.content);
+                                  setBgmPrompt(result.content);
+                                  showToast('success', t('textAI.bgmStyleSuggested'));
+                                } catch (e) {
+                                  showToast('error', getErrorMessage(e, t('textAI.promptRefineFailed')));
+                                } finally {
+                                  setSuggestingBGMStyle(false);
+                                }
+                              }}
+                            >
+                              {suggestingBGMStyle ? <RefreshCw size={10} className="spin" /> : <Wand2 size={10} />}
+                              {suggestingBGMStyle ? t('textAI.suggestingBGMStyle') : t('textAI.suggestBGMStyle')}
+                            </button>
                           </div>
 
                           {/* Prompt input */}

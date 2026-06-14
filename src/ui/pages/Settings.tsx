@@ -126,6 +126,20 @@ export const Settings: React.FC = () => {
             />
           </div>
 
+          {/* Anthropic Base URL */}
+          <div className="form-group">
+            <label className="form-label">{t('settings.anthropicBaseUrlLabel')}</label>
+            <input
+              id="settings-minimax-anthropic-base-url"
+              className="form-input"
+              type="url"
+              value={config.minimaxAnthropicBaseUrl}
+              onChange={e => handleChange('minimaxAnthropicBaseUrl', e.target.value)}
+              placeholder={t('settings.anthropicBaseUrlPlaceholder')}
+            />
+            <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{t('settings.anthropicBaseUrlHint')}</p>
+          </div>
+
           {/* External link */}
           <a
             href="https://platform.minimaxi.com/user-center/basic-information/interface-key"

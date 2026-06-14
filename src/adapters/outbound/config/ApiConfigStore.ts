@@ -7,6 +7,7 @@ export interface ApiConfig {
   minimaxApiKey: string;
   minimaxGroupId: string;
   minimaxBaseUrl: string;
+  minimaxAnthropicBaseUrl: string;
 }
 
 const STORAGE_KEY = 'ai_video_studio_api_config';
@@ -14,7 +15,8 @@ const STORAGE_KEY = 'ai_video_studio_api_config';
 const DEFAULT_CONFIG: ApiConfig = {
   minimaxApiKey: '',
   minimaxGroupId: '',
-  minimaxBaseUrl: 'https://api.minimaxi.com/v1'
+  minimaxBaseUrl: 'https://api.minimaxi.com/v1',
+  minimaxAnthropicBaseUrl: 'https://api.minimaxi.com/anthropic',
 };
 
 export const ApiConfigStore = {

@@ -1,49 +1,27 @@
-import type { IVideoGeneratorPort, VideoPromptContext, VideoTaskResult } from '../../../domain/ports/OutboundPorts';
+import type { IVideoGeneratorPort, VideoPromptContext, VideoTaskResult, VideoDownloadResult } from '../../../domain/ports/OutboundPorts';
 import { ApiConfigStore } from '../config/ApiConfigStore';
 import { getMiniMaxErrorMessage } from './MiniMaxErrorUtils';
 import axios from 'axios';
 
 /**
  * Adapter for MiniMax Video Generation API.
- * Reads the API Key and Group ID from ApiConfigStore (localStorage).
- * Falls back to mock mode when no API key is configured.
  *
- * MiniMax API Docs (2025):
+ * Supports 3 generation modes:
+ *   - T2V (Text-to-Video): prompt-only, supports Hailuo-2.3/Hailuo-02/T2V-01-Director/T2V-01
+ *   - FL2V (First-Last-Frame): first_frame_image + last_frame_image, only Hailuo-02
+ *   - S2V (Subject-Reference): subject_reference images, only S2V-01
+ *
+ * API Endpoints:
  *   - Submit task: POST https://api.minimaxi.com/v1/video_generation
  *   - Query status: GET  https://api.minimaxi.com/v1/query/video_generation?task_id={id}
- *   - Download file: GET  https://api.minimaxi.com/v1/files/{file_id}
- *
- * Response codes (base_resp.status_code):
- *   0: success | 1002: rate limit | 1004: auth failed
- *   1008: insufficient balance | 1026: sensitive content | 2013: invalid params
- *   2049: invalid api key
+ *   - Download file: GET  https://api.minimaxi.com/v1/files/retrieve?file_id={id}
  *
  * Task statuses: Preparing → Queueing → Processing → Success / Fail
  */
 export class MiniMaxVideoAdapter implements IVideoGeneratorPort {
 
-  private buildPrompt(context: VideoPromptContext): string {
-    const parts: string[] = [];
-
-    if (context.characters && context.characters.length > 0) {
-      const charDescs = context.characters.map(c => {
-        let desc = c.appearancePrompt;
-        if (c.personalityPrompt) desc += `, ${c.personalityPrompt}`;
-        return desc;
-      });
-      parts.push(charDescs.join(' and '));
-    }
-    if (context.background) {
-      parts.push(`in ${context.background.environmentPrompt}`);
-    }
-    parts.push(context.actionContent);
-
-    return parts.join(', ') + '.';
-  }
-
   async submitVideoTask(context: VideoPromptContext): Promise<string> {
     const config = ApiConfigStore.load();
-    const prompt = this.buildPrompt(context);
 
     // ── Mock mode (no API key configured) ──────────────────────────────────
     if (!config.minimaxApiKey) {
@@ -52,50 +30,82 @@ export class MiniMaxVideoAdapter implements IVideoGeneratorPort {
       return `mock-task-${Date.now()}`;
     }
 
-    // ── Real API call ───────────────────────────────────────────────────────
-    console.log('[MiniMaxVideoAdapter] Submitting task with prompt:', prompt);
+    // ── Build prompt from legacy fields if prompt not directly provided ─────
+    const prompt = context.prompt || this.buildPrompt(context);
 
-    const baseUrl = config.minimaxBaseUrl.replace(/\/+$/, '');
+    // ── Determine mode and model ────────────────────────────────────────────
+    const mode = context.mode || this.inferMode(context);
+    const model = context.model || this.getDefaultModel(mode);
 
-    // Build request payload with optional voice and BGM fields
+    // ── Build request payload ───────────────────────────────────────────────
     const payload: Record<string, unknown> = {
-      model: 'T2V-01-Director',
+      model,
       prompt,
-      prompt_optimizer: true
+      prompt_optimizer: context.promptOptimizer !== undefined ? context.promptOptimizer : true,
     };
 
+    // Mode-specific fields
+    if (mode === 'fl2v') {
+      if (!context.firstFrameImage) {
+        throw new Error('FL2V mode requires firstFrameImage');
+      }
+      payload.first_frame_image = context.firstFrameImage;
+      if (context.lastFrameImage) {
+        payload.last_frame_image = context.lastFrameImage;
+      }
+    } else if (mode === 's2v') {
+      if (!context.subjectReference || context.subjectReference.length === 0) {
+        throw new Error('S2V mode requires subjectReference');
+      }
+      payload.subject_reference = context.subjectReference;
+    }
+
+    // Common optional fields
+    if (context.fastPretreatment !== undefined && (model === 'MiniMax-Hailuo-2.3' || model === 'MiniMax-Hailuo-02')) {
+      payload.fast_pretreatment = context.fastPretreatment;
+    }
+    if (context.duration) {
+      payload.duration = context.duration;
+    }
+    if (context.resolution) {
+      payload.resolution = context.resolution;
+    }
+    if (context.callbackUrl) {
+      payload.callback_url = context.callbackUrl;
+    }
+
+    // Voice and BGM (T2V mode with Director model)
     if (context.characterVoiceIds && Object.keys(context.characterVoiceIds).length > 0) {
       payload.character_voice_ids = context.characterVoiceIds;
     }
-
     if (context.bgmAudioUrl) {
       payload.bgm_audio_url = context.bgmAudioUrl;
     }
 
+    console.log(`[MiniMaxVideoAdapter] Submitting ${mode.toUpperCase()} task, model: ${model}`);
+
+    // ── Real API call ───────────────────────────────────────────────────────
+    const baseUrl = config.minimaxBaseUrl.replace(/\/+$/, '');
     const response = await axios.post(
       `${baseUrl}/video_generation`,
       payload,
       {
         headers: {
           Authorization: `Bearer ${config.minimaxApiKey}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
-        params: config.minimaxGroupId ? { group_id: config.minimaxGroupId } : undefined
+        params: config.minimaxGroupId ? { group_id: config.minimaxGroupId } : undefined,
       }
     );
 
     const data = response.data;
-
-    // Check base_resp for error codes
     const statusCode = data?.base_resp?.status_code;
     const statusMsg = data?.base_resp?.status_msg || '';
-
     const error = getMiniMaxErrorMessage(statusCode, statusMsg);
     if (error) throw new Error(error);
 
     const taskId: string = data?.task_id;
     if (!taskId) {
-      // Log full response for debugging
       console.error('[MiniMaxVideoAdapter] Unexpected response:', JSON.stringify(data));
       throw new Error('MiniMax API did not return a task_id. Please check your API Key and Group ID configuration.');
     }
@@ -112,26 +122,27 @@ export class MiniMaxVideoAdapter implements IVideoGeneratorPort {
       if (isDone) {
         return {
           status: 'SUCCESS',
-          videoUrl: 'https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_1mb.mp4'
+          videoUrl: 'https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_1mb.mp4',
+          fileId: 'mock-file-id',
+          videoWidth: 1280,
+          videoHeight: 720,
         };
       }
       return { status: 'PROCESSING' };
     }
 
     // ── Real API call ───────────────────────────────────────────────────────
-    console.log(`[MiniMaxVideoAdapter] Polling status for task: ${externalTaskId}`);
-
     const baseUrl = config.minimaxBaseUrl.replace(/\/+$/, '');
     const response = await axios.get(
       `${baseUrl}/query/video_generation`,
       {
         params: {
           task_id: externalTaskId,
-          ...(config.minimaxGroupId ? { group_id: config.minimaxGroupId } : {})
+          ...(config.minimaxGroupId ? { group_id: config.minimaxGroupId } : {}),
         },
         headers: {
-          Authorization: `Bearer ${config.minimaxApiKey}`
-        }
+          Authorization: `Bearer ${config.minimaxApiKey}`,
+        },
       }
     );
 
@@ -141,20 +152,29 @@ export class MiniMaxVideoAdapter implements IVideoGeneratorPort {
     // Check for API-level errors
     const statusCode = data?.base_resp?.status_code;
     if (statusCode !== undefined && statusCode !== 0) {
-      // 1002 = rate limit, treat as still processing (will retry)
       if (statusCode === 1002) {
         return { status: 'PROCESSING' };
       }
-      // Other errors = fail the task
       const statusMsg = data?.base_resp?.status_msg || `API error (code ${statusCode})`;
       return { status: 'FAILED', errorMessage: statusMsg };
     }
 
     if (status === 'Success') {
       const fileId = data?.file_id;
-      // Build video URL via File API
-      const videoUrl = fileId ? `${baseUrl}/files/${fileId}` : undefined;
-      return { status: 'SUCCESS', videoUrl };
+      const videoWidth = data?.video_width;
+      const videoHeight = data?.video_height;
+      // Use download API to get the actual download URL
+      let videoUrl: string | undefined;
+      if (fileId) {
+        try {
+          const downloadResult = await this.downloadVideo(String(fileId));
+          videoUrl = downloadResult.downloadUrl;
+        } catch {
+          // Fallback: construct URL from file_id
+          videoUrl = `${baseUrl}/files/${fileId}`;
+        }
+      }
+      return { status: 'SUCCESS', videoUrl, fileId: fileId ? String(fileId) : undefined, videoWidth, videoHeight };
     }
     if (status === 'Fail') {
       const failMsg = data?.base_resp?.status_msg || 'Video generation failed';
@@ -162,5 +182,89 @@ export class MiniMaxVideoAdapter implements IVideoGeneratorPort {
     }
     // Preparing / Queueing / Processing → all map to PROCESSING
     return { status: 'PROCESSING' };
+  }
+
+  async downloadVideo(fileId: string): Promise<VideoDownloadResult> {
+    const config = ApiConfigStore.load();
+
+    if (!config.minimaxApiKey) {
+      throw new Error('API key is required to download videos');
+    }
+
+    const baseUrl = config.minimaxBaseUrl.replace(/\/+$/, '');
+    const response = await axios.get(
+      `${baseUrl}/files/retrieve`,
+      {
+        params: {
+          file_id: fileId,
+          ...(config.minimaxGroupId ? { group_id: config.minimaxGroupId } : {}),
+        },
+        headers: {
+          Authorization: `Bearer ${config.minimaxApiKey}`,
+        },
+      }
+    );
+
+    const data = response.data;
+    const statusCode = data?.base_resp?.status_code;
+    const error = getMiniMaxErrorMessage(statusCode, data?.base_resp?.status_msg);
+    if (error) throw new Error(error);
+
+    const file = data?.file;
+    if (!file?.download_url) {
+      throw new Error('No download URL returned from file retrieval API');
+    }
+
+    return {
+      downloadUrl: file.download_url,
+      filename: file.filename || 'output_aigc.mp4',
+      bytes: file.bytes || 0,
+      createdAt: file.created_at || 0,
+    };
+  }
+
+  /**
+   * Build prompt from legacy context fields (characters, background, actionContent).
+   */
+  private buildPrompt(context: VideoPromptContext): string {
+    const parts: string[] = [];
+
+    if (context.characters && context.characters.length > 0) {
+      const charDescs = context.characters.map(c => {
+        let desc = c.appearancePrompt;
+        if (c.personalityPrompt) desc += `, ${c.personalityPrompt}`;
+        return desc;
+      });
+      parts.push(charDescs.join(' and '));
+    }
+    if (context.background) {
+      parts.push(`in ${context.background.environmentPrompt}`);
+    }
+    if (context.actionContent) {
+      parts.push(context.actionContent);
+    }
+
+    return parts.join(', ') + '.';
+  }
+
+  /**
+   * Infer generation mode from context fields.
+   */
+  private inferMode(context: VideoPromptContext): 't2v' | 'fl2v' | 's2v' {
+    if (context.firstFrameImage) return 'fl2v';
+    if (context.subjectReference && context.subjectReference.length > 0) return 's2v';
+    return 't2v';
+  }
+
+  /**
+   * Get default model for a given mode.
+   */
+  private getDefaultModel(mode: 't2v' | 'fl2v' | 's2v'): string {
+    switch (mode) {
+      case 'fl2v': return 'MiniMax-Hailuo-02';
+      case 's2v': return 'S2V-01';
+      case 't2v':
+      default: return 'T2V-01-Director';
+    }
   }
 }

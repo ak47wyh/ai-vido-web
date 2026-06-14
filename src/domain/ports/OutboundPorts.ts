@@ -49,26 +49,61 @@ export interface IVideoTaskRepository {
   updateStatus(taskId: string, status: VideoTaskStatus, videoUrl?: string, error?: string): Promise<void>;
 }
 
-// --- external APIs ---
+// --- Video Generation ---
+
+export type VideoModel = 'MiniMax-Hailuo-2.3' | 'MiniMax-Hailuo-02' | 'T2V-01-Director' | 'T2V-01' | 'S2V-01';
+export type VideoResolution = '720P' | '768P' | '1080P';
+export type VideoGenerationMode = 't2v' | 'fl2v' | 's2v';
+
+export interface VideoSubjectReference {
+  type: string;
+  image: string[];
+}
 
 export interface VideoPromptContext {
-  actionContent: string;
-  characters: Character[];
-  background?: Background;
-  videoStyle?: string;
+  mode?: VideoGenerationMode;
+  model?: VideoModel;
+  prompt: string;
+  promptOptimizer?: boolean;
+  fastPretreatment?: boolean;
+  duration?: 6 | 10;
+  resolution?: VideoResolution;
+  callbackUrl?: string;
+  // FL2V: first/last frame images
+  firstFrameImage?: string;
+  lastFrameImage?: string;
+  // S2V: subject reference
+  subjectReference?: VideoSubjectReference[];
+  // T2V with voice/BGM
   characterVoiceIds?: Record<string, string>;
   bgmAudioUrl?: string;
+  // Legacy fields (kept for backward compatibility)
+  actionContent?: string;
+  characters?: import('../entities/models').Character[];
+  background?: import('../entities/models').Background;
+  videoStyle?: string;
 }
 
 export interface VideoTaskResult {
   status: VideoTaskStatus;
   videoUrl?: string;
+  videoWidth?: number;
+  videoHeight?: number;
+  fileId?: string;
   errorMessage?: string;
+}
+
+export interface VideoDownloadResult {
+  downloadUrl: string;
+  filename: string;
+  bytes: number;
+  createdAt: number;
 }
 
 export interface IVideoGeneratorPort {
   submitVideoTask(context: VideoPromptContext): Promise<string>;
   queryTaskStatus(externalTaskId: string): Promise<VideoTaskResult>;
+  downloadVideo(fileId: string): Promise<VideoDownloadResult>;
 }
 
 export interface SegmentDraft {
