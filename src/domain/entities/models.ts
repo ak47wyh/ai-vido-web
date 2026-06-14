@@ -65,7 +65,7 @@ export interface VideoTask {
   errorMessage?: string;
   externalTaskId?: string;
   createdAt: number;
-  // New fields for extended video generation
+  updatedAt?: number;
   mode?: VideoGenerationMode;
   model?: VideoModel;
   resolution?: VideoResolution;
@@ -76,4 +76,53 @@ export interface VideoTask {
   promptOptimizer?: boolean;
   firstFrameImage?: string;
   lastFrameImage?: string;
+}
+
+// --- Final Cut & Pipeline (v7) ---
+
+export type PipelineStatus =
+  | 'idle'
+  | 'splitting'
+  | 'generating_images'
+  | 'generating_audio'
+  | 'generating_bgm'
+  | 'generating_videos'
+  | 'post_processing'
+  | 'generating_srt'
+  | 'burning_subtitles'
+  | 'complete'
+  | 'failed';
+
+export interface PipelineStep {
+  name: PipelineStatus;
+  status: 'pending' | 'running' | 'done' | 'failed';
+  startedAt?: number;
+  completedAt?: number;
+  error?: string;
+}
+
+export interface PipelineTask {
+  id: string;
+  storyId: string;
+  status: PipelineStatus;
+  progress: number;
+  currentStep: string;
+  steps: PipelineStep[];
+  finalVideoUrl?: string;
+  createdAt: number;
+  completedAt?: number;
+  error?: string;
+}
+
+export interface FinalCut {
+  id: string;
+  storyId: string;
+  pipelineTaskId?: string;
+  videoBlob: Blob;
+  thumbnailUrl?: string;
+  duration: number;
+  size: number;
+  hasSubtitles: boolean;
+  srtContent?: string;
+  createdAt: number;
 }

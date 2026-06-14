@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { LayoutDashboard, Users, Image as ImageIcon, BookOpen, Settings, FolderOpen } from 'lucide-react';
+import { LayoutDashboard, Users, Image as ImageIcon, BookOpen, Settings, FolderOpen, Download } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../adapters/outbound/repositories/DexieDatabase';
@@ -56,6 +56,10 @@ export const MainLayout: React.FC = () => {
           <NavLink to="/spaces" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
             <FolderOpen size={20} />
             <span>{t('nav.spaces')}</span>
+          </NavLink>
+          <NavLink to="/export" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+            <Download size={20} />
+            <span>{t('nav.export')}</span>
           </NavLink>
         </nav>
         <div style={{ paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>

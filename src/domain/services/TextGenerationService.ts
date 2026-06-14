@@ -1,4 +1,5 @@
 import type { ITextGenerationPort, RefineResult } from '../ports/OutboundPorts';
+import { recordTextGenUsage } from '../../utils/cacheMonitor';
 
 export class TextGenerationService {
   textPort: ITextGenerationPort;
@@ -45,6 +46,8 @@ export class TextGenerationService {
       useAnthropicEndpoint: true,
     });
 
+    recordTextGenUsage(`refine_${type}`, result.usage);
+
     return {
       content: result.content.trim(),
       cachedTokens: result.usage?.cachedTokens,
@@ -80,6 +83,8 @@ export class TextGenerationService {
       useAnthropicEndpoint: true,
     });
 
+    recordTextGenUsage('refine_text', result.usage);
+
     return {
       content: result.content.trim(),
       cachedTokens: result.usage?.cachedTokens,
@@ -114,6 +119,8 @@ export class TextGenerationService {
       maxTokens: 128,
       useAnthropicEndpoint: true,
     });
+
+    recordTextGenUsage('bgm_style', result.usage);
 
     return {
       content: result.content.trim(),
@@ -164,6 +171,8 @@ export class TextGenerationService {
       maxTokens: 512,
       useAnthropicEndpoint: true,
     });
+
+    recordTextGenUsage('video_prompt', result.usage);
 
     return {
       content: result.content.trim(),

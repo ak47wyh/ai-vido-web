@@ -69,15 +69,11 @@ export interface VideoPromptContext {
   duration?: 6 | 10;
   resolution?: VideoResolution;
   callbackUrl?: string;
-  // FL2V: first/last frame images
   firstFrameImage?: string;
   lastFrameImage?: string;
-  // S2V: subject reference
   subjectReference?: VideoSubjectReference[];
-  // T2V with voice/BGM
   characterVoiceIds?: Record<string, string>;
   bgmAudioUrl?: string;
-  // Legacy fields (kept for backward compatibility)
   actionContent?: string;
   characters?: import('../entities/models').Character[];
   background?: import('../entities/models').Background;
@@ -177,7 +173,6 @@ export interface ImageGenerationContext {
   aigcWatermark?: boolean;
   subjectReference?: ImageSubjectReference[];
   style?: ImageStyle;
-  // Legacy field
   subjectReferenceUrl?: string;
 }
 
@@ -282,6 +277,16 @@ export interface FileUploadResult {
   fileId: string;
 }
 
+export interface T2AStreamCallbacks {
+  onAudioChunk: (chunk: ArrayBuffer) => void;
+  onComplete?: (totalLength?: number) => void;
+  onError?: (error: Error) => void;
+}
+
+export interface T2AStreamHandle {
+  close: () => void;
+}
+
 export interface IVoicePort {
   uploadFile(file: File, purpose: 'voice_clone' | 'prompt_audio' | 't2a_async_input'): Promise<FileUploadResult>;
   cloneVoice(context: VoiceCloneContext): Promise<VoiceCloneResult>;
@@ -292,6 +297,8 @@ export interface IVoicePort {
   designVoice(prompt: string, previewText: string, voiceId?: string): Promise<VoiceDesignResult>;
   getAvailableVoices(voiceType: VoiceType): Promise<VoiceListResult>;
   deleteVoice(voiceType: 'voice_cloning' | 'voice_generation', voiceId: string): Promise<void>;
+  /** WebSocket 流式合成 — 边生成边推送音频块。返回 handle 用于中止 */
+  synthesizeSpeechStream(context: T2ASyncContext, callbacks: T2AStreamCallbacks): T2AStreamHandle;
 }
 
 // --- Music Generation ---
@@ -312,7 +319,6 @@ export interface MusicGenerationContext {
     bitrate?: number;
     format?: string;
   };
-  // Cover mode: reference audio
   audioUrl?: string;
   audioBase64?: string;
   coverFeatureId?: string;

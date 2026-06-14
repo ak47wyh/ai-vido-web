@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { Character, Background, Story, StorySegment, StorySpace, VideoTask } from '../../../domain/entities/models';
+import type { Character, Background, Story, StorySegment, StorySpace, VideoTask, PipelineTask, FinalCut } from '../../../domain/entities/models';
 
 export class AiVideoDatabase extends Dexie {
   storySpaces!: Table<StorySpace, string>;
@@ -8,6 +8,8 @@ export class AiVideoDatabase extends Dexie {
   stories!: Table<Story, string>;
   segments!: Table<StorySegment, string>;
   videoTasks!: Table<VideoTask, string>;
+  pipelineTasks!: Table<PipelineTask, string>;
+  finalCuts!: Table<FinalCut, string>;
 
   constructor() {
     super('AiVideoDatabase');
@@ -79,6 +81,17 @@ export class AiVideoDatabase extends Dexie {
       stories: 'id, spaceId, status, createdAt',
       segments: 'id, storyId, sequenceOrder',
       videoTasks: 'id, segmentId, status, createdAt'
+    });
+    // Version 7: Add Pipeline + FinalCut tables (no migration needed, new tables)
+    this.version(7).stores({
+      storySpaces: 'id, name, createdAt',
+      characters: 'id, spaceId, name, createdAt',
+      backgrounds: 'id, spaceId, name, createdAt',
+      stories: 'id, spaceId, status, createdAt',
+      segments: 'id, storyId, sequenceOrder',
+      videoTasks: 'id, segmentId, status, createdAt',
+      pipelineTasks: 'id, storyId, status, createdAt',
+      finalCuts: 'id, storyId, pipelineTaskId, createdAt'
     });
   }
 }

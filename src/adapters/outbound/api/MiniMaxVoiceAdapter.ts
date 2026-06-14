@@ -10,7 +10,9 @@ import type {
   VoiceDesignResult,
   VoiceType,
   VoiceListResult,
-  FileUploadResult
+  FileUploadResult,
+  T2AStreamCallbacks,
+  T2AStreamHandle
 } from '../../../domain/ports/OutboundPorts';
 import { ApiConfigStore } from '../config/ApiConfigStore';
 import { getMiniMaxErrorMessage } from './MiniMaxErrorUtils';
@@ -259,6 +261,114 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
       audioSize: extraInfo?.audio_size,
       usageCharacters: extraInfo?.usage_characters,
     };
+  }
+
+  // --- WebSocket Streaming T2A ---
+
+  synthesizeSpeechStream(context: T2ASyncContext, callbacks: T2AStreamCallbacks): T2AStreamHandle {
+    const config = ApiConfigStore.load();
+    if (!config.minimaxApiKey) {
+      const error = new Error('API Key not configured — cannot stream speech');
+      callbacks.onError?.(error);
+      return { close: () => {} };
+    }
+
+    // Convert https://... to wss://...
+    const baseUrl = config.minimaxBaseUrl.replace(/\/+$/, '').replace(/^https?:/, (m) => m === 'https:' ? 'wss:' : 'ws:');
+    const wsUrl = `${baseUrl}/t2a_v2`;
+
+    let ws: WebSocket | null = null;
+    let closed = false;
+
+    const close = () => {
+      if (closed) return;
+      closed = true;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        try {
+          ws.close();
+        } catch {
+          // ignore
+        }
+      }
+      ws = null;
+    };
+
+    try {
+      ws = new WebSocket(wsUrl);
+    } catch (e) {
+      callbacks.onError?.(e instanceof Error ? e : new Error(String(e)));
+      return { close };
+    }
+
+    ws.binaryType = 'arraybuffer';
+
+    ws.onopen = () => {
+      if (closed || !ws) return;
+      const payload = {
+        model: context.model || 'speech-2.8-turbo',
+        text: context.text,
+        voice_setting: {
+          voice_id: context.voiceId,
+          speed: context.speed ?? 1,
+          vol: context.volume ?? 1,
+          pitch: context.pitch ?? 0,
+        },
+        audio_setting: {
+          audio_sample_rate: context.sampleRate ?? 32000,
+          bitrate: 128000,
+          format: context.audioFormat || 'mp3',
+          channel: 1,
+        },
+        stream: true,
+        ...(context.languageBoost ? { language_boost: context.languageBoost } : { language_boost: 'auto' }),
+      };
+      try {
+        ws.send(JSON.stringify(payload));
+      } catch (e) {
+        callbacks.onError?.(e instanceof Error ? e : new Error(String(e)));
+        close();
+      }
+    };
+
+    ws.onmessage = (event) => {
+      if (closed) return;
+      // Server may send binary audio chunks or JSON control messages
+      if (event.data instanceof ArrayBuffer) {
+        callbacks.onAudioChunk(event.data);
+      } else if (event.data instanceof Blob) {
+        event.data.arrayBuffer().then(buf => callbacks.onAudioChunk(buf)).catch(() => {});
+      } else if (typeof event.data === 'string') {
+        try {
+          const parsed = JSON.parse(event.data);
+          if (parsed.base_resp?.status_code && parsed.base_resp.status_code !== 0) {
+            const msg = getMiniMaxErrorMessage(parsed.base_resp.status_code, parsed.base_resp.status_msg, 'T2A Stream error');
+            if (msg) {
+              callbacks.onError?.(new Error(msg));
+              close();
+            }
+          } else if (parsed.type === 'done' || parsed.audio_length) {
+            callbacks.onComplete?.(parsed.audio_length);
+            close();
+          }
+        } catch {
+          // ignore non-JSON messages
+        }
+      }
+    };
+
+    ws.onerror = (event) => {
+      if (closed) return;
+      const message = (event as ErrorEvent).message || 'WebSocket error';
+      callbacks.onError?.(new Error(message));
+    };
+
+    ws.onclose = () => {
+      if (closed) return;
+      closed = true;
+      callbacks.onComplete?.();
+    };
+
+    return { close };
   }
 
   // --- Voice Design ---

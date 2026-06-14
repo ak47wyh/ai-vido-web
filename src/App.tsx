@@ -7,6 +7,7 @@ import { BackgroundManagement } from './ui/pages/BackgroundManagement';
 import { StoryWorkbench } from './ui/pages/StoryWorkbench';
 import { StorySpaceManagement } from './ui/pages/StorySpaceManagement';
 import { Settings } from './ui/pages/Settings';
+import { ExportCenter } from './ui/pages/ExportCenter';
 import { SpaceProvider } from './ui/contexts/SpaceContext';
 import { ToastProvider } from './ui/contexts/ToastContext';
 import { ConfirmProvider } from './ui/contexts/ConfirmContext';
@@ -33,6 +34,7 @@ function App() {
                   <Route path="backgrounds" element={<BackgroundManagement />} />
                   <Route path="workbench" element={<StoryWorkbench />} />
                   <Route path="spaces" element={<StorySpaceManagement />} />
+                  <Route path="export" element={<ExportCenter />} />
                   <Route path="settings" element={<Settings />} />
                 </Route>
               </Routes>

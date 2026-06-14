@@ -1,4 +1,4 @@
-import type { IVoicePort, T2AAsyncContext, T2ASyncContext, T2ASyncResult, VoiceDesignResult, VoiceType, VoiceListResult } from '../ports/OutboundPorts';
+import type { IVoicePort, T2AAsyncContext, T2ASyncContext, T2ASyncResult, T2AStreamCallbacks, T2AStreamHandle, VoiceDesignResult, VoiceType, VoiceListResult } from '../ports/OutboundPorts';
 import type { ICharacterRepository } from '../ports/OutboundPorts';
 
 /** Max text length for synchronous T2A (short text = instant response) */
@@ -126,6 +126,30 @@ export class VoiceService {
     };
 
     return this.voicePort.synthesizeSpeechSync(context);
+  }
+
+  /**
+   * WebSocket 流式 T2A — 边生成边播放，最佳实时体验。
+   * 返回 handle 用于中止流。
+   */
+  synthesizeStream(
+    text: string,
+    voiceId: string,
+    callbacks: T2AStreamCallbacks
+  ): T2AStreamHandle {
+    const context: T2ASyncContext = {
+      model: 'speech-2.8-turbo',
+      text,
+      voiceId,
+      speed: 1,
+      volume: 1,
+      audioFormat: 'mp3',
+      sampleRate: 32000,
+      stream: true,
+      outputFormat: 'hex',
+      languageBoost: 'auto',
+    };
+    return this.voicePort.synthesizeSpeechStream(context, callbacks);
   }
 
   /**

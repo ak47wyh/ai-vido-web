@@ -503,38 +503,5 @@
     "startTime": "Start Time",
     "endTime": "End Time",
     "targetLanguage": "Target Language"
-  },
-  "network": {
-    "online": "Online",
-    "offline": "Offline",
-    "cacheTitle": "Offline Cache",
-    "totalCacheSize": "Total {{size}} · {{count}} items",
-    "offlineMode": "Offline mode",
-    "swActive": "Service Worker active",
-    "noCache": "No cache items",
-    "confirmClear": "Clear all cache?"
-  },
-  "bgm": {
-    "title": "BGM Recommendation",
-    "category": "Category",
-    "emotion": "Emotion",
-    "tempo": "Tempo",
-    "instruments": "Instruments",
-    "useInstrumental": "Instrumental",
-    "reasoning": "Reasoning",
-    "duration": "Suggested Duration",
-    "apply": "Apply",
-    "cinematic-epic": "Cinematic/Epic",
-    "lighthearted": "Lighthearted",
-    "suspense": "Suspense",
-    "melancholic": "Melancholic",
-    "upbeat": "Upbeat",
-    "romantic": "Romantic",
-    "mystery": "Mystery",
-    "epic-action": "Action",
-    "sci-fi-tech": "Sci-Fi/Tech",
-    "fantasy-mythic": "Fantasy/Mythic",
-    "horror-dark": "Horror/Dark",
-    "documentary": "Documentary"
   }
 }

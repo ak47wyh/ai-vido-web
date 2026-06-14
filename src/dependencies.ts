@@ -1,6 +1,9 @@
 import { StoryService } from './domain/services/StoryService';
 import { VideoGenerationService } from './domain/services/VideoGenerationService';
 import { StorySpaceService } from './domain/services/StorySpaceService';
+import { PostProcessService } from './domain/services/PostProcessService';
+import { PipelineService } from './domain/services/PipelineService';
+import { SubtitleService } from './domain/services/SubtitleService';
 import { StorySpaceRepositoryAdapter, CharacterRepositoryAdapter, StoryRepositoryAdapter, StorySegmentRepositoryAdapter, BackgroundRepositoryAdapter, VideoTaskRepositoryAdapter } from './adapters/outbound/repositories/IndexedDBAdapters';
 import { MiniMaxVideoAdapter } from './adapters/outbound/api/MiniMaxVideoAdapter';
 import { MiniMaxImageAdapter } from './adapters/outbound/api/MiniMaxImageAdapter';
@@ -11,6 +14,8 @@ import { MiniMaxTextSplitterAdapter } from './adapters/outbound/api/MiniMaxTextS
 import { MiniMaxStoryBreakdownAdapter } from './adapters/outbound/api/MiniMaxStoryBreakdownAdapter';
 import { MiniMaxModelAdapter } from './adapters/outbound/api/MiniMaxModelAdapter';
 import { MiniMaxFileAdapter } from './adapters/outbound/api/MiniMaxFileAdapter';
+import { FFmpegAdapter } from './adapters/outbound/api/FFmpegAdapter';
+import { WhisperAdapter } from './adapters/outbound/api/WhisperAdapter';
 import { MockTextSplitterAdapter } from './adapters/outbound/api/MockTextSplitter';
 import { MockStoryBreakdownAdapter } from './adapters/outbound/api/MockStoryBreakdown';
 import { ImageGenerationService } from './domain/services/ImageGenerationService';
@@ -19,6 +24,8 @@ import { MusicService } from './domain/services/MusicService';
 import { TextGenerationService } from './domain/services/TextGenerationService';
 import { ModelManagementService } from './domain/services/ModelManagementService';
 import { FileManagementService } from './domain/services/FileManagementService';
+import { AgentService } from './domain/services/AgentService';
+import { BGMRecommendationService } from './domain/services/BGMRecommendationService';
 
 export const spaceRepo = new StorySpaceRepositoryAdapter();
 export const characterRepo = new CharacterRepositoryAdapter();
@@ -34,6 +41,8 @@ export const musicAdapter = new MiniMaxMusicAdapter();
 export const textAdapter = new MiniMaxTextAdapter();
 export const modelAdapter = new MiniMaxModelAdapter();
 export const fileAdapter = new MiniMaxFileAdapter();
+export const ffmpegAdapter = new FFmpegAdapter();
+export const whisperAdapter = new WhisperAdapter();
 
 // Mock adapters (used as fallback when API is unavailable)
 export const mockTextSplitter = new MockTextSplitterAdapter();
@@ -85,3 +94,17 @@ export const textGenerationService = new TextGenerationService(textAdapter);
 export const modelManagementService = new ModelManagementService(modelAdapter);
 
 export const fileManagementService = new FileManagementService(fileAdapter);
+
+export const postProcessService = new PostProcessService(ffmpegAdapter, whisperAdapter);
+
+export const pipelineService = new PipelineService(videoTaskRepo);
+
+export const subtitleService = new SubtitleService(whisperAdapter, textAdapter);
+
+export const agentService = new AgentService(textAdapter);
+
+export const autoEditService = new AutoEditService(ffmpegAdapter);
+
+export const cinematographyService = new CinematographyService(textAdapter);
+
+export const bgmRecommendationService = new BGMRecommendationService(textAdapter);
