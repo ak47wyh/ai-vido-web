@@ -8,7 +8,10 @@ import type {
   IVideoTaskRepository,
   IBackgroundRepository,
   IStoryBreakdownPort,
-  StoryBreakdownResult
+  StoryBreakdownResult,
+  CharacterDraft,
+  BackgroundDraft,
+  BreakdownSegmentDraft
 } from '../ports/OutboundPorts';
 
 export class StoryService {
@@ -103,11 +106,29 @@ export class StoryService {
     return segments;
   }
 
-  async breakdownStory(storyId: string): Promise<StoryBreakdownResult & { savedCharacterIds: string[]; savedBackgroundIds: string[] }> {
+  /**
+   * Preview breakdown: call AI to extract characters/backgrounds/segments
+   * but do NOT save anything — return drafts for user to edit.
+   */
+  async previewBreakdown(storyId: string): Promise<StoryBreakdownResult> {
     const story = await this.storyRepo.findById(storyId);
     if (!story) throw new Error('Story not found');
+    return this.storyBreakdownPort.breakdownStory(story.originalText);
+  }
 
-    const result = await this.storyBreakdownPort.breakdownStory(story.originalText);
+  /**
+   * Apply breakdown: save user-edited characters, backgrounds, and segments.
+   * - Existing same-name characters/backgrounds are reused (not overwritten).
+   * - Previous segments & video tasks for this story are deleted and rebuilt.
+   */
+  async applyBreakdown(
+    storyId: string,
+    characters: CharacterDraft[],
+    backgrounds: BackgroundDraft[],
+    segments: BreakdownSegmentDraft[]
+  ): Promise<{ savedCharacterIds: string[]; savedBackgroundIds: string[] }> {
+    const story = await this.storyRepo.findById(storyId);
+    if (!story) throw new Error('Story not found');
 
     // Load existing characters/backgrounds in this space for dedup
     const existingCharacters = await this.characterRepo.findBySpaceId(story.spaceId);
@@ -117,10 +138,10 @@ export class StoryService {
 
     const savedCharacterIds: string[] = [];
     const characterNameToId = new Map<string, string>();
-    for (const draft of result.characters) {
-      // Reuse existing character with same name, or create new
+    for (const draft of characters) {
       const existing = existingCharByName.get(draft.name);
       if (existing) {
+        // Reuse existing — do NOT overwrite user edits
         savedCharacterIds.push(existing.id);
         characterNameToId.set(draft.name, existing.id);
       } else {
@@ -141,7 +162,7 @@ export class StoryService {
 
     const savedBackgroundIds: string[] = [];
     const backgroundNameToId = new Map<string, string>();
-    for (const draft of result.backgrounds) {
+    for (const draft of backgrounds) {
       const existing = existingBgByName.get(draft.name);
       if (existing) {
         savedBackgroundIds.push(existing.id);
@@ -160,6 +181,7 @@ export class StoryService {
       }
     }
 
+    // Delete old segments & video tasks
     const existingSegments = await this.segmentRepo.findByStoryId(story.id);
     if (existingSegments.length > 0) {
       const existingSegmentIds = existingSegments.map(s => s.id);
@@ -167,8 +189,9 @@ export class StoryService {
       await this.segmentRepo.deleteByStoryId(story.id);
     }
 
-    for (let i = 0; i < result.segments.length; i++) {
-      const draft = result.segments[i];
+    // Save new segments
+    for (let i = 0; i < segments.length; i++) {
+      const draft = segments[i];
       const mentionedCharacterIds = draft.mentionedCharacterNames
         .map(name => characterNameToId.get(name))
         .filter((id): id is string => !!id);
@@ -189,7 +212,7 @@ export class StoryService {
     story.status = 'SPLIT';
     await this.storyRepo.save(story);
 
-    return { ...result, savedCharacterIds, savedBackgroundIds };
+    return { savedCharacterIds, savedBackgroundIds };
   }
 
   async getSegments(storyId: string): Promise<StorySegment[]> {

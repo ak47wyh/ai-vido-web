@@ -6,7 +6,7 @@ import { Play, Spline, Trash2, RefreshCw, Users, PlayCircle, AlertTriangle, Imag
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { VideoTask, Character } from '../../domain/entities/models';
-import type { StoryBreakdownResult } from '../../domain/ports/OutboundPorts';
+import type { CharacterDraft, BackgroundDraft, BreakdownSegmentDraft } from '../../domain/ports/OutboundPorts';
 import { useSpace } from '../contexts/SpaceContext';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -32,8 +32,11 @@ export const StoryWorkbench: React.FC = () => {
   const [isBatchGenerating, setIsBatchGenerating] = useState(false);
   const [batchBgId, setBatchBgId] = useState('');
   const [isBreakingDown, setIsBreakingDown] = useState(false);
-  const [breakdownResult, setBreakdownResult] = useState<(StoryBreakdownResult & { savedCharacterIds: string[]; savedBackgroundIds: string[] }) | null>(null);
+  const [draftCharacters, setDraftCharacters] = useState<CharacterDraft[]>([]);
+  const [draftBackgrounds, setDraftBackgrounds] = useState<BackgroundDraft[]>([]);
+  const [draftSegments, setDraftSegments] = useState<BreakdownSegmentDraft[]>([]);
   const [showBreakdownPreview, setShowBreakdownPreview] = useState(false);
+  const [isApplyingBreakdown, setIsApplyingBreakdown] = useState(false);
   const [editingStoryId, setEditingStoryId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editOriginalText, setEditOriginalText] = useState('');
@@ -126,13 +129,17 @@ export const StoryWorkbench: React.FC = () => {
   const handleCreateAndBreakdown = async () => {
     if (!title || !originalText || !currentSpaceId) return;
     setIsBreakingDown(true);
-    setBreakdownResult(null);
+    setDraftCharacters([]);
+    setDraftBackgrounds([]);
+    setDraftSegments([]);
     setShowBreakdownPreview(false);
     try {
       const story = await storyService.createStory(title, originalText, currentSpaceId);
       setSelectedStoryId(story.id);
-      const result = await storyService.breakdownStory(story.id);
-      setBreakdownResult(result);
+      const result = await storyService.previewBreakdown(story.id);
+      setDraftCharacters(result.characters);
+      setDraftBackgrounds(result.backgrounds);
+      setDraftSegments(result.segments);
       setShowBreakdownPreview(true);
       setTitle('');
       setOriginalText('');
@@ -154,11 +161,15 @@ export const StoryWorkbench: React.FC = () => {
     });
     if (!ok) return;
     setIsBreakingDown(true);
-    setBreakdownResult(null);
+    setDraftCharacters([]);
+    setDraftBackgrounds([]);
+    setDraftSegments([]);
     setShowBreakdownPreview(false);
     try {
-      const result = await storyService.breakdownStory(selectedStoryId);
-      setBreakdownResult(result);
+      const result = await storyService.previewBreakdown(selectedStoryId);
+      setDraftCharacters(result.characters);
+      setDraftBackgrounds(result.backgrounds);
+      setDraftSegments(result.segments);
       setShowBreakdownPreview(true);
     } catch (e) {
       console.error(e);
@@ -178,6 +189,75 @@ export const StoryWorkbench: React.FC = () => {
       showToast('error', t('workbench.splitFailed'));
     } finally {
       setIsSplitting(false);
+    }
+  };
+
+  // --- Breakdown draft editing helpers ---
+  const updateDraftCharacter = (index: number, field: keyof CharacterDraft, value: string) => {
+    setDraftCharacters(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      // If name changed, also update segment references
+      if (field === 'name') {
+        const oldName = prev[index].name;
+        setDraftSegments(segs => segs.map(seg => ({
+          ...seg,
+          mentionedCharacterNames: seg.mentionedCharacterNames.map(n => n === oldName ? value : n)
+        })));
+      }
+      return next;
+    });
+  };
+
+  const removeDraftCharacter = (index: number) => {
+    const name = draftCharacters[index].name;
+    setDraftCharacters(prev => prev.filter((_, i) => i !== index));
+    setDraftSegments(prev => prev.map(seg => ({
+      ...seg,
+      mentionedCharacterNames: seg.mentionedCharacterNames.filter(n => n !== name)
+    })));
+  };
+
+  const updateDraftBackground = (index: number, field: keyof BackgroundDraft, value: string) => {
+    setDraftBackgrounds(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      // If name changed, also update segment references
+      if (field === 'name') {
+        const oldName = prev[index].name;
+        setDraftSegments(segs => segs.map(seg => ({
+          ...seg,
+          suggestedBackgroundName: seg.suggestedBackgroundName === oldName ? value : seg.suggestedBackgroundName
+        })));
+      }
+      return next;
+    });
+  };
+
+  const removeDraftBackground = (index: number) => {
+    const name = draftBackgrounds[index].name;
+    setDraftBackgrounds(prev => prev.filter((_, i) => i !== index));
+    setDraftSegments(prev => prev.map(seg => ({
+      ...seg,
+      suggestedBackgroundName: seg.suggestedBackgroundName === name ? '' : seg.suggestedBackgroundName
+    })));
+  };
+
+  const handleApplyBreakdown = async () => {
+    if (!selectedStoryId) return;
+    setIsApplyingBreakdown(true);
+    try {
+      await storyService.applyBreakdown(selectedStoryId, draftCharacters, draftBackgrounds, draftSegments);
+      setShowBreakdownPreview(false);
+      setDraftCharacters([]);
+      setDraftBackgrounds([]);
+      setDraftSegments([]);
+      showToast('success', t('workbench.breakdownApplied'));
+    } catch (e) {
+      console.error(e);
+      showToast('error', t('workbench.breakdownApplyFailed'));
+    } finally {
+      setIsApplyingBreakdown(false);
     }
   };
 
@@ -454,8 +534,8 @@ export const StoryWorkbench: React.FC = () => {
           </div>
         </div>
 
-        {/* Breakdown result preview */}
-        {showBreakdownPreview && breakdownResult && (
+        {/* Breakdown result preview — editable */}
+        {showBreakdownPreview && (draftCharacters.length > 0 || draftBackgrounds.length > 0) && (
           <div style={{
             marginBottom: '1.5rem', padding: '1.5rem', borderRadius: 'var(--radius-lg)',
             background: 'linear-gradient(135deg, rgba(99,102,241,0.1), rgba(236,72,153,0.1))',
@@ -467,49 +547,108 @@ export const StoryWorkbench: React.FC = () => {
                 <Sparkles size={18} style={{ verticalAlign: 'middle', marginRight: '0.5rem' }} />
                 {t('workbench.breakdownResult')}
               </h3>
-              <button className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.8rem' }} onClick={() => setShowBreakdownPreview(false)}>
-                {t('workbench.closePreview')}
-              </button>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  className="btn btn-primary"
+                  style={{ fontSize: '0.8rem', padding: '0.4rem 1rem', background: 'linear-gradient(135deg, #6366f1, #ec4899)' }}
+                  onClick={handleApplyBreakdown}
+                  disabled={isApplyingBreakdown}
+                >
+                  {isApplyingBreakdown ? t('workbench.applying') : t('workbench.applyBreakdownBtn')}
+                </button>
+                <button className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.8rem' }} onClick={() => setShowBreakdownPreview(false)}>
+                  {t('workbench.closePreview')}
+                </button>
+              </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-              {/* Extracted characters */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1rem' }}>
+              {/* Editable character cards */}
               <div>
                 <h4 style={{ fontSize: '0.85rem', color: '#818cf8', marginBottom: '0.5rem' }}>
                   <Users size={14} style={{ verticalAlign: 'middle', marginRight: '0.3rem' }} />
-                  {t('workbench.extractedCharacters')} ({breakdownResult.characters.length})
+                  {t('workbench.extractedCharacters')} ({draftCharacters.length})
                 </h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                  {breakdownResult.characters.map((c, i) => (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {draftCharacters.map((c, i) => (
                     <div key={i} style={{
-                      padding: '0.5rem 0.75rem', borderRadius: 'var(--radius-md)',
-                      background: 'rgba(99,102,241,0.1)', fontSize: '0.8rem'
+                      padding: '0.75rem', borderRadius: 'var(--radius-md)',
+                      background: 'rgba(99,102,241,0.1)', fontSize: '0.8rem',
+                      border: '1px solid rgba(99,102,241,0.2)'
                     }}>
-                      <strong style={{ color: '#a78bfa' }}>{c.name}</strong>
-                      <span style={{ color: 'var(--text-muted)', marginLeft: '0.5rem' }}>
-                        {c.appearancePrompt.length > 40 ? c.appearancePrompt.substring(0, 40) + '...' : c.appearancePrompt}
-                      </span>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                        <input
+                          className="form-input"
+                          style={{ fontSize: '0.8rem', padding: '0.3rem 0.5rem', flex: 1, marginRight: '0.5rem' }}
+                          value={c.name}
+                          onChange={e => updateDraftCharacter(i, 'name', e.target.value)}
+                          placeholder={t('workbench.draftCharNamePlaceholder')}
+                        />
+                        <button
+                          className="btn btn-secondary"
+                          style={{ padding: '0.2rem', border: 'none', color: '#f87171' }}
+                          onClick={() => removeDraftCharacter(i)}
+                          title={t('workbench.removeDraft')}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                      <textarea
+                        className="form-textarea"
+                        style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem', minHeight: '40px', width: '100%', marginBottom: '0.3rem' }}
+                        value={c.appearancePrompt}
+                        onChange={e => updateDraftCharacter(i, 'appearancePrompt', e.target.value)}
+                        placeholder={t('workbench.draftAppearancePlaceholder')}
+                      />
+                      <textarea
+                        className="form-textarea"
+                        style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem', minHeight: '40px', width: '100%' }}
+                        value={c.personalityPrompt}
+                        onChange={e => updateDraftCharacter(i, 'personalityPrompt', e.target.value)}
+                        placeholder={t('workbench.draftPersonalityPlaceholder')}
+                      />
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Extracted backgrounds */}
+              {/* Editable background cards */}
               <div>
                 <h4 style={{ fontSize: '0.85rem', color: '#f472b6', marginBottom: '0.5rem' }}>
                   <ImagePlus size={14} style={{ verticalAlign: 'middle', marginRight: '0.3rem' }} />
-                  {t('workbench.extractedBackgrounds')} ({breakdownResult.backgrounds.length})
+                  {t('workbench.extractedBackgrounds')} ({draftBackgrounds.length})
                 </h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                  {breakdownResult.backgrounds.map((bg, i) => (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {draftBackgrounds.map((bg, i) => (
                     <div key={i} style={{
-                      padding: '0.5rem 0.75rem', borderRadius: 'var(--radius-md)',
-                      background: 'rgba(236,72,153,0.1)', fontSize: '0.8rem'
+                      padding: '0.75rem', borderRadius: 'var(--radius-md)',
+                      background: 'rgba(236,72,153,0.1)', fontSize: '0.8rem',
+                      border: '1px solid rgba(236,72,153,0.2)'
                     }}>
-                      <strong style={{ color: '#f472b6' }}>{bg.name}</strong>
-                      <span style={{ color: 'var(--text-muted)', marginLeft: '0.5rem' }}>
-                        {bg.environmentPrompt.length > 40 ? bg.environmentPrompt.substring(0, 40) + '...' : bg.environmentPrompt}
-                      </span>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                        <input
+                          className="form-input"
+                          style={{ fontSize: '0.8rem', padding: '0.3rem 0.5rem', flex: 1, marginRight: '0.5rem' }}
+                          value={bg.name}
+                          onChange={e => updateDraftBackground(i, 'name', e.target.value)}
+                          placeholder={t('workbench.draftBgNamePlaceholder')}
+                        />
+                        <button
+                          className="btn btn-secondary"
+                          style={{ padding: '0.2rem', border: 'none', color: '#f87171' }}
+                          onClick={() => removeDraftBackground(i)}
+                          title={t('workbench.removeDraft')}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                      <textarea
+                        className="form-textarea"
+                        style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem', minHeight: '50px', width: '100%' }}
+                        value={bg.environmentPrompt}
+                        onChange={e => updateDraftBackground(i, 'environmentPrompt', e.target.value)}
+                        placeholder={t('workbench.draftEnvPlaceholder')}
+                      />
                     </div>
                   ))}
                 </div>
@@ -517,7 +656,7 @@ export const StoryWorkbench: React.FC = () => {
             </div>
 
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.75rem' }}>
-              {t('workbench.breakdownSaved')}
+              {t('workbench.breakdownEditHint')}
             </p>
           </div>
         )}
