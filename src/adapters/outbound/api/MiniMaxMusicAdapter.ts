@@ -10,12 +10,25 @@ import { ApiConfigStore } from '../config/ApiConfigStore';
 import { getMiniMaxErrorMessage } from './MiniMaxErrorUtils';
 import axios from 'axios';
 
+/**
+ * Adapter for MiniMax Music Generation API.
+ *
+ * Supports 4 models:
+ *   - music-2.6: Text-to-music (recommended)
+ *   - music-2.6-free: Free tier text-to-music
+ *   - music-cover: Cover song generation (two-step flow)
+ *   - music-cover-free: Free tier cover song generation
+ *
+ * API Endpoints:
+ *   - Music generation: POST /v1/music_generation
+ *   - Lyrics generation: POST /v1/lyrics_generation
+ *   - Cover preprocess:  POST /v1/music_cover_preprocess
+ */
 export class MiniMaxMusicAdapter implements IMusicPort {
 
   async generateMusic(context: MusicGenerationContext): Promise<MusicGenerationResult> {
     const config = ApiConfigStore.load();
     if (!config.minimaxApiKey) {
-      // Mock mode: return a placeholder result
       console.warn('[MiniMaxMusicAdapter] No API Key configured — returning mock result');
       return {
         audioUrl: 'mock://music-placeholder',
@@ -26,25 +39,40 @@ export class MiniMaxMusicAdapter implements IMusicPort {
     }
 
     const baseUrl = config.minimaxBaseUrl.replace(/\/+$/, '');
+    const model = context.model || 'music-2.6';
 
     const payload: Record<string, unknown> = {
-      model: context.model || 'music-2.6',
+      model,
       prompt: context.prompt,
       output_format: context.outputFormat || 'url',
     };
 
+    // Lyrics
     if (context.lyrics) {
       payload.lyrics = context.lyrics;
     }
 
-    if (context.isInstrumental !== undefined) {
+    // Instrumental mode (only for music-2.6 / music-2.6-free)
+    if (context.isInstrumental !== undefined && (model === 'music-2.6' || model === 'music-2.6-free')) {
       payload.is_instrumental = context.isInstrumental;
     }
 
-    if (context.lyricsOptimizer !== undefined) {
+    // Lyrics optimizer (only for music-2.6 / music-2.6-free)
+    if (context.lyricsOptimizer !== undefined && (model === 'music-2.6' || model === 'music-2.6-free')) {
       payload.lyrics_optimizer = context.lyricsOptimizer;
     }
 
+    // Stream
+    if (context.stream !== undefined) {
+      payload.stream = context.stream;
+    }
+
+    // Watermark
+    if (context.aigcWatermark !== undefined) {
+      payload.aigc_watermark = context.aigcWatermark;
+    }
+
+    // Audio settings
     if (context.audioSetting) {
       payload.audio_setting = {
         sample_rate: context.audioSetting.sampleRate ?? 44100,
@@ -53,7 +81,18 @@ export class MiniMaxMusicAdapter implements IMusicPort {
       };
     }
 
-    console.log('[MiniMaxMusicAdapter] Generating music, prompt:', context.prompt.substring(0, 50));
+    // Cover mode: reference audio or preprocessed feature
+    if (model === 'music-cover' || model === 'music-cover-free') {
+      if (context.coverFeatureId) {
+        payload.cover_feature_id = context.coverFeatureId;
+      } else if (context.audioUrl) {
+        payload.audio_url = context.audioUrl;
+      } else if (context.audioBase64) {
+        payload.audio_base64 = context.audioBase64;
+      }
+    }
+
+    console.log(`[MiniMaxMusicAdapter] Generating music, model: ${model}, prompt: ${context.prompt.substring(0, 50)}`);
 
     const response = await axios.post(`${baseUrl}/music_generation`, payload, {
       headers: {
@@ -61,7 +100,7 @@ export class MiniMaxMusicAdapter implements IMusicPort {
         'Content-Type': 'application/json',
       },
       params: config.minimaxGroupId ? { group_id: config.minimaxGroupId } : undefined,
-      timeout: 120000, // Music generation can take up to 2 minutes
+      timeout: 120000,
     });
 
     const data = response.data;
@@ -76,10 +115,8 @@ export class MiniMaxMusicAdapter implements IMusicPort {
     let audioHex: string | undefined;
 
     if (context.outputFormat === 'url') {
-      // When output_format=url, the audio field contains the URL
       audioUrl = typeof audioData === 'string' ? audioData : undefined;
     } else {
-      // When output_format=hex (default), the audio field contains hex-encoded data
       audioHex = typeof audioData === 'string' ? audioData : undefined;
     }
 
@@ -89,6 +126,9 @@ export class MiniMaxMusicAdapter implements IMusicPort {
       duration: extraInfo.music_duration,
       sampleRate: extraInfo.music_sample_rate,
       bitrate: extraInfo.bitrate,
+      channel: extraInfo.music_channel,
+      size: extraInfo.music_size,
+      status: data?.data?.status,
     };
   }
 
@@ -107,8 +147,11 @@ export class MiniMaxMusicAdapter implements IMusicPort {
 
     const payload: Record<string, unknown> = {
       mode: context.mode,
-      prompt: context.prompt,
     };
+
+    if (context.prompt) {
+      payload.prompt = context.prompt;
+    }
 
     if (context.lyrics) {
       payload.lyrics = context.lyrics;
@@ -118,7 +161,7 @@ export class MiniMaxMusicAdapter implements IMusicPort {
       payload.title = context.title;
     }
 
-    console.log('[MiniMaxMusicAdapter] Generating lyrics, prompt:', context.prompt.substring(0, 50));
+    console.log('[MiniMaxMusicAdapter] Generating lyrics, mode:', context.mode);
 
     const response = await axios.post(`${baseUrl}/lyrics_generation`, payload, {
       headers: {

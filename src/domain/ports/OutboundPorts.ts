@@ -151,14 +151,43 @@ export interface IStoryBreakdownPort {
 
 // --- Image Generation ---
 
+export type ImageModel = 'image-01' | 'image-01-live';
+export type ImageResponseFormat = 'url' | 'base64';
+export type ImageAspectRatio = '1:1' | '16:9' | '4:3' | '3:2' | '2:3' | '3:4' | '9:16' | '21:9';
+
+export interface ImageSubjectReference {
+  type: string;
+  image_file: string;
+}
+
+export interface ImageStyle {
+  [key: string]: string;
+}
+
 export interface ImageGenerationContext {
   prompt: string;
-  aspectRatio: string;
+  model?: ImageModel;
+  aspectRatio?: ImageAspectRatio;
+  width?: number;
+  height?: number;
+  responseFormat?: ImageResponseFormat;
+  seed?: number;
+  n?: number;
+  promptOptimizer?: boolean;
+  aigcWatermark?: boolean;
+  subjectReference?: ImageSubjectReference[];
+  style?: ImageStyle;
+  // Legacy field
   subjectReferenceUrl?: string;
 }
 
 export interface ImageGenerationResult {
-  imageDataUri: string;
+  imageDataUri?: string;
+  imageUrls?: string[];
+  metadata?: {
+    successCount: number;
+    failedCount: number;
+  };
 }
 
 export interface IImageGeneratorPort {
@@ -217,18 +246,26 @@ export interface IVoicePort {
 
 // --- Music Generation ---
 
+export type MusicModel = 'music-2.6' | 'music-2.6-free' | 'music-cover' | 'music-cover-free';
+
 export interface MusicGenerationContext {
   prompt: string;
   lyrics?: string;
   isInstrumental?: boolean;
   lyricsOptimizer?: boolean;
-  model?: 'music-2.6' | 'music-2.6-free';
+  model?: MusicModel;
   outputFormat?: 'url' | 'hex';
+  stream?: boolean;
+  aigcWatermark?: boolean;
   audioSetting?: {
     sampleRate?: number;
     bitrate?: number;
     format?: string;
   };
+  // Cover mode: reference audio
+  audioUrl?: string;
+  audioBase64?: string;
+  coverFeatureId?: string;
 }
 
 export interface MusicGenerationResult {
@@ -237,11 +274,14 @@ export interface MusicGenerationResult {
   duration?: number;
   sampleRate?: number;
   bitrate?: number;
+  channel?: number;
+  size?: number;
+  status?: number;
 }
 
 export interface LyricsGenerationContext {
   mode: 'write_full_song' | 'edit';
-  prompt: string;
+  prompt?: string;
   lyrics?: string;
   title?: string;
 }

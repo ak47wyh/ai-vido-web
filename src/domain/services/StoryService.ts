@@ -120,6 +120,7 @@ export class StoryService {
    * Apply breakdown: save user-edited characters, backgrounds, and segments.
    * - Existing same-name characters/backgrounds are reused (not overwritten).
    * - Previous segments & video tasks for this story are deleted and rebuilt.
+   * - Uses a "delete old first, then create new" strategy for better atomicity.
    */
   async applyBreakdown(
     storyId: string,
@@ -136,6 +137,15 @@ export class StoryService {
     const existingBackgrounds = await this.backgroundRepo.findBySpaceId(story.spaceId);
     const existingBgByName = new Map(existingBackgrounds.map(b => [b.name, b]));
 
+    // Step 1: Delete old segments & video tasks FIRST (before creating new data)
+    const existingSegments = await this.segmentRepo.findByStoryId(story.id);
+    if (existingSegments.length > 0) {
+      const existingSegmentIds = existingSegments.map(s => s.id);
+      await this.videoTaskRepo.deleteBySegmentIds(existingSegmentIds);
+      await this.segmentRepo.deleteByStoryId(story.id);
+    }
+
+    // Step 2: Save characters (reuse existing or create new)
     const savedCharacterIds: string[] = [];
     const characterNameToId = new Map<string, string>();
     for (const draft of characters) {
@@ -174,6 +184,7 @@ export class StoryService {
       }
     }
 
+    // Step 3: Save backgrounds (reuse existing or create new)
     const savedBackgroundIds: string[] = [];
     const backgroundNameToId = new Map<string, string>();
     for (const draft of backgrounds) {
@@ -201,15 +212,7 @@ export class StoryService {
       }
     }
 
-    // Delete old segments & video tasks
-    const existingSegments = await this.segmentRepo.findByStoryId(story.id);
-    if (existingSegments.length > 0) {
-      const existingSegmentIds = existingSegments.map(s => s.id);
-      await this.videoTaskRepo.deleteBySegmentIds(existingSegmentIds);
-      await this.segmentRepo.deleteByStoryId(story.id);
-    }
-
-    // Save new segments
+    // Step 4: Save new segments
     for (let i = 0; i < segments.length; i++) {
       const draft = segments[i];
       const mentionedCharacterIds = draft.mentionedCharacterNames
@@ -229,6 +232,7 @@ export class StoryService {
       await this.segmentRepo.save(segment);
     }
 
+    // Step 5: Mark story as SPLIT (only after all data is saved)
     story.status = 'SPLIT';
     await this.storyRepo.save(story);
 

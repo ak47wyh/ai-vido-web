@@ -5,12 +5,16 @@ import axios from 'axios';
 
 /**
  * Adapter for MiniMax Image Generation API.
- * Uses the same API Key / Group ID / Base URL as the video adapter.
  *
- * API Docs: https://platform.minimaxi.com/docs/guides/image-generation
+ * Supports both T2I (Text-to-Image) and I2I (Image-to-Image with subject_reference).
+ *
+ * API Docs:
+ *   - T2I: https://platform.minimaxi.com/docs/api-reference/image-generation-t2i
+ *   - I2I: https://platform.minimaxi.com/docs/api-reference/image-generation-i2i
+ *
  * Endpoint: POST https://api.minimaxi.com/v1/image_generation
- * Model: image-01
- * Response: { data: { image_base64: ["..."] } }
+ * Models: image-01, image-01-live
+ * Response format: url (24h validity) or base64
  */
 export class MiniMaxImageAdapter implements IImageGeneratorPort {
 
@@ -24,28 +28,63 @@ export class MiniMaxImageAdapter implements IImageGeneratorPort {
       return { imageDataUri: `data:image/png;base64,${mockBase64}` };
     }
 
-    // ── Real API call ─────────────────────────────────────────────────────
-    const baseUrl = config.minimaxBaseUrl.replace(/\/+$/, '');
+    // ── Build request payload ──────────────────────────────────────────────
+    const model = context.model || 'image-01';
+    const responseFormat = context.responseFormat || 'base64';
 
     const payload: Record<string, unknown> = {
-      model: 'image-01',
+      model,
       prompt: context.prompt,
-      aspect_ratio: context.aspectRatio,
-      response_format: 'base64',
+      response_format: responseFormat,
     };
 
-    // 图生图：添加 subject_reference
-    if (context.subjectReferenceUrl) {
-      payload.subject_reference = [
-        {
-          type: 'character',
-          image_file: context.subjectReferenceUrl,
-        },
-      ];
+    // Aspect ratio
+    if (context.aspectRatio) {
+      payload.aspect_ratio = context.aspectRatio;
     }
 
-    console.log('[MiniMaxImageAdapter] Generating image with prompt:', context.prompt);
+    // Custom width/height (only for image-01)
+    if (model === 'image-01' && context.width && context.height) {
+      payload.width = context.width;
+      payload.height = context.height;
+    }
 
+    // Number of images
+    if (context.n && context.n > 1) {
+      payload.n = context.n;
+    }
+
+    // Seed for reproducibility
+    if (context.seed !== undefined) {
+      payload.seed = context.seed;
+    }
+
+    // Prompt optimizer
+    if (context.promptOptimizer !== undefined) {
+      payload.prompt_optimizer = context.promptOptimizer;
+    }
+
+    // Watermark
+    if (context.aigcWatermark !== undefined) {
+      payload.aigc_watermark = context.aigcWatermark;
+    }
+
+    // Subject reference (I2V: image-to-image)
+    const subjectRef = context.subjectReference ||
+      (context.subjectReferenceUrl ? [{ type: 'character', image_file: context.subjectReferenceUrl }] : undefined);
+    if (subjectRef && subjectRef.length > 0) {
+      payload.subject_reference = subjectRef;
+    }
+
+    // Style (only for image-01-live)
+    if (model === 'image-01-live' && context.style) {
+      payload.style = context.style;
+    }
+
+    console.log(`[MiniMaxImageAdapter] Generating image, model: ${model}, format: ${responseFormat}`);
+
+    // ── Real API call ─────────────────────────────────────────────────────
+    const baseUrl = config.minimaxBaseUrl.replace(/\/+$/, '');
     const response = await axios.post(
       `${baseUrl}/image_generation`,
       payload,
@@ -60,19 +99,45 @@ export class MiniMaxImageAdapter implements IImageGeneratorPort {
 
     const data = response.data;
 
-    // 检查 base_resp 错误码
+    // Check base_resp error codes
     const statusCode = data?.base_resp?.status_code;
     const error = getMiniMaxErrorMessage(statusCode, data?.base_resp?.status_msg, 'MiniMax Image Generation error');
     if (error) throw new Error(error);
 
+    // Parse metadata
+    const metadata = data?.metadata ? {
+      successCount: Number(data.metadata.success_count || 0),
+      failedCount: Number(data.metadata.failed_count || 0),
+    } : undefined;
+
+    // Parse response based on format
+    if (responseFormat === 'url') {
+      const imageUrls: string[] = data?.data?.image_urls;
+      if (!imageUrls || imageUrls.length === 0) {
+        throw new Error('MiniMax Image API did not return any image URLs.');
+      }
+      return { imageUrls, metadata };
+    }
+
+    // base64 format
     const images: string[] = data?.data?.image_base64;
     if (!images || images.length === 0) {
       console.error('[MiniMaxImageAdapter] Unexpected response:', JSON.stringify(data));
       throw new Error('MiniMax Image API did not return any images.');
     }
 
+    if (images.length === 1) {
+      return {
+        imageDataUri: `data:image/jpeg;base64,${images[0]}`,
+        metadata,
+      };
+    }
+
+    // Multiple base64 images — return first as imageDataUri, all as imageUrls with data URI prefix
     return {
       imageDataUri: `data:image/jpeg;base64,${images[0]}`,
+      imageUrls: images.map(img => `data:image/jpeg;base64,${img}`),
+      metadata,
     };
   }
 }

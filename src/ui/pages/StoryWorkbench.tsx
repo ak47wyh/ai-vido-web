@@ -47,8 +47,10 @@ export const StoryWorkbench: React.FC = () => {
   // BGM state
   const [bgmSegmentId, setBgmSegmentId] = useState<string | null>(null);
   const [bgmPrompt, setBgmPrompt] = useState('');
-  const [bgmMode, setBgmMode] = useState<'instrumental' | 'autoLyrics' | 'customLyrics'>('instrumental');
+  const [bgmMode, setBgmMode] = useState<'instrumental' | 'autoLyrics' | 'customLyrics' | 'cover'>('instrumental');
   const [bgmLyrics, setBgmLyrics] = useState('');
+  const [bgmModel, setBgmModel] = useState<'music-2.6' | 'music-2.6-free' | 'music-cover' | 'music-cover-free'>('music-2.6');
+  const [bgmCoverAudioUrl, setBgmCoverAudioUrl] = useState('');
   const [isGeneratingBGM, setIsGeneratingBGM] = useState(false);
   const [isGeneratingLyrics, setIsGeneratingLyrics] = useState(false);
   const [editingStoryId, setEditingStoryId] = useState<string | null>(null);
@@ -210,8 +212,10 @@ export const StoryWorkbench: React.FC = () => {
     setShowBreakdownPreview(false);
     setConfirmedCharIndices(new Set());
     setConfirmedBgIndices(new Set());
+    let createdStoryId: string | null = null;
     try {
       const story = await storyService.createStory(title, originalText, currentSpaceId);
+      createdStoryId = story.id;
       switchStory(story.id);
       const result = await storyService.previewBreakdown(story.id);
       setDraftCharacters(result.characters);
@@ -222,6 +226,11 @@ export const StoryWorkbench: React.FC = () => {
       setOriginalText('');
     } catch (e) {
       console.error(e);
+      // Rollback: delete the created story if breakdown preview failed
+      if (createdStoryId) {
+        try { await storyService.deleteStory(createdStoryId); } catch { /* ignore rollback error */ }
+        switchStory(null);
+      }
       showToast('error', t('workbench.breakdownFailed'));
     } finally {
       setIsBreakingDown(false);
@@ -450,18 +459,29 @@ export const StoryWorkbench: React.FC = () => {
         if (!ok) return;
       }
 
+      let successCount = 0;
+      let failCount = 0;
       for (const seg of eligible) {
-        await videoGenerationService.generateVideo(seg.id, selectedStoryId, 'MINIMAX', {
-          mode: videoMode,
-          model: videoModel,
-          resolution: videoResolution,
-          duration: videoDuration,
-          promptOptimizer: videoPromptOptimizer,
-        });
+        try {
+          await videoGenerationService.generateVideo(seg.id, selectedStoryId, 'MINIMAX', {
+            mode: videoMode,
+            model: videoModel,
+            resolution: videoResolution,
+            duration: videoDuration,
+            promptOptimizer: videoPromptOptimizer,
+          });
+          successCount++;
+        } catch {
+          failCount++;
+        }
       }
-      if (eligible.length > 0) {
-        showToast('info', t('workbench.batchStarted', { count: eligible.length }));
-      } else {
+      if (successCount > 0) {
+        showToast('info', t('workbench.batchStarted', { count: successCount }));
+      }
+      if (failCount > 0) {
+        showToast('warning', t('workbench.batchPartialFailed', { count: failCount }));
+      }
+      if (successCount === 0 && failCount === 0) {
         showToast('warning', t('workbench.batchNoEligible'));
       }
     } catch (e: unknown) {
@@ -513,6 +533,16 @@ export const StoryWorkbench: React.FC = () => {
     if (!editingStoryId || !editTitle.trim()) return;
     const story = stories?.find(s => s.id === editingStoryId);
     const wasSplit = story?.status === 'SPLIT';
+    // Warn user if editing a split story — content changes will reset status
+    if (wasSplit && (editTitle.trim() !== story!.title || editOriginalText.trim() !== story!.originalText)) {
+      const ok = await confirm({
+        title: t('workbench.confirmEditSplitTitle'),
+        message: t('workbench.confirmEditSplit'),
+        confirmLabel: t('workbench.saveEditBtn'),
+        danger: true
+      });
+      if (!ok) return;
+    }
     await storyService.updateStory(editingStoryId, editTitle.trim(), editOriginalText.trim());
     setEditingStoryId(null);
     if (wasSplit) {
@@ -557,21 +587,35 @@ export const StoryWorkbench: React.FC = () => {
     }
     setIsGeneratingBGM(true);
     try {
-      const options: { isInstrumental?: boolean; lyrics?: string; lyricsOptimizer?: boolean } = {};
-      if (bgmMode === 'instrumental') {
-        options.isInstrumental = true;
-      } else if (bgmMode === 'autoLyrics') {
-        options.isInstrumental = false;
-        options.lyricsOptimizer = true;
+      if (bgmMode === 'cover') {
+        // Cover mode: two-step flow
+        if (!bgmCoverAudioUrl.trim()) {
+          showToast('warning', t('music.coverAudioRequired'));
+          return;
+        }
+        await musicService.generateCoverBGM(segmentId, bgmCoverAudioUrl.trim(), bgmPrompt.trim(), {
+          lyrics: bgmLyrics || undefined,
+          model: bgmModel,
+        });
       } else {
-        options.isInstrumental = false;
-        options.lyrics = bgmLyrics || undefined;
+        // Standard music generation
+        const options: { isInstrumental?: boolean; lyrics?: string; lyricsOptimizer?: boolean; model?: string } = { model: bgmModel };
+        if (bgmMode === 'instrumental') {
+          options.isInstrumental = true;
+        } else if (bgmMode === 'autoLyrics') {
+          options.isInstrumental = false;
+          options.lyricsOptimizer = true;
+        } else {
+          options.isInstrumental = false;
+          options.lyrics = bgmLyrics || undefined;
+        }
+        await musicService.generateBGM(segmentId, bgmPrompt.trim(), options);
       }
-      await musicService.generateBGM(segmentId, bgmPrompt.trim(), options);
       showToast('success', t('music.bgmGenerated'));
       setBgmSegmentId(null);
       setBgmPrompt('');
       setBgmLyrics('');
+      setBgmCoverAudioUrl('');
     } catch (e: unknown) {
       showToast('error', getErrorMessage(e, t('music.bgmGenerateFailed')));
     } finally {
@@ -942,11 +986,12 @@ export const StoryWorkbench: React.FC = () => {
                             const context: ImageGenerationContext = {
                               prompt: [c.appearancePrompt, c.personalityPrompt].filter(Boolean).join(', '),
                               aspectRatio: '1:1',
+                              promptOptimizer: true,
                             };
                             const result = await imageAdapter.generateImage(context);
                             setDraftCharacters(prev => {
                               const next = [...prev];
-                              next[i] = { ...next[i], referenceImageUrl: result.imageDataUri };
+                              next[i] = { ...next[i], referenceImageUrl: result.imageDataUri || result.imageUrls?.[0] };
                               return next;
                             });
                             showToast('success', t('workbench.draftImageGenerated'));
@@ -1085,11 +1130,12 @@ export const StoryWorkbench: React.FC = () => {
                             const context: ImageGenerationContext = {
                               prompt: bg.environmentPrompt,
                               aspectRatio: '16:9',
+                              promptOptimizer: true,
                             };
                             const result = await imageAdapter.generateImage(context);
                             setDraftBackgrounds(prev => {
                               const next = [...prev];
-                              next[i] = { ...next[i], referenceImageUrl: result.imageDataUri };
+                              next[i] = { ...next[i], referenceImageUrl: result.imageDataUri || result.imageUrls?.[0] };
                               return next;
                             });
                             showToast('success', t('workbench.draftImageGenerated'));
@@ -1417,8 +1463,11 @@ export const StoryWorkbench: React.FC = () => {
                         setNarrationStatuses(prev => ({ ...prev, [seg.id]: 'running' }));
                         try {
                           const taskId = await voiceService.generateNarrationAudio(seg.content, charWithVoice.voiceId);
+                          let pollRetries = 0;
+                          const maxPollRetries = 60;
                           const pollInterval = setInterval(async () => {
                             try {
+                              pollRetries++;
                               const result = await voiceService.queryNarrationStatus(taskId);
                               if (result.status === 'done') {
                                 clearInterval(pollInterval);
@@ -1433,6 +1482,11 @@ export const StoryWorkbench: React.FC = () => {
                                 narrationPollersRef.current.delete(seg.id);
                                 setNarrationStatuses(prev => ({ ...prev, [seg.id]: 'failed' }));
                                 showToast('error', result.errorMessage || t('character.narrationFailed'));
+                              } else if (pollRetries >= maxPollRetries) {
+                                clearInterval(pollInterval);
+                                narrationPollersRef.current.delete(seg.id);
+                                setNarrationStatuses(prev => ({ ...prev, [seg.id]: 'failed' }));
+                                showToast('error', t('character.narrationFailed'));
                               }
                             } catch {
                               clearInterval(pollInterval);
@@ -1480,8 +1534,8 @@ export const StoryWorkbench: React.FC = () => {
                       ) : bgmSegmentId === seg.id ? (
                         <div style={{ padding: '0.75rem', borderRadius: 'var(--radius-md)', background: 'rgba(244,114,182,0.08)', border: '1px solid rgba(244,114,182,0.2)' }}>
                           {/* Mode selection */}
-                          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                            {(['instrumental', 'autoLyrics', 'customLyrics'] as const).map(mode => (
+                          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+                            {(['instrumental', 'autoLyrics', 'customLyrics', 'cover'] as const).map(mode => (
                               <button
                                 key={mode}
                                 className="btn btn-secondary"
@@ -1491,11 +1545,40 @@ export const StoryWorkbench: React.FC = () => {
                                   borderColor: bgmMode === mode ? '#f472b6' : undefined,
                                   color: bgmMode === mode ? '#f472b6' : undefined,
                                 }}
-                                onClick={() => setBgmMode(mode)}
+                                onClick={() => {
+                                  setBgmMode(mode);
+                                  // Auto-select model for cover mode
+                                  if (mode === 'cover') setBgmModel('music-cover');
+                                  else setBgmModel('music-2.6');
+                                }}
                               >
                                 {t(`music.mode${mode.charAt(0).toUpperCase() + mode.slice(1)}`)}
                               </button>
                             ))}
+                          </div>
+
+                          {/* Model selection */}
+                          <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.5rem', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{t('music.modelLabel')}</span>
+                            <select
+                              className="form-select"
+                              style={{ fontSize: '0.7rem', padding: '0.15rem 0.3rem', width: 'auto' }}
+                              value={bgmModel}
+                              onChange={e => setBgmModel(e.target.value as typeof bgmModel)}
+                            >
+                              {bgmMode !== 'cover' && (
+                                <>
+                                  <option value="music-2.6">music-2.6</option>
+                                  <option value="music-2.6-free">music-2.6-free</option>
+                                </>
+                              )}
+                              {bgmMode === 'cover' && (
+                                <>
+                                  <option value="music-cover">music-cover</option>
+                                  <option value="music-cover-free">music-cover-free</option>
+                                </>
+                              )}
+                            </select>
                           </div>
 
                           {/* Style presets */}
@@ -1543,7 +1626,7 @@ export const StoryWorkbench: React.FC = () => {
                             placeholder={t('music.promptPlaceholder')}
                           />
 
-                          {/* Lyrics (for autoLyrics and customLyrics modes) */}
+                          {/* Lyrics (for autoLyrics, customLyrics and cover modes) */}
                           {bgmMode !== 'instrumental' && (
                             <div style={{ marginBottom: '0.5rem' }}>
                               <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.3rem' }}>
@@ -1566,6 +1649,21 @@ export const StoryWorkbench: React.FC = () => {
                                 onChange={e => setBgmLyrics(e.target.value)}
                                 placeholder={t('music.lyricsPlaceholder')}
                               />
+                            </div>
+                          )}
+
+                          {/* Cover audio URL (for cover mode) */}
+                          {bgmMode === 'cover' && (
+                            <div style={{ marginBottom: '0.5rem' }}>
+                              <input
+                                className="form-input"
+                                style={{ fontSize: '0.7rem', padding: '0.3rem 0.5rem', width: '100%' }}
+                                type="url"
+                                value={bgmCoverAudioUrl}
+                                onChange={e => setBgmCoverAudioUrl(e.target.value)}
+                                placeholder={t('music.coverAudioPlaceholder')}
+                              />
+                              <p style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>{t('music.coverAudioHint')}</p>
                             </div>
                           )}
 

@@ -334,8 +334,8 @@ export const CharacterManagement: React.FC = () => {
                   }
                   const prompt = [appearance.trim(), personality.trim()].filter(Boolean).join(', ');
                   try {
-                    const result = await imageAdapter.generateImage({ prompt, aspectRatio: generateAspectRatio });
-                    setImageUrl(result.imageDataUri);
+                    const result = await imageAdapter.generateImage({ prompt, aspectRatio: generateAspectRatio, promptOptimizer: true });
+                    setImageUrl(result.imageDataUri || result.imageUrls?.[0]);
                   } catch (err: unknown) {
                     const msg = getErrorMessage(err, 'Image generation failed');
                     showToast('error', msg);

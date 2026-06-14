@@ -1,4 +1,4 @@
-import type { IMusicPort, IStorySegmentRepository, MusicGenerationContext, LyricsGenerationContext, LyricsGenerationResult } from '../ports/OutboundPorts';
+import type { IMusicPort, IStorySegmentRepository, MusicGenerationContext, MusicModel, LyricsGenerationContext, LyricsGenerationResult, CoverPreprocessResult } from '../ports/OutboundPorts';
 
 export class MusicService {
   musicPort: IMusicPort;
@@ -23,14 +23,16 @@ export class MusicService {
       isInstrumental?: boolean;
       lyrics?: string;
       lyricsOptimizer?: boolean;
+      model?: MusicModel;
     }
   ): Promise<string> {
+    const model = options?.model || 'music-2.6';
     const context: MusicGenerationContext = {
       prompt,
       lyrics: options?.lyrics,
       isInstrumental: options?.isInstrumental ?? true,
       lyricsOptimizer: options?.lyricsOptimizer,
-      model: 'music-2.6',
+      model,
       outputFormat: 'url',
       audioSetting: {
         sampleRate: 44100,
@@ -58,6 +60,57 @@ export class MusicService {
   }
 
   /**
+   * Generate cover song BGM (two-step flow):
+   * 1. Preprocess the reference audio to get cover_feature_id
+   * 2. Generate cover music using the feature ID
+   */
+  async generateCoverBGM(
+    segmentId: string,
+    referenceAudioUrl: string,
+    prompt: string,
+    options?: {
+      lyrics?: string;
+      model?: MusicModel;
+    }
+  ): Promise<string> {
+    const model = options?.model || 'music-cover';
+
+    // Step 1: Preprocess reference audio
+    const preprocessResult = await this.preprocessCover(referenceAudioUrl);
+
+    // Step 2: Generate cover music with preprocessed feature
+    const context: MusicGenerationContext = {
+      prompt,
+      lyrics: options?.lyrics || preprocessResult.formattedLyrics,
+      model,
+      outputFormat: 'url',
+      coverFeatureId: preprocessResult.coverFeatureId,
+      audioSetting: {
+        sampleRate: 44100,
+        bitrate: 256000,
+        format: 'mp3',
+      },
+    };
+
+    const result = await this.musicPort.generateMusic(context);
+
+    if (!result.audioUrl) {
+      throw new Error('Cover music generation completed but no audio URL returned');
+    }
+
+    // Bind to segment
+    await this.bindBGMToSegment(
+      segmentId,
+      result.audioUrl,
+      prompt,
+      options?.lyrics || preprocessResult.formattedLyrics,
+      false // Cover songs are not instrumental
+    );
+
+    return result.audioUrl;
+  }
+
+  /**
    * Generate lyrics based on a prompt.
    */
   async generateLyrics(prompt: string): Promise<LyricsGenerationResult> {
@@ -67,6 +120,13 @@ export class MusicService {
     };
 
     return this.musicPort.generateLyrics(context);
+  }
+
+  /**
+   * Preprocess a reference audio for cover song generation.
+   */
+  async preprocessCover(audioUrl: string): Promise<CoverPreprocessResult> {
+    return this.musicPort.preprocessCover(audioUrl);
   }
 
   /**

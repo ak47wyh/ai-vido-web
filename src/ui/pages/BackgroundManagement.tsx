@@ -214,8 +214,8 @@ export const BackgroundManagement: React.FC = () => {
                     return;
                   }
                   try {
-                    const result = await imageAdapter.generateImage({ prompt: environmentPrompt.trim(), aspectRatio: generateAspectRatio });
-                    setImageUrl(result.imageDataUri);
+                    const result = await imageAdapter.generateImage({ prompt: environmentPrompt.trim(), aspectRatio: generateAspectRatio, promptOptimizer: true });
+                    setImageUrl(result.imageDataUri || result.imageUrls?.[0]);
                   } catch (err: unknown) {
                     const msg = getErrorMessage(err, 'Image generation failed');
                     showToast('error', msg);
