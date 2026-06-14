@@ -13,6 +13,7 @@ export interface Character {
   personalityPrompt: string;
   characterBackground: string;
   referenceImageUrl?: string;
+  voiceId?: string;
   createdAt: number;
 }
 
@@ -43,6 +44,10 @@ export interface StorySegment {
   content: string;
   mentionedCharacters: string[];
   selectedBackgroundId?: string;
+  bgmAudioUrl?: string;
+  bgmPrompt?: string;
+  bgmLyrics?: string;
+  bgmIsInstrumental?: boolean;
 }
 
 export type VideoTaskStatus = 'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAILED';

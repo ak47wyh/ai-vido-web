@@ -53,6 +53,24 @@ export class AiVideoDatabase extends Dexie {
       await tx.table('backgrounds').toCollection().modify(b => { b.spaceId = defaultSpaceId; });
       await tx.table('stories').toCollection().modify(s => { s.spaceId = defaultSpaceId; });
     });
+    // Version 4: Add voiceId to characters (non-indexed, no migration needed)
+    this.version(4).stores({
+      storySpaces: 'id, name, createdAt',
+      characters: 'id, spaceId, name, createdAt',
+      backgrounds: 'id, spaceId, name, createdAt',
+      stories: 'id, spaceId, status, createdAt',
+      segments: 'id, storyId, sequenceOrder',
+      videoTasks: 'id, segmentId, status, createdAt'
+    });
+    // Version 5: Add BGM fields to segments (non-indexed, no migration needed)
+    this.version(5).stores({
+      storySpaces: 'id, name, createdAt',
+      characters: 'id, spaceId, name, createdAt',
+      backgrounds: 'id, spaceId, name, createdAt',
+      stories: 'id, spaceId, status, createdAt',
+      segments: 'id, storyId, sequenceOrder',
+      videoTasks: 'id, segmentId, status, createdAt'
+    });
   }
 }
 

@@ -10,6 +10,7 @@ import { useSpace } from '../contexts/SpaceContext';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useImageUpload, useCopyToSpace } from '../hooks/useSharedForm';
+import { getErrorMessage } from '../utils/errorUtils';
 
 export const BackgroundManagement: React.FC = () => {
   const { t } = useTranslation();
@@ -113,7 +114,7 @@ export const BackgroundManagement: React.FC = () => {
       await imageGenerationService.generateBackgroundImage(bgId, generateAspectRatio);
       showToast('success', t('background.generateImageSuccess'));
     } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : t('background.generateImageFailed');
+      const message = getErrorMessage(e, t('background.generateImageFailed'));
       showToast('error', message);
     } finally {
       setGeneratingBgId(null);
@@ -194,7 +195,7 @@ export const BackgroundManagement: React.FC = () => {
                     const result = await imageAdapter.generateImage({ prompt: environmentPrompt.trim(), aspectRatio: generateAspectRatio });
                     setImageUrl(result.imageDataUri);
                   } catch (err: unknown) {
-                    const msg = err instanceof Error ? err.message : 'Image generation failed';
+                    const msg = getErrorMessage(err, 'Image generation failed');
                     showToast('error', msg);
                   }
                 }}

@@ -60,11 +60,20 @@ export class VideoGenerationService {
       if (bg) background = bg;
     }
 
+    const characterVoiceIds: Record<string, string> = {};
+    for (const char of characters) {
+      if (char.voiceId) {
+        characterVoiceIds[char.name] = char.voiceId;
+      }
+    }
+
     const context: VideoPromptContext = {
       actionContent: segment.content,
       characters,
       background,
-      videoStyle: 'default'
+      videoStyle: 'default',
+      characterVoiceIds: Object.keys(characterVoiceIds).length > 0 ? characterVoiceIds : undefined,
+      bgmAudioUrl: segment.bgmAudioUrl,
     };
 
     this.processTask(task, context).catch(console.error);

@@ -141,7 +141,19 @@ export class StoryService {
     for (const draft of characters) {
       const existing = existingCharByName.get(draft.name);
       if (existing) {
-        // Reuse existing — do NOT overwrite user edits
+        // Reuse existing — but update image/voice if draft provides new ones
+        let needsUpdate = false;
+        if (draft.referenceImageUrl && !existing.referenceImageUrl) {
+          existing.referenceImageUrl = draft.referenceImageUrl;
+          needsUpdate = true;
+        }
+        if (draft.voiceId && !existing.voiceId) {
+          existing.voiceId = draft.voiceId;
+          needsUpdate = true;
+        }
+        if (needsUpdate) {
+          await this.characterRepo.save(existing);
+        }
         savedCharacterIds.push(existing.id);
         characterNameToId.set(draft.name, existing.id);
       } else {
@@ -153,6 +165,7 @@ export class StoryService {
           personalityPrompt: draft.personalityPrompt,
           characterBackground: draft.characterBackground,
           referenceImageUrl: draft.referenceImageUrl,
+          voiceId: draft.voiceId,
           createdAt: Date.now()
         };
         await this.characterRepo.save(character);
@@ -166,6 +179,11 @@ export class StoryService {
     for (const draft of backgrounds) {
       const existing = existingBgByName.get(draft.name);
       if (existing) {
+        // Reuse existing — but update image if draft provides a new one
+        if (draft.referenceImageUrl && !existing.referenceImageUrl) {
+          existing.referenceImageUrl = draft.referenceImageUrl;
+          await this.backgroundRepo.save(existing);
+        }
         savedBackgroundIds.push(existing.id);
         backgroundNameToId.set(draft.name, existing.id);
       } else {

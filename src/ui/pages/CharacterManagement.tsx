@@ -1,15 +1,17 @@
 import React, { useState, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../adapters/outbound/repositories/DexieDatabase';
-import { characterRepo, storyService, storySpaceService, imageGenerationService, imageAdapter } from '../../dependencies';
+import { characterRepo, storyService, storySpaceService, imageGenerationService, imageAdapter, voiceService } from '../../dependencies';
 import { v4 as uuidv4 } from 'uuid';
-import { Pencil, Plus, Trash2, Copy, Users, ChevronDown, ChevronUp, Sparkles, RefreshCw } from 'lucide-react';
+import { Pencil, Plus, Trash2, Copy, Users, ChevronDown, ChevronUp, Sparkles, RefreshCw, Mic, Upload, Volume2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { Character } from '../../domain/entities/models';
 import { useSpace } from '../contexts/SpaceContext';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useImageUpload, useCopyToSpace } from '../hooks/useSharedForm';
+import { SYSTEM_VOICES, VOICES_BY_LANGUAGE, LANGUAGE_LABELS } from '../../domain/data/systemVoices';
+import { getErrorMessage } from '../utils/errorUtils';
 
 export const CharacterManagement: React.FC = () => {
   const { t } = useTranslation();
@@ -26,6 +28,11 @@ export const CharacterManagement: React.FC = () => {
   const [characterBackground, setCharacterBackground] = useState('');
   const [generatingCharId, setGeneratingCharId] = useState<string | null>(null);
   const [generateAspectRatio, setGenerateAspectRatio] = useState('1:1');
+  const [selectedVoiceId, setSelectedVoiceId] = useState('');
+  const [isCloning, setIsCloning] = useState(false);
+  const [cloneAudioFile, setCloneAudioFile] = useState<File | null>(null);
+  const [promptAudioFile, setPromptAudioFile] = useState<File | null>(null);
+  const [promptText, setPromptText] = useState('');
   const { imageInputMode, imageUrl, imageUploadError, isGenerating, setImageUrl, handleImageUpload, switchImageMode, resetImageState } = useImageUpload('character');
   const { copyingId, copyTargetSpaceId, setCopyTargetSpaceId, startCopy, finishCopy } = useCopyToSpace();
   const [expandedFields, setExpandedFields] = useState<Set<string>>(new Set());
@@ -44,6 +51,10 @@ export const CharacterManagement: React.FC = () => {
     setAppearance('');
     setPersonality('');
     setCharacterBackground('');
+    setSelectedVoiceId('');
+    setCloneAudioFile(null);
+    setPromptAudioFile(null);
+    setPromptText('');
     resetImageState();
     setIsFormOpen(false);
   };
@@ -66,6 +77,7 @@ export const CharacterManagement: React.FC = () => {
     setPersonality(character.personalityPrompt);
     setCharacterBackground(character.characterBackground || '');
     setImageUrl(character.referenceImageUrl || '');
+    setSelectedVoiceId(character.voiceId || '');
     switchImageMode(character.referenceImageUrl?.startsWith('data:image/') ? 'upload' : 'url');
     setIsFormOpen(true);
   };
@@ -85,6 +97,7 @@ export const CharacterManagement: React.FC = () => {
       personalityPrompt: personality.trim(),
       characterBackground: characterBackground.trim(),
       referenceImageUrl: imageUrl.trim() || undefined,
+      voiceId: selectedVoiceId || undefined,
       createdAt
     };
     await characterRepo.save(character);
@@ -120,7 +133,7 @@ export const CharacterManagement: React.FC = () => {
       await imageGenerationService.generateCharacterImage(characterId, generateAspectRatio);
       showToast('success', t('character.generateImageSuccess'));
     } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : t('character.generateImageFailed');
+      const message = getErrorMessage(e, t('character.generateImageFailed'));
       showToast('error', message);
     } finally {
       setGeneratingCharId(null);
@@ -160,6 +173,77 @@ export const CharacterManagement: React.FC = () => {
             <label className="form-label">{t('character.backgroundLabel')}</label>
             <textarea className="form-textarea" value={characterBackground} onChange={e => setCharacterBackground(e.target.value)} placeholder={t('character.backgroundPlaceholder')} />
           </div>
+
+          {/* Voice Selection */}
+          <div className="form-group">
+            <label className="form-label">
+              <Mic size={14} style={{ verticalAlign: 'middle', marginRight: '0.3rem' }} />
+              {t('character.voiceLabel')}
+            </label>
+            <select className="form-select" value={selectedVoiceId} onChange={e => setSelectedVoiceId(e.target.value)}>
+              <option value="">{t('character.noVoice')}</option>
+              {Object.entries(VOICES_BY_LANGUAGE).map(([lang, voices]) => (
+                <optgroup key={lang} label={LANGUAGE_LABELS[lang] || lang}>
+                  {voices.map(v => (
+                    <option key={v.voiceId} value={v.voiceId}>{v.name}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+
+          {/* Voice Clone */}
+          <div className="form-group" style={{ border: '1px solid rgba(99,102,241,0.2)', borderRadius: 'var(--radius-md)', padding: '0.75rem' }}>
+            <label className="form-label" style={{ fontSize: '0.8rem', color: '#818cf8' }}>
+              <Upload size={14} style={{ verticalAlign: 'middle', marginRight: '0.3rem' }} />
+              {t('character.cloneVoice')}
+            </label>
+            <div className="form-group" style={{ marginBottom: '0.5rem' }}>
+              <label className="form-label" style={{ fontSize: '0.75rem' }}>{t('character.cloneAudioLabel')}</label>
+              <input className="form-input" type="file" accept="audio/mp3,audio/m4a,audio/wav,audio/mpeg" onChange={e => setCloneAudioFile(e.target.files?.[0] || null)} />
+              <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{t('character.cloneAudioHint')}</p>
+            </div>
+            <div className="form-group" style={{ marginBottom: '0.5rem' }}>
+              <label className="form-label" style={{ fontSize: '0.75rem' }}>{t('character.promptAudioLabel')}</label>
+              <input className="form-input" type="file" accept="audio/mp3,audio/m4a,audio/wav,audio/mpeg" onChange={e => setPromptAudioFile(e.target.files?.[0] || null)} />
+              <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{t('character.promptAudioHint')}</p>
+            </div>
+            <div className="form-group" style={{ marginBottom: '0.5rem' }}>
+              <label className="form-label" style={{ fontSize: '0.75rem' }}>{t('character.promptTextLabel')}</label>
+              <input className="form-input" value={promptText} onChange={e => setPromptText(e.target.value)} />
+            </div>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+              disabled={isCloning || !cloneAudioFile}
+              onClick={async () => {
+                if (!cloneAudioFile) return;
+                setIsCloning(true);
+                try {
+                  const customVoiceId = `clone_${Date.now()}`;
+                  const text = personality.trim() || appearance.trim() || '你好，我是' + (name.trim() || '角色');
+                  const clonedVoiceId = await voiceService.cloneVoice(
+                    cloneAudioFile,
+                    customVoiceId,
+                    text,
+                    promptAudioFile || undefined,
+                    promptText || undefined
+                  );
+                  setSelectedVoiceId(clonedVoiceId);
+                  showToast('success', t('character.cloneVoiceSuccess'));
+                } catch (e: unknown) {
+                  showToast('error', getErrorMessage(e, t('character.cloneVoiceFailed')));
+                } finally {
+                  setIsCloning(false);
+                }
+              }}
+            >
+              {isCloning ? <RefreshCw size={14} className="spin" /> : <Upload size={14} />}
+              {isCloning ? t('character.cloneVoiceCloning') : t('character.cloneVoiceBtn')}
+            </button>
+          </div>
+
           <div className="form-group">
             <label className="form-label">{t('character.imageSourceLabel')}</label>
             <select
@@ -210,7 +294,7 @@ export const CharacterManagement: React.FC = () => {
                     const result = await imageAdapter.generateImage({ prompt, aspectRatio: generateAspectRatio });
                     setImageUrl(result.imageDataUri);
                   } catch (err: unknown) {
-                    const msg = err instanceof Error ? err.message : 'Image generation failed';
+                    const msg = getErrorMessage(err, 'Image generation failed');
                     showToast('error', msg);
                   }
                 }}
@@ -282,6 +366,12 @@ export const CharacterManagement: React.FC = () => {
                     {expandedFields.has(`${char.id}-bg`) ? <><ChevronUp size={12} /> {t('common.collapse')}</> : <><ChevronDown size={12} /> {t('common.expand')}</>}
                   </button>
                 )}
+              </div>
+            )}
+            {char.voiceId && (
+              <div style={{ fontSize: '0.8rem', marginBottom: '0.5rem', opacity: 0.8, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                <Volume2 size={12} style={{ color: '#818cf8' }} />
+                <span>{SYSTEM_VOICES.find(v => v.voiceId === char.voiceId)?.name || char.voiceId}</span>
               </div>
             )}
             <div style={{ position: 'absolute', top: '1rem', right: '1rem', display: 'flex', gap: '0.5rem' }}>

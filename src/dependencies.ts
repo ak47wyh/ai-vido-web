@@ -4,9 +4,13 @@ import { StorySpaceService } from './domain/services/StorySpaceService';
 import { StorySpaceRepositoryAdapter, CharacterRepositoryAdapter, StoryRepositoryAdapter, StorySegmentRepositoryAdapter, BackgroundRepositoryAdapter, VideoTaskRepositoryAdapter } from './adapters/outbound/repositories/IndexedDBAdapters';
 import { MiniMaxVideoAdapter } from './adapters/outbound/api/MiniMaxVideoAdapter';
 import { MiniMaxImageAdapter } from './adapters/outbound/api/MiniMaxImageAdapter';
+import { MiniMaxVoiceAdapter } from './adapters/outbound/api/MiniMaxVoiceAdapter';
+import { MiniMaxMusicAdapter } from './adapters/outbound/api/MiniMaxMusicAdapter';
 import { MockTextSplitterAdapter } from './adapters/outbound/api/MockTextSplitter';
 import { MockStoryBreakdownAdapter } from './adapters/outbound/api/MockStoryBreakdown';
 import { ImageGenerationService } from './domain/services/ImageGenerationService';
+import { VoiceService } from './domain/services/VoiceService';
+import { MusicService } from './domain/services/MusicService';
 
 export const spaceRepo = new StorySpaceRepositoryAdapter();
 export const characterRepo = new CharacterRepositoryAdapter();
@@ -17,6 +21,8 @@ export const videoTaskRepo = new VideoTaskRepositoryAdapter();
 
 export const videoAdapter = new MiniMaxVideoAdapter();
 export const imageAdapter = new MiniMaxImageAdapter();
+export const voiceAdapter = new MiniMaxVoiceAdapter();
+export const musicAdapter = new MiniMaxMusicAdapter();
 export const textSplitterAdapter = new MockTextSplitterAdapter();
 export const storyBreakdownAdapter = new MockStoryBreakdownAdapter();
 
@@ -52,3 +58,7 @@ export const imageGenerationService = new ImageGenerationService(
   characterRepo,
   backgroundRepo
 );
+
+export const voiceService = new VoiceService(voiceAdapter, characterRepo);
+
+export const musicService = new MusicService(musicAdapter, segmentRepo);

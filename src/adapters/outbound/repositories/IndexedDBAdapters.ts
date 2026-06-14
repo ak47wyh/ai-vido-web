@@ -82,6 +82,9 @@ export class StorySegmentRepositoryAdapter implements IStorySegmentRepository {
   async save(segment: StorySegment): Promise<void> {
     await db.segments.put(segment);
   }
+  async findById(id: string): Promise<StorySegment | null> {
+    return (await db.segments.get(id)) || null;
+  }
   async findByStoryId(storyId: string): Promise<StorySegment[]> {
     return db.segments.where('storyId').equals(storyId).toArray();
   }

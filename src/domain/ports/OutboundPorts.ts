@@ -35,6 +35,7 @@ export interface IStoryRepository {
 
 export interface IStorySegmentRepository {
   save(segment: StorySegment): Promise<void>;
+  findById(id: string): Promise<StorySegment | null>;
   findByStoryId(storyId: string): Promise<StorySegment[]>;
   deleteByStoryId(storyId: string): Promise<void>;
 }
@@ -55,6 +56,8 @@ export interface VideoPromptContext {
   characters: Character[];
   background?: Background;
   videoStyle?: string;
+  characterVoiceIds?: Record<string, string>;
+  bgmAudioUrl?: string;
 }
 
 export interface VideoTaskResult {
@@ -86,6 +89,7 @@ export interface CharacterDraft {
   personalityPrompt: string;
   characterBackground: string;
   referenceImageUrl?: string;
+  voiceId?: string;
 }
 
 export interface BackgroundDraft {
@@ -124,4 +128,104 @@ export interface ImageGenerationResult {
 
 export interface IImageGeneratorPort {
   generateImage(context: ImageGenerationContext): Promise<ImageGenerationResult>;
+}
+
+// --- Voice ---
+
+export interface VoiceCloneContext {
+  fileId: string;
+  voiceId: string;
+  text: string;
+  promptAudioFileId?: string;
+  promptText?: string;
+}
+
+export interface VoiceCloneResult {
+  voiceId: string;
+  previewAudioUrl?: string;
+}
+
+export interface T2AAsyncContext {
+  text: string;
+  voiceId: string;
+  model?: string;
+  speed?: number;
+  vol?: number;
+  pitch?: number;
+  audioFormat?: string;
+  sampleRate?: number;
+}
+
+export interface T2AAsyncResult {
+  taskId: string;
+}
+
+export interface T2AAsyncStatus {
+  status: 'pending' | 'running' | 'done' | 'failed';
+  audioFileId?: string;
+  audioUrl?: string;
+  audioDuration?: number;
+  errorMessage?: string;
+}
+
+export interface FileUploadResult {
+  fileId: string;
+}
+
+export interface IVoicePort {
+  uploadFile(file: File, purpose: 'voice_clone' | 'prompt_audio' | 't2a_async_input'): Promise<FileUploadResult>;
+  cloneVoice(context: VoiceCloneContext): Promise<VoiceCloneResult>;
+  createT2ATask(context: T2AAsyncContext): Promise<T2AAsyncResult>;
+  queryT2ATask(taskId: string): Promise<T2AAsyncStatus>;
+  getFileUrl(fileId: string): string;
+}
+
+// --- Music Generation ---
+
+export interface MusicGenerationContext {
+  prompt: string;
+  lyrics?: string;
+  isInstrumental?: boolean;
+  lyricsOptimizer?: boolean;
+  model?: 'music-2.6' | 'music-2.6-free';
+  outputFormat?: 'url' | 'hex';
+  audioSetting?: {
+    sampleRate?: number;
+    bitrate?: number;
+    format?: string;
+  };
+}
+
+export interface MusicGenerationResult {
+  audioUrl?: string;
+  audioHex?: string;
+  duration?: number;
+  sampleRate?: number;
+  bitrate?: number;
+}
+
+export interface LyricsGenerationContext {
+  mode: 'write_full_song' | 'edit';
+  prompt: string;
+  lyrics?: string;
+  title?: string;
+}
+
+export interface LyricsGenerationResult {
+  songTitle: string;
+  styleTags: string;
+  lyrics: string;
+}
+
+export interface CoverPreprocessResult {
+  coverFeatureId: string;
+  formattedLyrics: string;
+  structureResult: string;
+  audioDuration: number;
+}
+
+export interface IMusicPort {
+  generateMusic(context: MusicGenerationContext): Promise<MusicGenerationResult>;
+  generateLyrics(context: LyricsGenerationContext): Promise<LyricsGenerationResult>;
+  preprocessCover(audioUrl: string): Promise<CoverPreprocessResult>;
 }

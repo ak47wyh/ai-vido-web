@@ -1,8 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../adapters/outbound/repositories/DexieDatabase';
-import { storyService, videoGenerationService, imageAdapter } from '../../dependencies';
-import { Play, Spline, Trash2, RefreshCw, Users, PlayCircle, AlertTriangle, ImagePlus, Sparkles, Pencil, BookOpen, Download, Check, CheckCircle2 } from 'lucide-react';
+import { storyService, videoGenerationService, imageAdapter, voiceService, musicService } from '../../dependencies';
+import { Play, Spline, Trash2, RefreshCw, Users, PlayCircle, AlertTriangle, ImagePlus, Sparkles, Pencil, BookOpen, Download, Check, CheckCircle2, Volume2, Music } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { VideoTask, Character } from '../../domain/entities/models';
@@ -10,6 +10,7 @@ import type { CharacterDraft, BackgroundDraft, BreakdownSegmentDraft, ImageGener
 import { useSpace } from '../contexts/SpaceContext';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { getErrorMessage } from '../utils/errorUtils';
 
 export const StoryWorkbench: React.FC = () => {
   const { t } = useTranslation();
@@ -39,9 +40,52 @@ export const StoryWorkbench: React.FC = () => {
   const [isApplyingBreakdown, setIsApplyingBreakdown] = useState(false);
   const [confirmedCharIndices, setConfirmedCharIndices] = useState<Set<number>>(new Set());
   const [confirmedBgIndices, setConfirmedBgIndices] = useState<Set<number>>(new Set());
+  const [generatingDraftCharImageIndices, setGeneratingDraftCharImageIndices] = useState<Set<number>>(new Set());
+  const [generatingDraftBgImageIndices, setGeneratingDraftBgImageIndices] = useState<Set<number>>(new Set());
+  const [narrationStatuses, setNarrationStatuses] = useState<Record<string, string>>({});
+  const [narrationUrls, setNarrationUrls] = useState<Record<string, string>>({});
+  // BGM state
+  const [bgmSegmentId, setBgmSegmentId] = useState<string | null>(null);
+  const [bgmPrompt, setBgmPrompt] = useState('');
+  const [bgmMode, setBgmMode] = useState<'instrumental' | 'autoLyrics' | 'customLyrics'>('instrumental');
+  const [bgmLyrics, setBgmLyrics] = useState('');
+  const [isGeneratingBGM, setIsGeneratingBGM] = useState(false);
+  const [isGeneratingLyrics, setIsGeneratingLyrics] = useState(false);
   const [editingStoryId, setEditingStoryId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editOriginalText, setEditOriginalText] = useState('');
+
+  // Track active narration polling intervals for cleanup
+  const narrationPollersRef = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map());
+
+  // Cleanup all polling intervals on unmount
+  useEffect(() => {
+    const currentPollers = narrationPollersRef.current;
+    return () => {
+      for (const [, interval] of currentPollers) {
+        clearInterval(interval);
+      }
+      currentPollers.clear();
+    };
+  }, []);
+
+  // Helper: clear all narration pollers and state (call when switching stories)
+  const clearNarrationState = () => {
+    for (const [, interval] of narrationPollersRef.current) {
+      clearInterval(interval);
+    }
+    narrationPollersRef.current.clear();
+    setNarrationStatuses({});
+    setNarrationUrls({});
+  };
+
+  // Wrapper for setting selectedStoryId that also clears narration state
+  const switchStory = (storyId: string | null) => {
+    if (storyId !== selectedStoryId) {
+      clearNarrationState();
+    }
+    setSelectedStoryId(storyId);
+  };
 
   // Reactive segments
   const segments = useLiveQuery(
@@ -116,7 +160,7 @@ export const StoryWorkbench: React.FC = () => {
     setIsSplitting(true);
     try {
       const story = await storyService.createStory(title, originalText, currentSpaceId);
-      setSelectedStoryId(story.id);
+      switchStory(story.id);
       await storyService.splitStory(story.id);
       setTitle('');
       setOriginalText('');
@@ -139,7 +183,7 @@ export const StoryWorkbench: React.FC = () => {
     setConfirmedBgIndices(new Set());
     try {
       const story = await storyService.createStory(title, originalText, currentSpaceId);
-      setSelectedStoryId(story.id);
+      switchStory(story.id);
       const result = await storyService.previewBreakdown(story.id);
       setDraftCharacters(result.characters);
       setDraftBackgrounds(result.backgrounds);
@@ -186,7 +230,7 @@ export const StoryWorkbench: React.FC = () => {
   };
 
   const handleQuickSplit = async (storyId: string) => {
-    setSelectedStoryId(storyId);
+    switchStory(storyId);
     setIsSplitting(true);
     try {
       await storyService.splitStory(storyId);
@@ -279,6 +323,8 @@ export const StoryWorkbench: React.FC = () => {
     setDraftSegments([]);
     setConfirmedCharIndices(new Set());
     setConfirmedBgIndices(new Set());
+    setGeneratingDraftCharImageIndices(new Set());
+    setGeneratingDraftBgImageIndices(new Set());
   };
 
   const handleApplyBreakdown = async () => {
@@ -295,6 +341,8 @@ export const StoryWorkbench: React.FC = () => {
       setDraftSegments([]);
       setConfirmedCharIndices(new Set());
       setConfirmedBgIndices(new Set());
+      setGeneratingDraftCharImageIndices(new Set());
+      setGeneratingDraftBgImageIndices(new Set());
       showToast('success', t('workbench.breakdownApplied'));
     } catch (e) {
       console.error(e);
@@ -334,7 +382,7 @@ export const StoryWorkbench: React.FC = () => {
     try {
       await videoGenerationService.generateVideo(segmentId, selectedStoryId, 'MINIMAX');
     } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : String(e);
+      const message = getErrorMessage(e);
       showToast('error', message);
     }
   };
@@ -357,7 +405,7 @@ export const StoryWorkbench: React.FC = () => {
         showToast('warning', t('workbench.batchNoEligible'));
       }
     } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : String(e);
+      const message = getErrorMessage(e);
       showToast('error', message);
     } finally {
       setIsBatchGenerating(false);
@@ -373,7 +421,7 @@ export const StoryWorkbench: React.FC = () => {
       showToast('success', t('workbench.batchBgSuccess', { count: sortedSegments.length }));
       setBatchBgId('');
     } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : String(e);
+      const message = getErrorMessage(e);
       showToast('error', message);
     }
   };
@@ -389,7 +437,7 @@ export const StoryWorkbench: React.FC = () => {
     await storyService.deleteStory(storyId);
     showToast('success', t('workbench.deleteSuccess'));
     if (selectedStoryId === storyId) {
-      setSelectedStoryId(null);
+      switchStory(null);
     }
   };
 
@@ -432,6 +480,74 @@ export const StoryWorkbench: React.FC = () => {
 
   const hasCharacters = (characters?.length ?? 0) > 0;
   const hasBackgrounds = (backgrounds?.length ?? 0) > 0;
+
+  // BGM style presets
+  const bgmStylePresets = [
+    { key: 'cinematic', prompt: 'Cinematic, Epic, Orchestral, Grand, Sweeping' },
+    { key: 'lighthearted', prompt: 'Lighthearted, Acoustic, Pop, Warm, Gentle' },
+    { key: 'suspense', prompt: 'Suspense, Dark, Thriller, Tension, Mysterious' },
+    { key: 'melancholic', prompt: 'Melancholic, Piano, Emotional, Sad, Reflective' },
+    { key: 'upbeat', prompt: 'Upbeat, Funky, Dance, Energetic, Joyful' },
+  ];
+
+  const handleGenerateBGM = async (segmentId: string) => {
+    if (!bgmPrompt.trim()) {
+      showToast('warning', t('music.promptLabel'));
+      return;
+    }
+    setIsGeneratingBGM(true);
+    try {
+      const options: { isInstrumental?: boolean; lyrics?: string; lyricsOptimizer?: boolean } = {};
+      if (bgmMode === 'instrumental') {
+        options.isInstrumental = true;
+      } else if (bgmMode === 'autoLyrics') {
+        options.isInstrumental = false;
+        options.lyricsOptimizer = true;
+      } else {
+        options.isInstrumental = false;
+        options.lyrics = bgmLyrics || undefined;
+      }
+      await musicService.generateBGM(segmentId, bgmPrompt.trim(), options);
+      showToast('success', t('music.bgmGenerated'));
+      setBgmSegmentId(null);
+      setBgmPrompt('');
+      setBgmLyrics('');
+    } catch (e: unknown) {
+      showToast('error', getErrorMessage(e, t('music.bgmGenerateFailed')));
+    } finally {
+      setIsGeneratingBGM(false);
+    }
+  };
+
+  const handleRemoveBGM = async (segmentId: string) => {
+    const ok = await confirm({
+      title: t('music.removeBGM'),
+      message: t('music.confirmRemoveBGM'),
+      confirmLabel: t('music.removeBGMBtn'),
+      danger: true
+    });
+    if (!ok) return;
+    try {
+      await musicService.removeBGMFromSegment(segmentId);
+      showToast('success', t('music.removeBGM'));
+    } catch (e: unknown) {
+      showToast('error', getErrorMessage(e));
+    }
+  };
+
+  const handleGenerateLyrics = async () => {
+    if (!bgmPrompt.trim()) return;
+    setIsGeneratingLyrics(true);
+    try {
+      const result = await musicService.generateLyrics(bgmPrompt.trim());
+      setBgmLyrics(result.lyrics);
+      showToast('success', t('music.lyricsGenerated'));
+    } catch (e: unknown) {
+      showToast('error', getErrorMessage(e));
+    } finally {
+      setIsGeneratingLyrics(false);
+    }
+  };
 
   return (
     <div style={{ display: 'flex', gap: '2rem', height: '100%', flexWrap: 'wrap' }}>
@@ -498,7 +614,7 @@ export const StoryWorkbench: React.FC = () => {
                       justifyContent: 'space-between',
                       alignItems: 'center'
                     }}
-                    onClick={() => setSelectedStoryId(s.id)}
+                    onClick={() => switchStory(s.id)}
                   >
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</div>
@@ -695,15 +811,15 @@ export const StoryWorkbench: React.FC = () => {
                         type="button"
                         className="btn btn-secondary"
                         style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', marginTop: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                        disabled={!c.appearancePrompt && !c.personalityPrompt}
+                        disabled={!c.appearancePrompt && !c.personalityPrompt || generatingDraftCharImageIndices.has(i)}
                         onClick={async () => {
+                          setGeneratingDraftCharImageIndices(prev => new Set(prev).add(i));
                           try {
                             const context: ImageGenerationContext = {
                               prompt: [c.appearancePrompt, c.personalityPrompt].filter(Boolean).join(', '),
                               aspectRatio: '1:1',
                             };
                             const result = await imageAdapter.generateImage(context);
-                            // 使用 referenceImageUrl 存储（CharacterDraft 已扩展）
                             setDraftCharacters(prev => {
                               const next = [...prev];
                               next[i] = { ...next[i], referenceImageUrl: result.imageDataUri };
@@ -711,11 +827,18 @@ export const StoryWorkbench: React.FC = () => {
                             });
                             showToast('success', t('workbench.draftImageGenerated'));
                           } catch (e: unknown) {
-                            showToast('error', e instanceof Error ? e.message : t('workbench.breakdownApplyFailed'));
+                            showToast('error', getErrorMessage(e, t('workbench.breakdownApplyFailed')));
+                          } finally {
+                            setGeneratingDraftCharImageIndices(prev => {
+                              const next = new Set(prev);
+                              next.delete(i);
+                              return next;
+                            });
                           }
                         }}
                       >
-                        <Sparkles size={12} /> {t('workbench.generateDraftImage')}
+                        {generatingDraftCharImageIndices.has(i) ? <RefreshCw size={12} className="spin" /> : <Sparkles size={12} />}
+                        {generatingDraftCharImageIndices.has(i) ? t('workbench.generatingDraftImage') : t('workbench.generateDraftImage')}
                       </button>
                     </div>
                     );
@@ -810,15 +933,15 @@ export const StoryWorkbench: React.FC = () => {
                         type="button"
                         className="btn btn-secondary"
                         style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', marginTop: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                        disabled={!bg.environmentPrompt}
+                        disabled={!bg.environmentPrompt || generatingDraftBgImageIndices.has(i)}
                         onClick={async () => {
+                          setGeneratingDraftBgImageIndices(prev => new Set(prev).add(i));
                           try {
                             const context: ImageGenerationContext = {
                               prompt: bg.environmentPrompt,
                               aspectRatio: '16:9',
                             };
                             const result = await imageAdapter.generateImage(context);
-                            // 使用 referenceImageUrl 存储（BackgroundDraft 已扩展）
                             setDraftBackgrounds(prev => {
                               const next = [...prev];
                               next[i] = { ...next[i], referenceImageUrl: result.imageDataUri };
@@ -826,11 +949,18 @@ export const StoryWorkbench: React.FC = () => {
                             });
                             showToast('success', t('workbench.draftImageGenerated'));
                           } catch (e: unknown) {
-                            showToast('error', e instanceof Error ? e.message : t('workbench.breakdownApplyFailed'));
+                            showToast('error', getErrorMessage(e, t('workbench.breakdownApplyFailed')));
+                          } finally {
+                            setGeneratingDraftBgImageIndices(prev => {
+                              const next = new Set(prev);
+                              next.delete(i);
+                              return next;
+                            });
                           }
                         }}
                       >
-                        <Sparkles size={12} /> {t('workbench.generateDraftImage')}
+                        {generatingDraftBgImageIndices.has(i) ? <RefreshCw size={12} className="spin" /> : <Sparkles size={12} />}
+                        {generatingDraftBgImageIndices.has(i) ? t('workbench.generatingDraftImage') : t('workbench.generateDraftImage')}
                       </button>
                     </div>
                     );
@@ -1059,6 +1189,183 @@ export const StoryWorkbench: React.FC = () => {
                         </a>
                       </div>
                     )}
+
+                    {/* Narration Generation */}
+                    <button
+                      className="btn btn-secondary"
+                      style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                      disabled={narrationStatuses[seg.id] === 'running'}
+                      onClick={async () => {
+                        const charWithVoice = seg.mentionedCharacters
+                          .map(id => characters?.find(c => c.id === id))
+                          .find(c => c?.voiceId);
+                        if (!charWithVoice?.voiceId) {
+                          showToast('warning', t('character.noVoice'));
+                          return;
+                        }
+                        setNarrationStatuses(prev => ({ ...prev, [seg.id]: 'running' }));
+                        try {
+                          const taskId = await voiceService.generateNarrationAudio(seg.content, charWithVoice.voiceId);
+                          const pollInterval = setInterval(async () => {
+                            try {
+                              const result = await voiceService.queryNarrationStatus(taskId);
+                              if (result.status === 'done') {
+                                clearInterval(pollInterval);
+                                narrationPollersRef.current.delete(seg.id);
+                                setNarrationStatuses(prev => ({ ...prev, [seg.id]: 'done' }));
+                                if (result.audioUrl) {
+                                  setNarrationUrls(prev => ({ ...prev, [seg.id]: result.audioUrl! }));
+                                }
+                                showToast('success', t('character.narrationGenerated'));
+                              } else if (result.status === 'failed') {
+                                clearInterval(pollInterval);
+                                narrationPollersRef.current.delete(seg.id);
+                                setNarrationStatuses(prev => ({ ...prev, [seg.id]: 'failed' }));
+                                showToast('error', result.errorMessage || t('character.narrationFailed'));
+                              }
+                            } catch {
+                              clearInterval(pollInterval);
+                              narrationPollersRef.current.delete(seg.id);
+                              setNarrationStatuses(prev => ({ ...prev, [seg.id]: 'failed' }));
+                            }
+                          }, 3000);
+                          narrationPollersRef.current.set(seg.id, pollInterval);
+                        } catch (e: unknown) {
+                          setNarrationStatuses(prev => ({ ...prev, [seg.id]: 'failed' }));
+                          showToast('error', getErrorMessage(e, t('character.narrationFailed')));
+                        }
+                      }}
+                    >
+                      {narrationStatuses[seg.id] === 'running' ? <RefreshCw size={14} className="spin" /> : <Volume2 size={14} />}
+                      {narrationStatuses[seg.id] === 'running' ? t('character.generatingNarration') : t('character.generateNarration')}
+                    </button>
+                    {narrationUrls[seg.id] && (
+                      <audio controls style={{ width: '100%', marginTop: '0.5rem', height: '32px' }} src={narrationUrls[seg.id]} />
+                    )}
+
+                    {/* BGM Section */}
+                    <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-color)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                        <Music size={14} style={{ color: '#f472b6' }} />
+                        <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f472b6' }}>{t('music.title')}</span>
+                      </div>
+
+                      {seg.bgmAudioUrl ? (
+                        <div>
+                          <audio controls style={{ width: '100%', height: '32px' }} src={seg.bgmAudioUrl} />
+                          {seg.bgmPrompt && (
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
+                              {seg.bgmIsInstrumental ? '🎵' : '🎤'} {seg.bgmPrompt}
+                            </span>
+                          )}
+                          <button
+                            className="btn btn-secondary"
+                            style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', marginTop: '0.3rem', color: '#f87171' }}
+                            onClick={() => handleRemoveBGM(seg.id)}
+                          >
+                            <Trash2 size={12} /> {t('music.removeBGMBtn')}
+                          </button>
+                        </div>
+                      ) : bgmSegmentId === seg.id ? (
+                        <div style={{ padding: '0.75rem', borderRadius: 'var(--radius-md)', background: 'rgba(244,114,182,0.08)', border: '1px solid rgba(244,114,182,0.2)' }}>
+                          {/* Mode selection */}
+                          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                            {(['instrumental', 'autoLyrics', 'customLyrics'] as const).map(mode => (
+                              <button
+                                key={mode}
+                                className="btn btn-secondary"
+                                style={{
+                                  fontSize: '0.7rem', padding: '0.2rem 0.5rem',
+                                  background: bgmMode === mode ? 'rgba(244,114,182,0.2)' : undefined,
+                                  borderColor: bgmMode === mode ? '#f472b6' : undefined,
+                                  color: bgmMode === mode ? '#f472b6' : undefined,
+                                }}
+                                onClick={() => setBgmMode(mode)}
+                              >
+                                {t(`music.mode${mode.charAt(0).toUpperCase() + mode.slice(1)}`)}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Style presets */}
+                          <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                            {bgmStylePresets.map(preset => (
+                              <button
+                                key={preset.key}
+                                className="btn btn-secondary"
+                                style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem' }}
+                                onClick={() => setBgmPrompt(preset.prompt)}
+                              >
+                                {t(`music.style${preset.key.charAt(0).toUpperCase() + preset.key.slice(1)}`)}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Prompt input */}
+                          <input
+                            className="form-input"
+                            style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem', width: '100%', marginBottom: '0.5rem' }}
+                            value={bgmPrompt}
+                            onChange={e => setBgmPrompt(e.target.value)}
+                            placeholder={t('music.promptPlaceholder')}
+                          />
+
+                          {/* Lyrics (for autoLyrics and customLyrics modes) */}
+                          {bgmMode !== 'instrumental' && (
+                            <div style={{ marginBottom: '0.5rem' }}>
+                              <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.3rem' }}>
+                                {bgmMode === 'autoLyrics' && (
+                                  <button
+                                    className="btn btn-secondary"
+                                    style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem', display: 'flex', alignItems: 'center', gap: '0.2rem' }}
+                                    disabled={isGeneratingLyrics || !bgmPrompt.trim()}
+                                    onClick={handleGenerateLyrics}
+                                  >
+                                    {isGeneratingLyrics ? <RefreshCw size={10} className="spin" /> : <Sparkles size={10} />}
+                                    {isGeneratingLyrics ? t('music.generatingLyrics') : t('music.generateLyricsBtn')}
+                                  </button>
+                                )}
+                              </div>
+                              <textarea
+                                className="form-textarea"
+                                style={{ fontSize: '0.7rem', padding: '0.3rem 0.5rem', minHeight: '60px', width: '100%' }}
+                                value={bgmLyrics}
+                                onChange={e => setBgmLyrics(e.target.value)}
+                                placeholder={t('music.lyricsPlaceholder')}
+                              />
+                            </div>
+                          )}
+
+                          {/* Generate & Cancel buttons */}
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <button
+                              className="btn btn-primary"
+                              style={{ fontSize: '0.7rem', padding: '0.3rem 0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem', background: 'linear-gradient(135deg, #f472b6, #ec4899)' }}
+                              disabled={isGeneratingBGM || !bgmPrompt.trim()}
+                              onClick={() => handleGenerateBGM(seg.id)}
+                            >
+                              {isGeneratingBGM ? <RefreshCw size={12} className="spin" /> : <Music size={12} />}
+                              {isGeneratingBGM ? t('music.generatingBGM') : t('music.generateBGM')}
+                            </button>
+                            <button
+                              className="btn btn-secondary"
+                              style={{ fontSize: '0.7rem', padding: '0.3rem 0.5rem' }}
+                              onClick={() => { setBgmSegmentId(null); setBgmPrompt(''); setBgmLyrics(''); }}
+                            >
+                              {t('workbench.cancelBtn')}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          className="btn btn-secondary"
+                          style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                          onClick={() => { setBgmSegmentId(seg.id); setBgmMode('instrumental'); setBgmPrompt(''); setBgmLyrics(''); }}
+                        >
+                          <Music size={14} /> {t('music.generateBGM')}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
