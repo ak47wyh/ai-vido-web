@@ -28,7 +28,7 @@ export const ExportCenter: React.FC = () => {
   const finalCuts = useLiveQuery(
     () => currentSpaceId
       ? db.finalCuts
-          .filter(cut => stories?.some(s => s.id === cut.storyId))
+          .filter(cut => stories ? stories.some(s => s.id === cut.storyId) : false)
           .toArray()
       : [],
     [currentSpaceId, stories]

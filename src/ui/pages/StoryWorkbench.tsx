@@ -1,12 +1,12 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../adapters/outbound/repositories/DexieDatabase';
-import { storyService, videoGenerationService, imageAdapter, voiceService, musicService, textGenerationService } from '../../dependencies';
-import { Spline, Sparkles, AlertTriangle, ImagePlus, PlayCircle } from 'lucide-react';
+import { storyService, videoGenerationService, imageAdapter, voiceService, musicService, textGenerationService, pipelineService } from '../../dependencies';
+import { Spline, Sparkles, AlertTriangle, ImagePlus, PlayCircle, Film } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { VideoTask, Character } from '../../domain/entities/models';
-import type { CharacterDraft, BackgroundDraft, BreakdownSegmentDraft, ImageGenerationContext, VideoModel, VideoResolution, VideoGenerationMode } from '../../domain/ports/OutboundPorts';
+import type { CharacterDraft, BackgroundDraft, BreakdownSegmentDraft, ImageGenerationContext, VideoModel, VideoResolution, VideoGenerationMode, MusicModel } from '../../domain/ports/OutboundPorts';
 import { useSpace } from '../contexts/SpaceContext';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -62,6 +62,8 @@ export const StoryWorkbench: React.FC = () => {
   const [videoResolution, setVideoResolution] = useState<VideoResolution>('768P');
   const [videoDuration, setVideoDuration] = useState<6 | 10>(6);
   const [videoPromptOptimizer, setVideoPromptOptimizer] = useState(true);
+  const [isAssembling, setIsAssembling] = useState(false);
+  const [assembleProgress, setAssembleProgress] = useState<{ percent: number; message: string } | null>(null);
 
   const narrationPollersRef = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map());
 
@@ -174,7 +176,7 @@ export const StoryWorkbench: React.FC = () => {
     } catch (e) {
       console.error(e);
       if (createdStoryId) {
-        try { await storyService.deleteStory(createdStoryId); } catch { }
+        try { await storyService.deleteStory(createdStoryId); } catch { /* rollback */ }
         switchStory(null);
       }
       showToast('error', t('workbench.splitFailed'));
@@ -205,7 +207,7 @@ export const StoryWorkbench: React.FC = () => {
     } catch (e) {
       console.error(e);
       if (createdStoryId) {
-        try { await storyService.deleteStory(createdStoryId); } catch { }
+        try { await storyService.deleteStory(createdStoryId); } catch { /* rollback */ }
         switchStory(null);
       }
       showToast('error', t('workbench.breakdownFailed'));
@@ -481,6 +483,24 @@ export const StoryWorkbench: React.FC = () => {
     }
   };
 
+  const handleAssembleFinalVideo = async () => {
+    if (!selectedStoryId) return;
+    setIsAssembling(true);
+    setAssembleProgress({ percent: 0, message: '初始化合成任务...' });
+    try {
+      await pipelineService.assembleFinalVideo(selectedStoryId, narrationUrls, (percent, message) => {
+        setAssembleProgress({ percent, message });
+      });
+      showToast('success', t('workbench.assembleSuccess', '合成成功，已保存至导出中心！'));
+      navigate('/export');
+    } catch (e: unknown) {
+      showToast('error', getErrorMessage(e, t('workbench.assembleFailed', '合成失败')));
+    } finally {
+      setIsAssembling(false);
+      setAssembleProgress(null);
+    }
+  };
+
   // ---- Narration handlers ----
 
   const handleGenerateNarration = async (segmentId: string, content: string, characterIds: string[]) => {
@@ -556,7 +576,7 @@ export const StoryWorkbench: React.FC = () => {
           lyrics: bgmLyrics || undefined, model: bgmModel,
         });
       } else {
-        const options: { isInstrumental?: boolean; lyrics?: string; lyricsOptimizer?: boolean; model?: string } = { model: bgmModel };
+        const options: { isInstrumental?: boolean; lyrics?: string; lyricsOptimizer?: boolean; model?: MusicModel } = { model: bgmModel };
         if (bgmMode === 'instrumental') {
           options.isInstrumental = true;
         } else if (bgmMode === 'autoLyrics') {
@@ -770,7 +790,6 @@ export const StoryWorkbench: React.FC = () => {
           <BreakdownPreview
           draftCharacters={draftCharacters}
           draftBackgrounds={draftBackgrounds}
-          draftSegments={draftSegments}
           confirmedCharIndices={confirmedCharIndices}
           confirmedBgIndices={confirmedBgIndices}
           generatingDraftCharImageIndices={generatingDraftCharImageIndices}
@@ -893,6 +912,48 @@ export const StoryWorkbench: React.FC = () => {
               <PlayCircle size={16} />
               {isBatchGenerating ? t('workbench.batchGenerating') : t('workbench.batchGenerateBtn')}
             </button>
+            <button className="btn btn-primary" onClick={handleAssembleFinalVideo}
+              disabled={isAssembling || progressStats?.success !== progressStats?.total}
+              style={{ background: 'linear-gradient(135deg, #8b5cf6, #ec4899)' }}>
+              <Film size={16} />
+              {isAssembling ? (assembleProgress?.message || t('workbench.assembling', '合成中...')) : t('workbench.assembleBtn', '一键合成导出')}
+            </button>
+          </div>
+        )}
+
+        {selectedStory && sortedSegments.length > 0 && (
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('workbench.videoConfig')}</span>
+            <select className="form-select" style={{ width: '100px', fontSize: '0.75rem' }}
+              value={videoMode} onChange={e => setVideoMode(e.target.value as VideoGenerationMode)}>
+              <option value="t2v">{t('video.modeT2V')}</option>
+              <option value="fl2v">{t('video.modeFL2V')}</option>
+              <option value="s2v">{t('video.modeS2V')}</option>
+            </select>
+            {videoMode === 't2v' && (
+              <select className="form-select" style={{ width: '140px', fontSize: '0.75rem' }}
+                value={videoModel} onChange={e => setVideoModel(e.target.value as VideoModel)}>
+                <option value="MiniMax-Hailuo-2.3">Hailuo 2.3</option>
+                <option value="MiniMax-Hailuo-02">Hailuo 02</option>
+                <option value="T2V-01-Director">T2V-01 Director</option>
+                <option value="T2V-01">T2V-01</option>
+              </select>
+            )}
+            <select className="form-select" style={{ width: '70px', fontSize: '0.75rem' }}
+              value={videoResolution} onChange={e => setVideoResolution(e.target.value as VideoResolution)}>
+              <option value="768P">768P</option>
+              <option value="1080P">1080P</option>
+            </select>
+            <select className="form-select" style={{ width: '60px', fontSize: '0.75rem' }}
+              value={videoDuration} onChange={e => setVideoDuration(Number(e.target.value) as 6 | 10)}>
+              <option value={6}>6s</option>
+              <option value={10}>10s</option>
+            </select>
+            <label style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '0.2rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={videoPromptOptimizer} onChange={e => setVideoPromptOptimizer(e.target.checked)}
+                style={{ width: '12px', height: '12px' }} />
+              {t('video.promptOptimizer')}
+            </label>
           </div>
         )}
 
@@ -909,13 +970,7 @@ export const StoryWorkbench: React.FC = () => {
                 index={idx}
                 task={latestTaskMap.get(seg.id)}
                 characterMap={characterMap}
-                characters={characters}
                 backgrounds={backgrounds}
-                videoMode={videoMode}
-                videoModel={videoModel}
-                videoResolution={videoResolution}
-                videoDuration={videoDuration}
-                videoPromptOptimizer={videoPromptOptimizer}
                 narrationStatus={narrationStatuses[seg.id]}
                 narrationUrl={narrationUrls[seg.id]}
                 isBGMEditing={bgmSegmentId === seg.id}

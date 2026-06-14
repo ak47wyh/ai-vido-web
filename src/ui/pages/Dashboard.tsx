@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../adapters/outbound/repositories/DexieDatabase';
-import { Users, Image as ImageIcon, BookOpen, Settings, ArrowRight, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Users, Image as ImageIcon, BookOpen, Settings, ArrowRight, CheckCircle, XCircle, Clock, Film } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useSpace } from '../contexts/SpaceContext';
 
@@ -81,9 +81,18 @@ export const Dashboard: React.FC = () => {
       color: '#f59e0b'
     },
     {
+      icon: <Film size={24} />,
+      title: t('dashboard.step4Title', '导出中心'),
+      desc: t('dashboard.step4Desc', '合成最终视频并下载导出'),
+      count: null,
+      countLabel: '',
+      path: '/export',
+      color: '#8b5cf6'
+    },
+    {
       icon: <Settings size={24} />,
-      title: t('dashboard.step4Title'),
-      desc: t('dashboard.step4Desc'),
+      title: t('dashboard.step5Title', '系统设置'),
+      desc: t('dashboard.step5Desc', '配置您的系统偏好'),
       count: null,
       countLabel: '',
       path: '/settings',

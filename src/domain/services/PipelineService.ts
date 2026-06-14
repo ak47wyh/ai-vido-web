@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { PipelineTask, PipelineStatus, PipelineStep, StorySegment, VideoTask, Character, Background, Story, FinalCut } from '../entities/models';
+import { db } from '../../adapters/outbound/repositories/DexieDatabase';
 import type {
   IVideoTaskRepository,
   IStoryRepository,
@@ -375,6 +376,91 @@ export class PipelineService {
       this.markFailed(task.id, e?.message ?? String(e));
       throw e;
     }
+  }
+
+  /**
+   * 业务闭环核心：将故事分镜、视频、音频通过 FFmpeg 拼接为成片
+   */
+  async assembleFinalVideo(
+    storyId: string,
+    narrationUrls: Record<string, string>,
+    onProgress?: (progress: number, message: string) => void
+  ): Promise<FinalCut> {
+    const story = await this.deps.storyRepo.findById(storyId);
+    if (!story) throw new Error('Story not found');
+    
+    const segments = await this.deps.segmentRepo.findByStoryId(storyId);
+    segments.sort((a, b) => a.sequenceOrder - b.sequenceOrder);
+    
+    if (segments.length === 0) throw new Error('No segments found for this story');
+
+    const mergedClips: Blob[] = [];
+    let processedCount = 0;
+
+    if (!this.deps.postProcess.isFFmpegLoaded()) {
+      onProgress?.(5, '加载后期处理引擎...');
+      await this.deps.postProcess.ensureLoaded();
+    }
+
+    for (const seg of segments) {
+      const task = await this.deps.videoTaskRepo.findLatestBySegmentId(seg.id);
+      if (!task || task.status !== 'SUCCESS' || !task.videoUrl) {
+        throw new Error(`分镜 ${seg.sequenceOrder + 1} 的视频未生成`);
+      }
+
+      onProgress?.(10 + Math.round((processedCount / segments.length) * 40), `正在下载分镜 ${seg.sequenceOrder + 1} 视频...`);
+      const videoRes = await fetch(task.videoUrl);
+      const videoBlob = await videoRes.blob();
+      
+      let finalClip = videoBlob;
+      
+      const audioUrl = narrationUrls[seg.id] || seg.bgmAudioUrl;
+      if (audioUrl) {
+        onProgress?.(10 + Math.round((processedCount / segments.length) * 40), `正在合并分镜 ${seg.sequenceOrder + 1} 音频...`);
+        const audioRes = await fetch(audioUrl);
+        const audioBlob = await audioRes.blob();
+        try {
+          finalClip = await this.deps.postProcess.mergeVideoAudio(videoBlob, audioBlob);
+        } catch (e) {
+          console.warn(`[Pipeline] failed to merge audio for segment ${seg.id}:`, e);
+          // Fallback to video only if audio merge fails
+        }
+      }
+      
+      mergedClips.push(finalClip);
+      processedCount++;
+    }
+
+    onProgress?.(60, '正在拼接所有分镜...');
+    const finalVideoBlob = await this.deps.postProcess.concatClips(mergedClips);
+
+    onProgress?.(90, '正在生成最终成片...');
+    
+    // Attempt to generate a thumbnail from the first clip
+    let thumbnailUrl = '';
+    try {
+      const firstFrameBlob = await this.deps.postProcess.extractFrame(finalVideoBlob, 0);
+      thumbnailUrl = URL.createObjectURL(firstFrameBlob);
+    } catch (e) {
+      console.warn('[Pipeline] failed to extract thumbnail:', e);
+    }
+
+    const finalCut: FinalCut = {
+      id: uuidv4(),
+      storyId,
+      videoBlob: finalVideoBlob,
+      thumbnailUrl,
+      duration: segments.length * 6 * 1000, // approximation
+      size: finalVideoBlob.size,
+      hasSubtitles: false,
+      createdAt: Date.now()
+    };
+    
+    onProgress?.(95, '正在保存至导出中心...');
+    await db.finalCuts.put(finalCut);
+    
+    onProgress?.(100, '合成完成！');
+    return finalCut;
   }
 
   private async findCharacterForSegment(segment: StorySegment): Promise<Character | null> {
