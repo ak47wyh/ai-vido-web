@@ -2,22 +2,21 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Save, Key, ExternalLink, CheckCircle, AlertCircle } from 'lucide-react';
 import { ApiConfigStore, type ApiConfig } from '../../adapters/outbound/config/ApiConfigStore';
+import { useToast } from '../contexts/ToastContext';
 
 export const Settings: React.FC = () => {
   const { t } = useTranslation();
+  const { showToast } = useToast();
   const [config, setConfig] = useState<ApiConfig>(() => ApiConfigStore.load());
-  const [saved, setSaved] = useState(false);
 
   const handleChange = (field: keyof ApiConfig, value: string) => {
     setConfig(prev => ({ ...prev, [field]: value }));
-    setSaved(false);
   };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     ApiConfigStore.save(config);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+    showToast('success', t('settings.savedMsg'));
   };
 
   const isLive = config.minimaxApiKey.trim().length > 0;
@@ -154,17 +153,6 @@ export const Settings: React.FC = () => {
             <Save size={16} />
             {t('settings.saveBtn')}
           </button>
-
-          {saved && (
-            <span style={{
-              display: 'flex', alignItems: 'center', gap: '0.4rem',
-              color: '#34d399', fontSize: '0.9rem', fontWeight: 500,
-              animation: 'fadeIn 0.3s ease'
-            }}>
-              <CheckCircle size={16} />
-              {t('settings.savedMsg')}
-            </span>
-          )}
         </div>
       </form>
     </div>

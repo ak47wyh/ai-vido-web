@@ -50,7 +50,8 @@ export class StorySpaceService {
       await this.videoTaskRepo.deleteBySegmentIds(segmentIds);
       await this.segmentRepo.deleteByStoryId(story.id);
     }
-    // Delete all characters, backgrounds, stories in this space
+    // Delete all characters and backgrounds in this space
+    // (no need to clean segment references since all stories in this space are being deleted)
     const characters = await this.characterRepo.findBySpaceId(spaceId);
     for (const c of characters) await this.characterRepo.delete(c.id);
     const backgrounds = await this.backgroundRepo.findBySpaceId(spaceId);
@@ -86,7 +87,7 @@ export class StorySpaceService {
     return copied;
   }
 
-  async copyAllToSpace(sourceSpaceId: string, targetSpaceId: string): Promise<{ characters: number; backgrounds: number }> {
+  async copyAllToSpace(sourceSpaceId: string, targetSpaceId: string): Promise<{ characters: number; backgrounds: number; stories: number }> {
     const characters = await this.characterRepo.findBySpaceId(sourceSpaceId);
     for (const c of characters) {
       await this.characterRepo.save({ ...c, id: uuidv4(), spaceId: targetSpaceId, createdAt: Date.now() });
@@ -95,7 +96,12 @@ export class StorySpaceService {
     for (const b of backgrounds) {
       await this.backgroundRepo.save({ ...b, id: uuidv4(), spaceId: targetSpaceId, createdAt: Date.now() });
     }
-    return { characters: characters.length, backgrounds: backgrounds.length };
+    // Copy stories (without segments/video tasks — those are story-specific)
+    const stories = await this.storyRepo.findBySpaceId(sourceSpaceId);
+    for (const s of stories) {
+      await this.storyRepo.save({ ...s, id: uuidv4(), spaceId: targetSpaceId, status: 'DRAFT' as const, createdAt: Date.now() });
+    }
+    return { characters: characters.length, backgrounds: backgrounds.length, stories: stories.length };
   }
 
   async getAllSpaces(): Promise<StorySpace[]> {

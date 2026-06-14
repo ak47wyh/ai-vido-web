@@ -76,6 +76,16 @@ export class VideoGenerationService {
     return this.videoTaskRepo.findLatestBySegmentId(segmentId);
   }
 
+  /** Resume polling for all active (PENDING/PROCESSING) tasks after page reload */
+  async resumeActivePolling(): Promise<void> {
+    const allTasks = await this.videoTaskRepo.findByStatuses(['PENDING', 'PROCESSING']);
+    for (const task of allTasks) {
+      if (task.externalTaskId && !this.activePollers.has(task.id)) {
+        this.pollTaskStatus(task.id, task.externalTaskId);
+      }
+    }
+  }
+
   /** Cancel all active polling intervals (call on app teardown) */
   cancelAllPolling(): void {
     for (const [taskId, interval] of this.activePollers) {

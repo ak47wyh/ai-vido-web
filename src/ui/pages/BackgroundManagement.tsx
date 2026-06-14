@@ -1,38 +1,35 @@
 import React, { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../adapters/outbound/repositories/DexieDatabase';
-import { backgroundRepo, storySpaceService } from '../../dependencies';
+import { backgroundRepo, storyService, storySpaceService } from '../../dependencies';
 import { v4 as uuidv4 } from 'uuid';
-import { Pencil, Plus, Trash2, Copy } from 'lucide-react';
+import { Pencil, Plus, Trash2, Copy, Image as ImageIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { Background } from '../../domain/entities/models';
 import { useSpace } from '../contexts/SpaceContext';
-
-type ImageInputMode = 'url' | 'upload';
-const MAX_UPLOAD_SIZE_BYTES = 5 * 1024 * 1024;
+import { useToast } from '../contexts/ToastContext';
+import { useConfirm } from '../contexts/ConfirmContext';
+import { useImageUpload, useCopyToSpace } from '../hooks/useSharedForm';
 
 export const BackgroundManagement: React.FC = () => {
   const { t } = useTranslation();
   const { currentSpaceId } = useSpace();
+  const { showToast } = useToast();
+  const { confirm } = useConfirm();
   const backgrounds = useLiveQuery(() => currentSpaceId ? db.backgrounds.where('spaceId').equals(currentSpaceId).toArray() : [], [currentSpaceId]);
   const allSpaces = useLiveQuery(() => db.storySpaces.toArray());
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingBackgroundId, setEditingBackgroundId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [environmentPrompt, setEnvironmentPrompt] = useState('');
-  const [imageInputMode, setImageInputMode] = useState<ImageInputMode>('url');
-  const [imageUrl, setImageUrl] = useState('');
-  const [imageUploadError, setImageUploadError] = useState('');
-  const [copyingBgId, setCopyingBgId] = useState<string | null>(null);
-  const [copyTargetSpaceId, setCopyTargetSpaceId] = useState('');
+  const { imageInputMode, imageUrl, imageUploadError, setImageUrl, handleImageUpload, switchImageMode, resetImageState } = useImageUpload('background');
+  const { copyingId, copyTargetSpaceId, setCopyTargetSpaceId, startCopy, finishCopy } = useCopyToSpace();
 
   const resetForm = () => {
     setEditingBackgroundId(null);
     setName('');
     setEnvironmentPrompt('');
-    setImageInputMode('url');
-    setImageUrl('');
-    setImageUploadError('');
+    resetImageState();
     setIsFormOpen(false);
   };
 
@@ -52,40 +49,8 @@ export const BackgroundManagement: React.FC = () => {
     setName(bg.name);
     setEnvironmentPrompt(bg.environmentPrompt);
     setImageUrl(bg.referenceImageUrl || '');
-    setImageInputMode(bg.referenceImageUrl?.startsWith('data:image/') ? 'upload' : 'url');
-    setImageUploadError('');
+    switchImageMode(bg.referenceImageUrl?.startsWith('data:image/') ? 'upload' : 'url');
     setIsFormOpen(true);
-  };
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      setImageUploadError(t('background.uploadInvalidType'));
-      e.currentTarget.value = '';
-      return;
-    }
-
-    if (file.size > MAX_UPLOAD_SIZE_BYTES) {
-      setImageUploadError(t('background.uploadTooLarge'));
-      e.currentTarget.value = '';
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setImageUrl(reader.result);
-        setImageUploadError('');
-      } else {
-        setImageUploadError(t('background.uploadReadFailed'));
-      }
-    };
-    reader.onerror = () => {
-      setImageUploadError(t('background.uploadReadFailed'));
-    };
-    reader.readAsDataURL(file);
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -105,20 +70,28 @@ export const BackgroundManagement: React.FC = () => {
       createdAt
     };
     await backgroundRepo.save(background);
+    showToast('success', t(editingBackgroundId ? 'background.updateSuccess' : 'background.saveSuccess'));
     resetForm();
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm(t('background.confirmDelete'))) return;
+    const ok = await confirm({
+      title: t('background.confirmDeleteTitle'),
+      message: t('background.confirmDelete'),
+      confirmLabel: t('background.deleteConfirmBtn'),
+      danger: true
+    });
+    if (!ok) return;
+    await storyService.removeBackgroundFromSegments(id);
     await backgroundRepo.delete(id);
+    showToast('success', t('background.deleteSuccess'));
   };
 
   const handleCopyToSpace = async (bgId: string, targetSpaceId: string) => {
     if (!targetSpaceId) return;
     await storySpaceService.copyBackgroundToSpace(bgId, targetSpaceId);
-    setCopyingBgId(null);
-    setCopyTargetSpaceId('');
-    alert(t('background.copySuccess'));
+    finishCopy();
+    showToast('success', t('background.copySuccess'));
   };
 
   const otherSpaces = allSpaces?.filter(s => s.id !== currentSpaceId) ?? [];
@@ -153,12 +126,7 @@ export const BackgroundManagement: React.FC = () => {
             <select
               className="form-select"
               value={imageInputMode}
-              onChange={e => {
-                const nextMode = e.target.value as ImageInputMode;
-                setImageInputMode(nextMode);
-                setImageUploadError('');
-                setImageUrl('');
-              }}
+              onChange={e => switchImageMode(e.target.value as 'url' | 'upload')}
             >
               <option value="url">{t('background.imageSourceUrl')}</option>
               <option value="upload">{t('background.imageSourceUpload')}</option>
@@ -229,15 +197,12 @@ export const BackgroundManagement: React.FC = () => {
                 className="btn btn-secondary"
                 style={{ padding: '0.4rem', border: 'none' }}
                 title={t('background.copyToSpace')}
-                onClick={() => {
-                  setCopyingBgId(copyingBgId === bg.id ? null : bg.id);
-                  setCopyTargetSpaceId('');
-                }}
+                onClick={() => startCopy(bg.id)}
               >
                 <Copy size={16} />
               </button>
             </div>
-            {copyingBgId === bg.id && otherSpaces.length > 0 && (
+            {copyingId === bg.id && otherSpaces.length > 0 && (
               <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem', alignItems: 'center' }}>
                 <select
                   className="form-select"
@@ -263,7 +228,13 @@ export const BackgroundManagement: React.FC = () => {
           </div>
         ))}
         {backgrounds?.length === 0 && !isFormOpen && (
-          <p style={{ color: 'var(--text-muted)' }}>{t('background.empty')}</p>
+          <div className="glass-panel" style={{ padding: '3rem', textAlign: 'center', gridColumn: '1 / -1' }}>
+            <ImageIcon size={48} style={{ color: 'var(--text-muted)', marginBottom: '1rem' }} />
+            <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem' }}>{t('background.empty')}</p>
+            <button className="btn btn-primary" onClick={openCreateForm}>
+              <Plus size={18} /> {t('background.newBtn')}
+            </button>
+          </div>
         )}
       </div>
     </div>

@@ -43,6 +43,7 @@ export interface IVideoTaskRepository {
   save(task: VideoTask): Promise<void>;
   findBySegmentId(segmentId: string): Promise<VideoTask[]>;
   findLatestBySegmentId(segmentId: string): Promise<VideoTask | null>;
+  findByStatuses(statuses: VideoTaskStatus[]): Promise<VideoTask[]>;
   deleteBySegmentIds(segmentIds: string[]): Promise<void>;
   updateStatus(taskId: string, status: VideoTaskStatus, videoUrl?: string, error?: string): Promise<void>;
 }

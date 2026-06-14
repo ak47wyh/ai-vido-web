@@ -105,6 +105,9 @@ export class VideoTaskRepositoryAdapter implements IVideoTaskRepository {
       .reverse().sortBy('createdAt');
     return tasks[0] || null;
   }
+  async findByStatuses(statuses: VideoTaskStatus[]): Promise<VideoTask[]> {
+    return db.videoTasks.where('status').anyOf(statuses).toArray();
+  }
   async deleteBySegmentIds(segmentIds: string[]): Promise<void> {
     if (segmentIds.length === 0) return;
     const tasksToDelete = await db.videoTasks

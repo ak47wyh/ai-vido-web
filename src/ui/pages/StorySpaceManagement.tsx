@@ -2,15 +2,19 @@ import React, { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../adapters/outbound/repositories/DexieDatabase';
 import { storySpaceService } from '../../dependencies';
-import { Plus, Pencil, Trash2, Copy } from 'lucide-react';
+import { Plus, Pencil, Trash2, Copy, Layers } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useSpace } from '../contexts/SpaceContext';
+import { useToast } from '../contexts/ToastContext';
+import { useConfirm } from '../contexts/ConfirmContext';
 import type { StorySpace } from '../../domain/entities/models';
 
 export const StorySpaceManagement: React.FC = () => {
   const { t } = useTranslation();
   const spaces = useLiveQuery(() => db.storySpaces.toArray());
   const { currentSpaceId, setCurrentSpaceId } = useSpace();
+  const { showToast } = useToast();
+  const { confirm } = useConfirm();
 
   // Create form state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -25,7 +29,6 @@ export const StorySpaceManagement: React.FC = () => {
   // Copy state
   const [copySourceId, setCopySourceId] = useState<string | null>(null);
   const [copyTargetId, setCopyTargetId] = useState<string>('');
-  const [copyMessage, setCopyMessage] = useState<string | null>(null);
 
   const resetCreateForm = () => {
     setNewName('');
@@ -38,6 +41,7 @@ export const StorySpaceManagement: React.FC = () => {
     if (!newName.trim()) return;
     const space = await storySpaceService.createSpace(newName.trim(), newDesc.trim());
     setCurrentSpaceId(space.id);
+    showToast('success', t('space.createSuccess'));
     resetCreateForm();
   };
 
@@ -55,12 +59,20 @@ export const StorySpaceManagement: React.FC = () => {
       name: editName.trim(),
       description: editDesc.trim(),
     });
+    showToast('success', t('space.updateSuccess'));
     setEditingSpace(null);
   };
 
   const handleDelete = async (spaceId: string) => {
-    if (!window.confirm(t('space.confirmDelete'))) return;
+    const ok = await confirm({
+      title: t('space.confirmDeleteTitle'),
+      message: t('space.confirmDelete'),
+      confirmLabel: t('space.deleteConfirmBtn'),
+      danger: true
+    });
+    if (!ok) return;
     await storySpaceService.deleteSpace(spaceId);
+    showToast('success', t('space.deleteSuccess'));
     if (currentSpaceId === spaceId) {
       setCurrentSpaceId(null);
     }
@@ -70,10 +82,9 @@ export const StorySpaceManagement: React.FC = () => {
     if (!copySourceId || !copyTargetId) return;
     if (copySourceId === copyTargetId) return;
     const result = await storySpaceService.copyAllToSpace(copySourceId, copyTargetId);
-    setCopyMessage(t('space.copyAllSuccess', { characters: result.characters, backgrounds: result.backgrounds }));
+    showToast('success', t('space.copyAllSuccess', { characters: result.characters, backgrounds: result.backgrounds, stories: result.stories }));
     setCopySourceId(null);
     setCopyTargetId('');
-    setTimeout(() => setCopyMessage(null), 3000);
   };
 
   const characterCounts = useLiveQuery(async () => {
@@ -137,7 +148,7 @@ export const StorySpaceManagement: React.FC = () => {
       {/* Edit form */}
       {editingSpace && (
         <form className="glass-panel" style={{ padding: '2rem', marginBottom: '2rem' }} onSubmit={handleEditSave}>
-          <h3 style={{ marginBottom: '1.5rem' }}>{t('space.createTitle')}</h3>
+          <h3 style={{ marginBottom: '1.5rem' }}>{t('space.editTitle')}</h3>
           <div className="form-group">
             <label className="form-label">{t('space.nameLabel')}</label>
             <input className="form-input" value={editName} onChange={e => setEditName(e.target.value)} required placeholder={t('space.namePlaceholder')} />
@@ -151,13 +162,6 @@ export const StorySpaceManagement: React.FC = () => {
             <button type="button" className="btn btn-secondary" onClick={() => setEditingSpace(null)}>{t('space.cancelBtn')}</button>
           </div>
         </form>
-      )}
-
-      {/* Copy success message */}
-      {copyMessage && (
-        <div className="glass-panel" style={{ padding: '1rem 1.5rem', marginBottom: '1.5rem', color: '#34d399', fontWeight: 600 }}>
-          {copyMessage}
-        </div>
       )}
 
       {/* Copy dialog */}
@@ -232,7 +236,16 @@ export const StorySpaceManagement: React.FC = () => {
           </div>
         ))}
         {spaces?.length === 0 && !isCreateOpen && (
-          <p style={{ color: 'var(--text-muted)' }}>{t('space.empty')}</p>
+          <div className="glass-panel" style={{
+            padding: '3rem 2rem', textAlign: 'center',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem'
+          }}>
+            <Layers size={48} style={{ color: 'var(--text-muted)', opacity: 0.5 }} />
+            <p style={{ color: 'var(--text-muted)', margin: 0 }}>{t('space.empty')}</p>
+            <button className="btn btn-primary" onClick={() => { resetCreateForm(); setIsCreateOpen(true); }}>
+              <Plus size={16} /> {t('space.newBtn')}
+            </button>
+          </div>
         )}
       </div>
     </div>

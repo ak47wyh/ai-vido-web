@@ -1,19 +1,21 @@
 import React, { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../adapters/outbound/repositories/DexieDatabase';
-import { characterRepo, storySpaceService } from '../../dependencies';
+import { characterRepo, storyService, storySpaceService } from '../../dependencies';
 import { v4 as uuidv4 } from 'uuid';
-import { Pencil, Plus, Trash2, Copy } from 'lucide-react';
+import { Pencil, Plus, Trash2, Copy, Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { Character } from '../../domain/entities/models';
 import { useSpace } from '../contexts/SpaceContext';
-
-type ImageInputMode = 'url' | 'upload';
-const MAX_UPLOAD_SIZE_BYTES = 5 * 1024 * 1024;
+import { useToast } from '../contexts/ToastContext';
+import { useConfirm } from '../contexts/ConfirmContext';
+import { useImageUpload, useCopyToSpace } from '../hooks/useSharedForm';
 
 export const CharacterManagement: React.FC = () => {
   const { t } = useTranslation();
   const { currentSpaceId } = useSpace();
+  const { showToast } = useToast();
+  const { confirm } = useConfirm();
   const characters = useLiveQuery(() => currentSpaceId ? db.characters.where('spaceId').equals(currentSpaceId).toArray() : [], [currentSpaceId]);
   const allSpaces = useLiveQuery(() => db.storySpaces.toArray());
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -22,11 +24,8 @@ export const CharacterManagement: React.FC = () => {
   const [appearance, setAppearance] = useState('');
   const [personality, setPersonality] = useState('');
   const [characterBackground, setCharacterBackground] = useState('');
-  const [imageInputMode, setImageInputMode] = useState<ImageInputMode>('url');
-  const [imageUrl, setImageUrl] = useState('');
-  const [imageUploadError, setImageUploadError] = useState('');
-  const [copyingCharId, setCopyingCharId] = useState<string | null>(null);
-  const [copyTargetSpaceId, setCopyTargetSpaceId] = useState('');
+  const { imageInputMode, imageUrl, imageUploadError, setImageUrl, handleImageUpload, switchImageMode, resetImageState } = useImageUpload('character');
+  const { copyingId, copyTargetSpaceId, setCopyTargetSpaceId, startCopy, finishCopy } = useCopyToSpace();
 
   const resetForm = () => {
     setEditingCharacterId(null);
@@ -34,9 +33,7 @@ export const CharacterManagement: React.FC = () => {
     setAppearance('');
     setPersonality('');
     setCharacterBackground('');
-    setImageInputMode('url');
-    setImageUrl('');
-    setImageUploadError('');
+    resetImageState();
     setIsFormOpen(false);
   };
 
@@ -58,40 +55,8 @@ export const CharacterManagement: React.FC = () => {
     setPersonality(character.personalityPrompt);
     setCharacterBackground(character.characterBackground || '');
     setImageUrl(character.referenceImageUrl || '');
-    setImageInputMode(character.referenceImageUrl?.startsWith('data:image/') ? 'upload' : 'url');
-    setImageUploadError('');
+    switchImageMode(character.referenceImageUrl?.startsWith('data:image/') ? 'upload' : 'url');
     setIsFormOpen(true);
-  };
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      setImageUploadError(t('character.uploadInvalidType'));
-      e.currentTarget.value = '';
-      return;
-    }
-
-    if (file.size > MAX_UPLOAD_SIZE_BYTES) {
-      setImageUploadError(t('character.uploadTooLarge'));
-      e.currentTarget.value = '';
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setImageUrl(reader.result);
-        setImageUploadError('');
-      } else {
-        setImageUploadError(t('character.uploadReadFailed'));
-      }
-    };
-    reader.onerror = () => {
-      setImageUploadError(t('character.uploadReadFailed'));
-    };
-    reader.readAsDataURL(file);
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -112,20 +77,28 @@ export const CharacterManagement: React.FC = () => {
       createdAt
     };
     await characterRepo.save(character);
+    showToast('success', t(editingCharacterId ? 'character.updateSuccess' : 'character.saveSuccess'));
     resetForm();
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm(t('character.confirmDelete'))) return;
+    const ok = await confirm({
+      title: t('character.confirmDeleteTitle'),
+      message: t('character.confirmDelete'),
+      confirmLabel: t('character.deleteConfirmBtn'),
+      danger: true
+    });
+    if (!ok) return;
+    await storyService.removeCharacterFromSegments(id);
     await characterRepo.delete(id);
+    showToast('success', t('character.deleteSuccess'));
   };
 
   const handleCopyToSpace = async (charId: string, targetSpaceId: string) => {
     if (!targetSpaceId) return;
     await storySpaceService.copyCharacterToSpace(charId, targetSpaceId);
-    setCopyingCharId(null);
-    setCopyTargetSpaceId('');
-    alert(t('character.copySuccess'));
+    finishCopy();
+    showToast('success', t('character.copySuccess'));
   };
 
   const otherSpaces = allSpaces?.filter(s => s.id !== currentSpaceId) ?? [];
@@ -168,12 +141,7 @@ export const CharacterManagement: React.FC = () => {
             <select
               className="form-select"
               value={imageInputMode}
-              onChange={e => {
-                const nextMode = e.target.value as ImageInputMode;
-                setImageInputMode(nextMode);
-                setImageUploadError('');
-                setImageUrl('');
-              }}
+              onChange={e => switchImageMode(e.target.value as 'url' | 'upload')}
             >
               <option value="url">{t('character.imageSourceUrl')}</option>
               <option value="upload">{t('character.imageSourceUpload')}</option>
@@ -248,15 +216,12 @@ export const CharacterManagement: React.FC = () => {
                 className="btn btn-secondary"
                 style={{ padding: '0.4rem', border: 'none' }}
                 title={t('character.copyToSpace')}
-                onClick={() => {
-                  setCopyingCharId(copyingCharId === char.id ? null : char.id);
-                  setCopyTargetSpaceId('');
-                }}
+                onClick={() => startCopy(char.id)}
               >
                 <Copy size={16} />
               </button>
             </div>
-            {copyingCharId === char.id && otherSpaces.length > 0 && (
+            {copyingId === char.id && otherSpaces.length > 0 && (
               <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem', alignItems: 'center' }}>
                 <select
                   className="form-select"
@@ -282,7 +247,13 @@ export const CharacterManagement: React.FC = () => {
           </div>
         ))}
         {characters?.length === 0 && !isFormOpen && (
-          <p style={{ color: 'var(--text-muted)' }}>{t('character.empty')}</p>
+          <div className="glass-panel" style={{ padding: '3rem', textAlign: 'center', gridColumn: '1 / -1' }}>
+            <Users size={48} style={{ color: 'var(--text-muted)', marginBottom: '1rem' }} />
+            <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem' }}>{t('character.empty')}</p>
+            <button className="btn btn-primary" onClick={openCreateForm}>
+              <Plus size={18} /> {t('character.newBtn')}
+            </button>
+          </div>
         )}
       </div>
     </div>

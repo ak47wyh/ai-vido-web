@@ -9,7 +9,7 @@ export class MockStoryBreakdownAdapter implements IStoryBreakdownPort {
     console.log('[MockStoryBreakdownAdapter] Breaking down story:', text.substring(0, 80) + '...');
 
     // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
     // --- Extract characters by heuristic ---
     // Look for capitalized names that appear multiple times

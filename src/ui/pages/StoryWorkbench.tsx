@@ -2,37 +2,54 @@ import React, { useState, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../adapters/outbound/repositories/DexieDatabase';
 import { storyService, videoGenerationService } from '../../dependencies';
-import { Play, Spline, Trash2, RefreshCw, Users, PlayCircle, AlertTriangle, ImagePlus, Sparkles } from 'lucide-react';
+import { Play, Spline, Trash2, RefreshCw, Users, PlayCircle, AlertTriangle, ImagePlus, Sparkles, Pencil, BookOpen } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { VideoTask, Character } from '../../domain/entities/models';
 import type { StoryBreakdownResult } from '../../domain/ports/OutboundPorts';
 import { useSpace } from '../contexts/SpaceContext';
+import { useToast } from '../contexts/ToastContext';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 export const StoryWorkbench: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { currentSpaceId } = useSpace();
+  const { showToast } = useToast();
+  const { confirm } = useConfirm();
   const stories = useLiveQuery(() => currentSpaceId ? db.stories.where('spaceId').equals(currentSpaceId).toArray() : [], [currentSpaceId]);
   const backgrounds = useLiveQuery(() => currentSpaceId ? db.backgrounds.where('spaceId').equals(currentSpaceId).toArray() : [], [currentSpaceId]);
   const characters = useLiveQuery(() => currentSpaceId ? db.characters.where('spaceId').equals(currentSpaceId).toArray() : [], [currentSpaceId]);
-  const videoTasks = useLiveQuery(() => db.videoTasks.toArray());
 
   const [title, setTitle] = useState('');
   const [originalText, setOriginalText] = useState('');
-  const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null);
+  const [selectedStoryId, setSelectedStoryId] = useState<string | null>(() => {
+    // Initialize from URL param if present
+    const params = new URLSearchParams(window.location.search);
+    return params.get('story');
+  });
   const [isSplitting, setIsSplitting] = useState(false);
   const [isBatchGenerating, setIsBatchGenerating] = useState(false);
   const [batchBgId, setBatchBgId] = useState('');
   const [isBreakingDown, setIsBreakingDown] = useState(false);
   const [breakdownResult, setBreakdownResult] = useState<(StoryBreakdownResult & { savedCharacterIds: string[]; savedBackgroundIds: string[] }) | null>(null);
   const [showBreakdownPreview, setShowBreakdownPreview] = useState(false);
+  const [editingStoryId, setEditingStoryId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editOriginalText, setEditOriginalText] = useState('');
 
   // Reactive segments
   const segments = useLiveQuery(
     () => selectedStoryId ? db.segments.where('storyId').equals(selectedStoryId).toArray() : [],
     [selectedStoryId],
     []
+  );
+
+  // Only load video tasks for segments of the selected story
+  const segmentIds = useMemo(() => (segments || []).map(s => s.id), [segments]);
+  const videoTasks = useLiveQuery(
+    () => segmentIds.length > 0 ? db.videoTasks.where('segmentId').anyOf(segmentIds).toArray() : [],
+    [segmentIds]
   );
 
   const sortedSegments = useMemo(
@@ -100,7 +117,7 @@ export const StoryWorkbench: React.FC = () => {
       setOriginalText('');
     } catch (e) {
       console.error(e);
-      alert(t('workbench.splitFailed'));
+      showToast('error', t('workbench.splitFailed'));
     } finally {
       setIsSplitting(false);
     }
@@ -121,7 +138,7 @@ export const StoryWorkbench: React.FC = () => {
       setOriginalText('');
     } catch (e) {
       console.error(e);
-      alert(t('workbench.breakdownFailed'));
+      showToast('error', t('workbench.breakdownFailed'));
     } finally {
       setIsBreakingDown(false);
     }
@@ -129,6 +146,13 @@ export const StoryWorkbench: React.FC = () => {
 
   const handleReBreakdown = async () => {
     if (!selectedStoryId) return;
+    const ok = await confirm({
+      title: t('workbench.confirmReBreakdownTitle'),
+      message: t('workbench.confirmReBreakdown'),
+      confirmLabel: t('workbench.reBreakdownBtn'),
+      danger: true
+    });
+    if (!ok) return;
     setIsBreakingDown(true);
     setBreakdownResult(null);
     setShowBreakdownPreview(false);
@@ -138,20 +162,40 @@ export const StoryWorkbench: React.FC = () => {
       setShowBreakdownPreview(true);
     } catch (e) {
       console.error(e);
-      alert(t('workbench.breakdownFailed'));
+      showToast('error', t('workbench.breakdownFailed'));
     } finally {
       setIsBreakingDown(false);
     }
   };
 
+  const handleQuickSplit = async (storyId: string) => {
+    setSelectedStoryId(storyId);
+    setIsSplitting(true);
+    try {
+      await storyService.splitStory(storyId);
+    } catch (e) {
+      console.error(e);
+      showToast('error', t('workbench.splitFailed'));
+    } finally {
+      setIsSplitting(false);
+    }
+  };
+
   const handleReSplit = async () => {
     if (!selectedStoryId) return;
+    const ok = await confirm({
+      title: t('workbench.confirmReSplitTitle'),
+      message: t('workbench.confirmReSplit'),
+      confirmLabel: t('workbench.reSplitBtn'),
+      danger: true
+    });
+    if (!ok) return;
     setIsSplitting(true);
     try {
       await storyService.splitStory(selectedStoryId);
     } catch (e) {
       console.error(e);
-      alert(t('workbench.splitFailed'));
+      showToast('error', t('workbench.splitFailed'));
     } finally {
       setIsSplitting(false);
     }
@@ -168,7 +212,7 @@ export const StoryWorkbench: React.FC = () => {
       await videoGenerationService.generateVideo(segmentId, selectedStoryId, 'MINIMAX');
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : String(e);
-      alert(message);
+      showToast('error', message);
     }
   };
 
@@ -184,9 +228,14 @@ export const StoryWorkbench: React.FC = () => {
       for (const seg of eligible) {
         await videoGenerationService.generateVideo(seg.id, selectedStoryId, 'MINIMAX');
       }
+      if (eligible.length > 0) {
+        showToast('info', t('workbench.batchStarted', { count: eligible.length }));
+      } else {
+        showToast('warning', t('workbench.batchNoEligible'));
+      }
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : String(e);
-      alert(message);
+      showToast('error', message);
     } finally {
       setIsBatchGenerating(false);
     }
@@ -194,17 +243,49 @@ export const StoryWorkbench: React.FC = () => {
 
   const handleBatchSetBackground = async () => {
     if (!selectedStoryId || !batchBgId) return;
-    for (const seg of sortedSegments) {
-      await storyService.updateSegmentBackground(seg.id, batchBgId, selectedStoryId);
+    try {
+      for (const seg of sortedSegments) {
+        await storyService.updateSegmentBackground(seg.id, batchBgId, selectedStoryId);
+      }
+      showToast('success', t('workbench.batchBgSuccess', { count: sortedSegments.length }));
+      setBatchBgId('');
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      showToast('error', message);
     }
-    setBatchBgId('');
   };
 
   const handleDeleteStory = async (storyId: string) => {
-    if (!window.confirm(t('workbench.confirmDelete'))) return;
+    const ok = await confirm({
+      title: t('workbench.confirmDeleteTitle'),
+      message: t('workbench.confirmDelete'),
+      confirmLabel: t('workbench.deleteConfirmBtn'),
+      danger: true
+    });
+    if (!ok) return;
     await storyService.deleteStory(storyId);
+    showToast('success', t('workbench.deleteSuccess'));
     if (selectedStoryId === storyId) {
       setSelectedStoryId(null);
+    }
+  };
+
+  const openEditStory = (storyId: string) => {
+    const story = stories?.find(s => s.id === storyId);
+    if (!story) return;
+    setEditingStoryId(storyId);
+    setEditTitle(story.title);
+    setEditOriginalText(story.originalText);
+  };
+
+  const handleSaveEditStory = async () => {
+    if (!editingStoryId || !editTitle.trim()) return;
+    const story = stories?.find(s => s.id === editingStoryId);
+    const wasSplit = story?.status === 'SPLIT';
+    await storyService.updateStory(editingStoryId, editTitle.trim(), editOriginalText.trim());
+    setEditingStoryId(null);
+    if (wasSplit) {
+      showToast('warning', t('workbench.editResetToDraft'));
     }
   };
 
@@ -230,9 +311,9 @@ export const StoryWorkbench: React.FC = () => {
   const hasBackgrounds = (backgrounds?.length ?? 0) > 0;
 
   return (
-    <div style={{ display: 'flex', gap: '2rem', height: '100%' }}>
+    <div style={{ display: 'flex', gap: '2rem', height: '100%', flexWrap: 'wrap' }}>
       {/* Left panel: Stories list & creation */}
-      <div style={{ flex: '0 0 350px', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      <div style={{ flex: '1 1 320px', maxWidth: '400px', minWidth: '280px', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         <div className="glass-panel" style={{ padding: '1.5rem' }}>
           <h3>{t('workbench.newStory')}</h3>
           <div className="form-group" style={{ marginTop: '1rem' }}>
@@ -268,42 +349,83 @@ export const StoryWorkbench: React.FC = () => {
           <h3>{t('workbench.yourStories')}</h3>
           <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             {stories?.map(s => (
-              <div
-                key={s.id}
-                className="glass-panel interactive story-card"
-                style={{
-                  padding: '1rem',
-                  cursor: 'pointer',
-                  borderColor: selectedStoryId === s.id ? 'var(--primary-color)' : 'var(--border-color)',
-                  background: selectedStoryId === s.id ? 'var(--bg-panel-hover)' : 'var(--bg-panel)',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}
-                onClick={() => setSelectedStoryId(s.id)}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    <span style={{
-                      display: 'inline-block', padding: '0.1rem 0.5rem', borderRadius: '999px',
-                      fontSize: '0.7rem', fontWeight: 600,
-                      background: s.status === 'SPLIT' ? 'rgba(52,211,153,0.15)' : 'rgba(251,191,36,0.15)',
-                      color: s.status === 'SPLIT' ? '#34d399' : '#fbbf24',
-                    }}>
-                      {s.status === 'SPLIT' ? t('workbench.statusSplit') : t('workbench.statusDraft')}
-                    </span>
+              <div key={s.id}>
+                {editingStoryId === s.id ? (
+                  <div className="glass-panel" style={{ padding: '1rem' }}>
+                    <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+                      <input className="form-input" value={editTitle} onChange={e => setEditTitle(e.target.value)} placeholder={t('workbench.storyTitlePlaceholder')} />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+                      <textarea className="form-textarea" value={editOriginalText} onChange={e => setEditOriginalText(e.target.value)} placeholder={t('workbench.storyContentPlaceholder')} style={{ minHeight: '80px' }} />
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button className="btn btn-primary" style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem' }} onClick={handleSaveEditStory}>{t('workbench.saveEditBtn')}</button>
+                      <button className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem' }} onClick={() => setEditingStoryId(null)}>{t('workbench.cancelBtn')}</button>
+                    </div>
                   </div>
-                </div>
-                <button
-                  className="btn btn-secondary"
-                  style={{ padding: '0.3rem', border: 'none', flexShrink: 0 }}
-                  onClick={(e) => { e.stopPropagation(); handleDeleteStory(s.id); }}
-                >
-                  <Trash2 size={14} />
-                </button>
+                ) : (
+                  <div
+                    className="glass-panel interactive story-card"
+                    style={{
+                      padding: '1rem',
+                      cursor: 'pointer',
+                      borderColor: selectedStoryId === s.id ? 'var(--primary-color)' : 'var(--border-color)',
+                      background: selectedStoryId === s.id ? 'var(--bg-panel-hover)' : 'var(--bg-panel)',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}
+                    onClick={() => setSelectedStoryId(s.id)}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                        <span style={{
+                          display: 'inline-block', padding: '0.1rem 0.5rem', borderRadius: '999px',
+                          fontSize: '0.7rem', fontWeight: 600,
+                          background: s.status === 'SPLIT' ? 'rgba(52,211,153,0.15)' : 'rgba(251,191,36,0.15)',
+                          color: s.status === 'SPLIT' ? '#34d399' : '#fbbf24',
+                        }}>
+                          {s.status === 'SPLIT' ? t('workbench.statusSplit') : t('workbench.statusDraft')}
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.25rem', flexShrink: 0 }}>
+                      {s.status === 'DRAFT' && (
+                        <button
+                          className="btn btn-secondary"
+                          style={{ padding: '0.3rem', border: 'none' }}
+                          onClick={(e) => { e.stopPropagation(); handleQuickSplit(s.id); }}
+                          title={t('workbench.splitBtn')}
+                        >
+                          <Spline size={14} />
+                        </button>
+                      )}
+                      <button
+                        className="btn btn-secondary"
+                        style={{ padding: '0.3rem', border: 'none' }}
+                        onClick={(e) => { e.stopPropagation(); openEditStory(s.id); }}
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        className="btn btn-secondary"
+                        style={{ padding: '0.3rem', border: 'none' }}
+                        onClick={(e) => { e.stopPropagation(); handleDeleteStory(s.id); }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
+            {stories?.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-muted)' }}>
+                <BookOpen size={36} style={{ marginBottom: '0.75rem', opacity: 0.4 }} />
+                <p style={{ fontSize: '0.85rem' }}>{t('workbench.noStoriesHint')}</p>
+              </div>
+            )}
           </div>
         </div>
       </div>

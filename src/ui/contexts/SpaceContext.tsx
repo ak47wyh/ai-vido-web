@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../adapters/outbound/repositories/DexieDatabase';
 import { storySpaceService } from '../../dependencies';
@@ -24,21 +24,24 @@ export const SpaceProvider: React.FC<React.PropsWithChildren> = ({ children }) =
   const spaces = useLiveQuery(() => db.storySpaces.toArray());
   const [explicitSpaceId, setExplicitSpaceId] = useState<string | null>(null);
 
-  const currentSpaceId = useMemo(() => {
-    if (spaces === undefined) return null;
-    if (spaces.length === 0) {
-      // No spaces exist yet — create a default one asynchronously
+  // Create default space if none exist (side effect in useEffect, not in render)
+  useEffect(() => {
+    if (spaces !== undefined && spaces.length === 0) {
       storySpaceService.createSpace('Default Space', 'Default workspace').then(space => {
         setExplicitSpaceId(space.id);
-      });
-      return null;
+      }).catch(console.error);
     }
+  }, [spaces]);
+
+  // Derive currentSpaceId: explicit selection > first space > null (loading)
+  const currentSpaceId = (() => {
+    if (spaces === undefined) return null; // still loading
     if (explicitSpaceId !== null && spaces.find(s => s.id === explicitSpaceId)) {
       return explicitSpaceId;
     }
     // Fall back to first space
-    return spaces[0].id;
-  }, [spaces, explicitSpaceId]);
+    return spaces.length > 0 ? spaces[0].id : null;
+  })();
 
   return (
     <SpaceContext.Provider value={{ currentSpaceId, setCurrentSpaceId: setExplicitSpaceId }}>
