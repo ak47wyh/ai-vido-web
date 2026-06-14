@@ -8,6 +8,9 @@ import { StoryWorkbench } from './ui/pages/StoryWorkbench';
 import { StorySpaceManagement } from './ui/pages/StorySpaceManagement';
 import { Settings } from './ui/pages/Settings';
 import { ExportCenter } from './ui/pages/ExportCenter';
+import { ImageLab } from './ui/pages/ImageLab';
+import { VoiceLab } from './ui/pages/VoiceLab';
+import { TextLab } from './ui/pages/TextLab';
 import { SpaceProvider } from './ui/contexts/SpaceContext';
 import { ToastProvider } from './ui/contexts/ToastContext';
 import { ConfirmProvider } from './ui/contexts/ConfirmContext';
@@ -35,6 +38,9 @@ function App() {
                   <Route path="workbench" element={<StoryWorkbench />} />
                   <Route path="spaces" element={<StorySpaceManagement />} />
                   <Route path="export" element={<ExportCenter />} />
+                  <Route path="labs/image" element={<ImageLab />} />
+                  <Route path="labs/voice" element={<VoiceLab />} />
+                  <Route path="labs/text" element={<TextLab />} />
                   <Route path="settings" element={<Settings />} />
                 </Route>
               </Routes>

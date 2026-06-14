@@ -48,6 +48,8 @@ export interface StorySegment {
   bgmPrompt?: string;
   bgmLyrics?: string;
   bgmIsInstrumental?: boolean;
+  actionContent?: string;
+  firstFrameImage?: string;
 }
 
 export type VideoTaskStatus = 'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAILED';

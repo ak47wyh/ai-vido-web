@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { LayoutDashboard, Users, Image as ImageIcon, BookOpen, Settings, FolderOpen, Download } from 'lucide-react';
+import { LayoutDashboard, Users, Image as ImageIcon, BookOpen, Settings, FolderOpen, Download, Mic, MessageSquare } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../adapters/outbound/repositories/DexieDatabase';
@@ -59,9 +59,28 @@ export const MainLayout: React.FC = () => {
           </NavLink>
           <NavLink to="/export" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
             <Download size={20} />
-            <span>{t('nav.export')}</span>
+            <span>{t('nav.export', '导出中心')}</span>
           </NavLink>
         </nav>
+        
+        <div style={{ padding: '0 1rem', marginBottom: '0.5rem' }}>
+          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>AI 实验室</span>
+        </div>
+        <nav className="sidebar-nav" style={{ flex: 1, paddingTop: 0 }}>
+          <NavLink to="/labs/image" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+            <ImageIcon size={20} />
+            <span>{t('nav.imageLab', '图片生成')}</span>
+          </NavLink>
+          <NavLink to="/labs/voice" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+            <Mic size={20} />
+            <span>{t('nav.voiceLab', '音色与配音')}</span>
+          </NavLink>
+          <NavLink to="/labs/text" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+            <MessageSquare size={20} />
+            <span>{t('nav.textLab', '文本问答润色')}</span>
+          </NavLink>
+        </nav>
+
         <div style={{ paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
           <NavLink to="/settings" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
             <Settings size={20} />

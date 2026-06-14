@@ -410,10 +410,14 @@ export const StoryWorkbench: React.FC = () => {
 
   const handleGenerateVideo = async (segmentId: string) => {
     if (!selectedStoryId) return;
+    const seg = sortedSegments.find(s => s.id === segmentId);
+    if (!seg) return;
     try {
       await videoGenerationService.generateVideo(segmentId, selectedStoryId, 'MINIMAX', {
         mode: videoMode, model: videoModel, resolution: videoResolution,
         duration: videoDuration, promptOptimizer: videoPromptOptimizer,
+        actionContent: seg.actionContent,
+        firstFrameImage: seg.firstFrameImage,
       });
     } catch (e: unknown) {
       showToast('error', getErrorMessage(e));
@@ -454,6 +458,8 @@ export const StoryWorkbench: React.FC = () => {
           await videoGenerationService.generateVideo(seg.id, selectedStoryId, 'MINIMAX', {
             mode: videoMode, model: videoModel, resolution: videoResolution,
             duration: videoDuration, promptOptimizer: videoPromptOptimizer,
+            actionContent: seg.actionContent,
+            firstFrameImage: seg.firstFrameImage,
           });
           successCount++;
         } catch {
@@ -480,6 +486,32 @@ export const StoryWorkbench: React.FC = () => {
       setBatchBgId('');
     } catch (e: unknown) {
       showToast('error', getErrorMessage(e));
+    }
+  };
+
+  const handleUpdateActionContent = async (segmentId: string, content: string) => {
+    try {
+      await storyService.updateSegmentActionContent?.(segmentId, content);
+      // Fallback update if storyService method doesn't exist
+      const seg = sortedSegments.find(s => s.id === segmentId);
+      if (seg) {
+        seg.actionContent = content;
+        await db.segments.put(seg);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleUpdateFirstFrameImage = async (segmentId: string, url: string) => {
+    try {
+      const seg = sortedSegments.find(s => s.id === segmentId);
+      if (seg) {
+        seg.firstFrameImage = url;
+        await db.segments.put(seg);
+      }
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -994,8 +1026,10 @@ export const StoryWorkbench: React.FC = () => {
                 onBgmLyricsChange={setBgmLyrics}
                 onBgmCoverAudioUrlChange={setBgmCoverAudioUrl}
                 onGenerateBGM={() => handleGenerateBGM(seg.id)}
-                onGenerateLyrics={handleGenerateLyrics}
+                onGenerateLyrics={() => handleGenerateLyrics(seg.id)}
                 onSuggestBGMStyle={handleSuggestBGMStyle}
+                onUpdateActionContent={handleUpdateActionContent}
+                onUpdateFirstFrameImage={handleUpdateFirstFrameImage}
               />
             ))}
           </div>

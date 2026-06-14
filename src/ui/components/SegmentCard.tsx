@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Play, RefreshCw, Users, Download, Volume2, Music, Trash2 } from 'lucide-react';
+import { Play, RefreshCw, Users, Download, Volume2, Music, Trash2, ChevronDown, ChevronUp, Image as ImageIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { StorySegment, Character, VideoTask, Background } from '../../domain/entities/models';
 import { BGMPanel } from './BGMPanel';
@@ -36,6 +36,8 @@ interface SegmentCardProps {
   onGenerateBGM: () => void;
   onGenerateLyrics: () => void;
   onSuggestBGMStyle: (segmentContent: string) => Promise<void>;
+  onUpdateActionContent?: (segmentId: string, content: string) => void;
+  onUpdateFirstFrameImage?: (segmentId: string, imageUrl: string) => void;
 }
 
 const getStatusColor = (status: VideoTask['status']) => {
@@ -66,9 +68,11 @@ export const SegmentCard: React.FC<SegmentCardProps> = ({
   onBgmPromptChange, onBgmModeChange, onBgmModelChange,
   onBgmLyricsChange, onBgmCoverAudioUrlChange,
   onGenerateBGM, onGenerateLyrics, onSuggestBGMStyle,
+  onUpdateActionContent, onUpdateFirstFrameImage,
 }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [showAdvanced, setShowAdvanced] = React.useState(false);
 
   const mentionedCharNames = segment.mentionedCharacters
     .map(id => characterMap.get(id)?.name)
@@ -134,6 +138,49 @@ export const SegmentCard: React.FC<SegmentCardProps> = ({
                 animation: task.status === 'PROCESSING' || task.status === 'PENDING' ? 'pulse 1.5s ease-in-out infinite' : 'none'
               }} />
               {getStatusLabel(task.status, t)}
+            </div>
+          )}
+        </div>
+
+        {/* Advanced Options Toggle */}
+        <div style={{ marginTop: '1rem' }}>
+          <button 
+            className="btn btn-secondary" 
+            style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', display: 'flex', alignItems: 'center', gap: '0.25rem', background: 'transparent', border: '1px solid var(--border-color)', opacity: 0.8 }}
+            onClick={() => setShowAdvanced(!showAdvanced)}
+          >
+            {showAdvanced ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            {t('workbench.advancedOptions', '高级选项 (运镜与参考图)')}
+          </button>
+          
+          {showAdvanced && (
+            <div style={{ marginTop: '0.75rem', padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
+                  {t('workbench.actionContent', '运镜与动作提示词 (Action / Camera)')}
+                </label>
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  placeholder={t('workbench.actionContentPlaceholder', '例如：向左平移，特写镜头')}
+                  value={segment.actionContent || ''}
+                  onChange={(e) => onUpdateActionContent?.(segment.id, e.target.value)}
+                  style={{ width: '100%', fontSize: '0.85rem', padding: '0.5rem' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
+                  <ImageIcon size={14} /> {t('workbench.firstFrameImage', '视频参考图 (首帧/尾帧 URL)')}
+                </label>
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  placeholder={t('workbench.firstFrameImagePlaceholder', '输入图片链接 (可选)')}
+                  value={segment.firstFrameImage || ''}
+                  onChange={(e) => onUpdateFirstFrameImage?.(segment.id, e.target.value)}
+                  style={{ width: '100%', fontSize: '0.85rem', padding: '0.5rem' }}
+                />
+              </div>
             </div>
           )}
         </div>
