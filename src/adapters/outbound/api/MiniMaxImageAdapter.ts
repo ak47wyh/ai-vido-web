@@ -1,5 +1,6 @@
 import type { IImageGeneratorPort, ImageGenerationContext, ImageGenerationResult } from '../../../domain/ports/OutboundPorts';
 import { ApiConfigStore } from '../config/ApiConfigStore';
+import { getMiniMaxErrorMessage } from './MiniMaxErrorUtils';
 import axios from 'axios';
 
 /**
@@ -61,20 +62,8 @@ export class MiniMaxImageAdapter implements IImageGeneratorPort {
 
     // 检查 base_resp 错误码
     const statusCode = data?.base_resp?.status_code;
-    const statusMsg = data?.base_resp?.status_msg || '';
-
-    if (statusCode !== undefined && statusCode !== 0) {
-      const errorMessages: Record<number, string> = {
-        1002: 'Rate limited — please try again later',
-        1004: 'Authentication failed — check your API Key',
-        1008: 'Insufficient account balance',
-        1026: 'Prompt contains sensitive content — please revise',
-        2013: 'Invalid parameters — check your request',
-        2049: 'Invalid API Key',
-      };
-      const msg = errorMessages[statusCode] || statusMsg || `API error (code ${statusCode})`;
-      throw new Error(`MiniMax Image API error: ${msg}`);
-    }
+    const error = getMiniMaxErrorMessage(statusCode, data?.base_resp?.status_msg, 'MiniMax Image Generation error');
+    if (error) throw new Error(error);
 
     const images: string[] = data?.data?.image_base64;
     if (!images || images.length === 0) {

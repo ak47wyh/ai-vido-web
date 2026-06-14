@@ -7,6 +7,7 @@ import type {
   CoverPreprocessResult
 } from '../../../domain/ports/OutboundPorts';
 import { ApiConfigStore } from '../config/ApiConfigStore';
+import { getMiniMaxErrorMessage } from './MiniMaxErrorUtils';
 import axios from 'axios';
 
 export class MiniMaxMusicAdapter implements IMusicPort {
@@ -17,8 +18,10 @@ export class MiniMaxMusicAdapter implements IMusicPort {
       // Mock mode: return a placeholder result
       console.warn('[MiniMaxMusicAdapter] No API Key configured — returning mock result');
       return {
-        audioUrl: '',
-        duration: 0,
+        audioUrl: 'mock://music-placeholder',
+        duration: 30000,
+        sampleRate: 44100,
+        bitrate: 256000,
       };
     }
 
@@ -64,17 +67,24 @@ export class MiniMaxMusicAdapter implements IMusicPort {
     const data = response.data;
 
     const statusCode = data?.base_resp?.status_code;
-    if (statusCode !== undefined && statusCode !== 0) {
-      const statusMsg = data?.base_resp?.status_msg || `Music generation error (code ${statusCode})`;
-      throw new Error(`MiniMax Music Generation error: ${statusMsg}`);
-    }
+    const error = getMiniMaxErrorMessage(statusCode, data?.base_resp?.status_msg, 'MiniMax Music Generation error');
+    if (error) throw new Error(error);
 
     const extraInfo = data?.extra_info || {};
-    const audioUrl = data?.data?.audio_url || data?.data?.audio;
-    const audioHex = context.outputFormat === 'hex' ? data?.data?.audio : undefined;
+    const audioData = data?.data?.audio;
+    let audioUrl: string | undefined;
+    let audioHex: string | undefined;
+
+    if (context.outputFormat === 'url') {
+      // When output_format=url, the audio field contains the URL
+      audioUrl = typeof audioData === 'string' ? audioData : undefined;
+    } else {
+      // When output_format=hex (default), the audio field contains hex-encoded data
+      audioHex = typeof audioData === 'string' ? audioData : undefined;
+    }
 
     return {
-      audioUrl: typeof audioUrl === 'string' && !audioUrl.startsWith('http') ? undefined : audioUrl,
+      audioUrl,
       audioHex,
       duration: extraInfo.music_duration,
       sampleRate: extraInfo.music_sample_rate,
@@ -121,10 +131,8 @@ export class MiniMaxMusicAdapter implements IMusicPort {
     const data = response.data;
 
     const statusCode = data?.base_resp?.status_code;
-    if (statusCode !== undefined && statusCode !== 0) {
-      const statusMsg = data?.base_resp?.status_msg || `Lyrics generation error (code ${statusCode})`;
-      throw new Error(`MiniMax Lyrics Generation error: ${statusMsg}`);
-    }
+    const error = getMiniMaxErrorMessage(statusCode, data?.base_resp?.status_msg, 'MiniMax Lyrics Generation error');
+    if (error) throw new Error(error);
 
     return {
       songTitle: data?.song_title || '',
@@ -159,10 +167,8 @@ export class MiniMaxMusicAdapter implements IMusicPort {
     const data = response.data;
 
     const statusCode = data?.base_resp?.status_code;
-    if (statusCode !== undefined && statusCode !== 0) {
-      const statusMsg = data?.base_resp?.status_msg || `Cover preprocess error (code ${statusCode})`;
-      throw new Error(`MiniMax Cover Preprocess error: ${statusMsg}`);
-    }
+    const error = getMiniMaxErrorMessage(statusCode, data?.base_resp?.status_msg, 'MiniMax Cover Preprocess error');
+    if (error) throw new Error(error);
 
     return {
       coverFeatureId: data?.cover_feature_id || '',

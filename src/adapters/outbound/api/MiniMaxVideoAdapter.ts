@@ -1,5 +1,6 @@
 import type { IVideoGeneratorPort, VideoPromptContext, VideoTaskResult } from '../../../domain/ports/OutboundPorts';
 import { ApiConfigStore } from '../config/ApiConfigStore';
+import { getMiniMaxErrorMessage } from './MiniMaxErrorUtils';
 import axios from 'axios';
 
 /**
@@ -55,13 +56,25 @@ export class MiniMaxVideoAdapter implements IVideoGeneratorPort {
     console.log('[MiniMaxVideoAdapter] Submitting task with prompt:', prompt);
 
     const baseUrl = config.minimaxBaseUrl.replace(/\/+$/, '');
+
+    // Build request payload with optional voice and BGM fields
+    const payload: Record<string, unknown> = {
+      model: 'T2V-01-Director',
+      prompt,
+      prompt_optimizer: true
+    };
+
+    if (context.characterVoiceIds && Object.keys(context.characterVoiceIds).length > 0) {
+      payload.character_voice_ids = context.characterVoiceIds;
+    }
+
+    if (context.bgmAudioUrl) {
+      payload.bgm_audio_url = context.bgmAudioUrl;
+    }
+
     const response = await axios.post(
       `${baseUrl}/video_generation`,
-      {
-        model: 'T2V-01-Director',
-        prompt,
-        prompt_optimizer: true
-      },
+      payload,
       {
         headers: {
           Authorization: `Bearer ${config.minimaxApiKey}`,
@@ -77,18 +90,8 @@ export class MiniMaxVideoAdapter implements IVideoGeneratorPort {
     const statusCode = data?.base_resp?.status_code;
     const statusMsg = data?.base_resp?.status_msg || '';
 
-    if (statusCode !== undefined && statusCode !== 0) {
-      const errorMessages: Record<number, string> = {
-        1002: 'Rate limited — please try again later',
-        1004: 'Authentication failed — check your API Key',
-        1008: 'Insufficient account balance',
-        1026: 'Prompt contains sensitive content — please revise',
-        2013: 'Invalid parameters — check your request',
-        2049: 'Invalid API Key'
-      };
-      const msg = errorMessages[statusCode] || statusMsg || `API error (code ${statusCode})`;
-      throw new Error(`MiniMax API error: ${msg}`);
-    }
+    const error = getMiniMaxErrorMessage(statusCode, statusMsg);
+    if (error) throw new Error(error);
 
     const taskId: string = data?.task_id;
     if (!taskId) {

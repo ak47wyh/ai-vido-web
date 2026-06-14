@@ -240,9 +240,8 @@ export class StoryService {
     return segments.sort((a, b) => a.sequenceOrder - b.sequenceOrder);
   }
 
-  async updateSegmentBackground(segmentId: string, backgroundId: string, storyId: string): Promise<void> {
-    const segments = await this.segmentRepo.findByStoryId(storyId);
-    const segment = segments.find(s => s.id === segmentId);
+  async updateSegmentBackground(segmentId: string, backgroundId: string): Promise<void> {
+    const segment = await this.segmentRepo.findById(segmentId);
     if (segment) {
       segment.selectedBackgroundId = backgroundId;
       await this.segmentRepo.save(segment);

@@ -229,3 +229,62 @@ export interface IMusicPort {
   generateLyrics(context: LyricsGenerationContext): Promise<LyricsGenerationResult>;
   preprocessCover(audioUrl: string): Promise<CoverPreprocessResult>;
 }
+
+// --- Text Generation ---
+
+export interface TextGenerationCacheControl {
+  type: 'ephemeral';
+}
+
+export interface TextGenerationSystemBlock {
+  type: 'text';
+  text: string;
+  cache_control?: TextGenerationCacheControl;
+}
+
+export interface TextGenerationMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+  cache_control?: TextGenerationCacheControl;
+}
+
+export interface TextGenerationContext {
+  model?: 'MiniMax-M3' | 'MiniMax-M2.5' | 'MiniMax-M2.5-highspeed' | 'MiniMax-M2.1' | 'MiniMax-M2.1-highspeed' | 'MiniMax-M2';
+  messages: TextGenerationMessage[];
+  maxTokens?: number;
+  temperature?: number;
+  stream?: boolean;
+  tools?: Array<{
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  }>;
+  useAnthropicEndpoint?: boolean;
+  systemBlocks?: TextGenerationSystemBlock[];
+}
+
+export interface TextGenerationResult {
+  content: string;
+  thinking?: string;
+  toolCalls?: Array<{
+    id: string;
+    name: string;
+    arguments: string;
+  }>;
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+    cachedTokens?: number;
+    cacheCreationTokens?: number;
+  };
+}
+
+export interface RefineResult {
+  content: string;
+  cachedTokens?: number;
+  totalTokens?: number;
+}
+
+export interface ITextGenerationPort {
+  chatCompletion(context: TextGenerationContext): Promise<TextGenerationResult>;
+}

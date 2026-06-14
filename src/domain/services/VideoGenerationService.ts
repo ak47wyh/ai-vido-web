@@ -8,6 +8,7 @@ import type {
   IBackgroundRepository,
   VideoPromptContext
 } from '../ports/OutboundPorts';
+import { getErrorMessage } from '../../ui/utils/errorUtils';
 
 export class VideoGenerationService {
   videoTaskRepo: IVideoTaskRepository;
@@ -113,7 +114,7 @@ export class VideoGenerationService {
 
       this.pollTaskStatus(task.id, externalTaskId);
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Submit failed';
+      const message = getErrorMessage(error, 'Submit failed');
       await this.videoTaskRepo.updateStatus(task.id, 'FAILED', undefined, message);
     }
   }
@@ -142,7 +143,7 @@ export class VideoGenerationService {
           await this.videoTaskRepo.updateStatus(taskId, 'FAILED', undefined, 'Polling timeout');
         }
       } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : 'Poll failed';
+        const message = getErrorMessage(error, 'Poll failed');
         clearInterval(interval);
         this.activePollers.delete(taskId);
         await this.videoTaskRepo.updateStatus(taskId, 'FAILED', undefined, message);

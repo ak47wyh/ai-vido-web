@@ -79,10 +79,19 @@ export const StoryWorkbench: React.FC = () => {
     setNarrationUrls({});
   };
 
-  // Wrapper for setting selectedStoryId that also clears narration state
+  // Helper: clear BGM editing state
+  const clearBGMState = () => {
+    setBgmSegmentId(null);
+    setBgmPrompt('');
+    setBgmLyrics('');
+    setBgmMode('instrumental');
+  };
+
+  // Wrapper for setting selectedStoryId that also clears narration and BGM state
   const switchStory = (storyId: string | null) => {
     if (storyId !== selectedStoryId) {
       clearNarrationState();
+      clearBGMState();
     }
     setSelectedStoryId(storyId);
   };
@@ -158,14 +167,21 @@ export const StoryWorkbench: React.FC = () => {
   const handleCreateStory = async () => {
     if (!title || !originalText || !currentSpaceId) return;
     setIsSplitting(true);
+    let createdStoryId: string | null = null;
     try {
       const story = await storyService.createStory(title, originalText, currentSpaceId);
+      createdStoryId = story.id;
       switchStory(story.id);
       await storyService.splitStory(story.id);
       setTitle('');
       setOriginalText('');
     } catch (e) {
       console.error(e);
+      // Rollback: delete the created story if split failed
+      if (createdStoryId) {
+        try { await storyService.deleteStory(createdStoryId); } catch { /* ignore rollback error */ }
+        switchStory(null);
+      }
       showToast('error', t('workbench.splitFailed'));
     } finally {
       setIsSplitting(false);
@@ -373,8 +389,7 @@ export const StoryWorkbench: React.FC = () => {
   };
 
   const handleSelectBackground = async (segmentId: string, bgId: string) => {
-    if (!selectedStoryId) return;
-    await storyService.updateSegmentBackground(segmentId, bgId, selectedStoryId);
+    await storyService.updateSegmentBackground(segmentId, bgId);
   };
 
   const handleGenerateVideo = async (segmentId: string) => {
@@ -396,6 +411,26 @@ export const StoryWorkbench: React.FC = () => {
         const task = latestTaskMap.get(seg.id);
         return !task || task.status === 'FAILED';
       });
+
+      // Check readiness warnings
+      const noVoice = eligible.filter(seg =>
+        seg.mentionedCharacters.some(id => !characters?.find(c => c.id === id)?.voiceId)
+      );
+      const noBGM = eligible.filter(seg => !seg.bgmAudioUrl);
+
+      if (noVoice.length > 0 || noBGM.length > 0) {
+        const warnings: string[] = [];
+        if (noVoice.length > 0) warnings.push(t('workbench.noVoiceWarning', { count: noVoice.length }));
+        if (noBGM.length > 0) warnings.push(t('workbench.noBGMWarning', { count: noBGM.length }));
+        const ok = await confirm({
+          title: t('workbench.batchWarningsTitle'),
+          message: warnings.join('\n'),
+          confirmLabel: t('workbench.batchGenerateBtn'),
+          danger: false
+        });
+        if (!ok) return;
+      }
+
       for (const seg of eligible) {
         await videoGenerationService.generateVideo(seg.id, selectedStoryId, 'MINIMAX');
       }
@@ -416,7 +451,7 @@ export const StoryWorkbench: React.FC = () => {
     if (!selectedStoryId || !batchBgId) return;
     try {
       for (const seg of sortedSegments) {
-        await storyService.updateSegmentBackground(seg.id, batchBgId, selectedStoryId);
+        await storyService.updateSegmentBackground(seg.id, batchBgId);
       }
       showToast('success', t('workbench.batchBgSuccess', { count: sortedSegments.length }));
       setBatchBgId('');

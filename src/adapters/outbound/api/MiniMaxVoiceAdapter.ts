@@ -8,6 +8,7 @@ import type {
   FileUploadResult
 } from '../../../domain/ports/OutboundPorts';
 import { ApiConfigStore } from '../config/ApiConfigStore';
+import { getMiniMaxErrorMessage } from './MiniMaxErrorUtils';
 import axios from 'axios';
 
 export class MiniMaxVoiceAdapter implements IVoicePort {
@@ -74,10 +75,8 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
     const data = response.data;
 
     const statusCode = data?.base_resp?.status_code;
-    if (statusCode !== undefined && statusCode !== 0) {
-      const statusMsg = data?.base_resp?.status_msg || `Voice clone error (code ${statusCode})`;
-      throw new Error(`MiniMax Voice Clone error: ${statusMsg}`);
-    }
+    const error = getMiniMaxErrorMessage(statusCode, data?.base_resp?.status_msg, 'MiniMax Voice Clone error');
+    if (error) throw new Error(error);
 
     const previewAudioUrl = data?.data?.audio_url || data?.extra_info?.audio_url;
 
@@ -126,10 +125,8 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
     const data = response.data;
 
     const statusCode = data?.base_resp?.status_code;
-    if (statusCode !== undefined && statusCode !== 0) {
-      const statusMsg = data?.base_resp?.status_msg || `T2A error (code ${statusCode})`;
-      throw new Error(`MiniMax T2A error: ${statusMsg}`);
-    }
+    const error = getMiniMaxErrorMessage(statusCode, data?.base_resp?.status_msg, 'MiniMax T2A error');
+    if (error) throw new Error(error);
 
     const taskId = data?.data?.task_id || data?.task_id;
     if (!taskId) {
@@ -161,10 +158,11 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
     const data = response.data;
 
     const statusCode = data?.base_resp?.status_code;
-    if (statusCode !== undefined && statusCode !== 0) {
+    const apiError = getMiniMaxErrorMessage(statusCode, data?.base_resp?.status_msg);
+    if (apiError) {
       return {
         status: 'failed',
-        errorMessage: data?.base_resp?.status_msg || `Query error (code ${statusCode})`,
+        errorMessage: apiError,
       };
     }
 
