@@ -1,8 +1,8 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../adapters/outbound/repositories/DexieDatabase';
 import { storyService, videoGenerationService, imageAdapter, voiceService, musicService, textGenerationService } from '../../dependencies';
-import { Play, Spline, Trash2, RefreshCw, Users, PlayCircle, AlertTriangle, ImagePlus, Sparkles, Pencil, BookOpen, Download, Check, CheckCircle2, Volume2, Music, Wand2 } from 'lucide-react';
+import { Spline, Sparkles, AlertTriangle, ImagePlus, PlayCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { VideoTask, Character } from '../../domain/entities/models';
@@ -11,6 +11,9 @@ import { useSpace } from '../contexts/SpaceContext';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { getErrorMessage } from '../utils/errorUtils';
+import { StoryListPanel } from '../components/StoryListPanel';
+import { BreakdownPreview } from '../components/BreakdownPreview';
+import { SegmentCard } from '../components/SegmentCard';
 
 export const StoryWorkbench: React.FC = () => {
   const { t } = useTranslation();
@@ -22,10 +25,7 @@ export const StoryWorkbench: React.FC = () => {
   const backgrounds = useLiveQuery(() => currentSpaceId ? db.backgrounds.where('spaceId').equals(currentSpaceId).toArray() : [], [currentSpaceId]);
   const characters = useLiveQuery(() => currentSpaceId ? db.characters.where('spaceId').equals(currentSpaceId).toArray() : [], [currentSpaceId]);
 
-  const [title, setTitle] = useState('');
-  const [originalText, setOriginalText] = useState('');
   const [selectedStoryId, setSelectedStoryId] = useState<string | null>(() => {
-    // Initialize from URL param if present
     const params = new URLSearchParams(window.location.search);
     return params.get('story');
   });
@@ -44,7 +44,6 @@ export const StoryWorkbench: React.FC = () => {
   const [generatingDraftBgImageIndices, setGeneratingDraftBgImageIndices] = useState<Set<number>>(new Set());
   const [narrationStatuses, setNarrationStatuses] = useState<Record<string, string>>({});
   const [narrationUrls, setNarrationUrls] = useState<Record<string, string>>({});
-  // BGM state
   const [bgmSegmentId, setBgmSegmentId] = useState<string | null>(null);
   const [bgmPrompt, setBgmPrompt] = useState('');
   const [bgmMode, setBgmMode] = useState<'instrumental' | 'autoLyrics' | 'customLyrics' | 'cover'>('instrumental');
@@ -53,27 +52,19 @@ export const StoryWorkbench: React.FC = () => {
   const [bgmCoverAudioUrl, setBgmCoverAudioUrl] = useState('');
   const [isGeneratingBGM, setIsGeneratingBGM] = useState(false);
   const [isGeneratingLyrics, setIsGeneratingLyrics] = useState(false);
-  const [editingStoryId, setEditingStoryId] = useState<string | null>(null);
-  const [editTitle, setEditTitle] = useState('');
-  const [editOriginalText, setEditOriginalText] = useState('');
-
-  // AI refine state
+  const [refiningStoryText, setRefiningStoryText] = useState(false);
   const [refiningDraftCharField, setRefiningDraftCharField] = useState<{ index: number; field: string } | null>(null);
   const [refiningDraftBgField, setRefiningDraftBgField] = useState<{ index: number; field: string } | null>(null);
-  const [refiningStoryText, setRefiningStoryText] = useState(false);
   const [suggestingBGMStyle, setSuggestingBGMStyle] = useState(false);
 
-  // Video generation config state
   const [videoMode, setVideoMode] = useState<VideoGenerationMode>('t2v');
   const [videoModel, setVideoModel] = useState<VideoModel>('T2V-01-Director');
   const [videoResolution, setVideoResolution] = useState<VideoResolution>('768P');
   const [videoDuration, setVideoDuration] = useState<6 | 10>(6);
   const [videoPromptOptimizer, setVideoPromptOptimizer] = useState(true);
 
-  // Track active narration polling intervals for cleanup
   const narrationPollersRef = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map());
 
-  // Cleanup all polling intervals on unmount
   useEffect(() => {
     const currentPollers = narrationPollersRef.current;
     return () => {
@@ -84,7 +75,6 @@ export const StoryWorkbench: React.FC = () => {
     };
   }, []);
 
-  // Helper: clear all narration pollers and state (call when switching stories)
   const clearNarrationState = () => {
     for (const [, interval] of narrationPollersRef.current) {
       clearInterval(interval);
@@ -94,7 +84,6 @@ export const StoryWorkbench: React.FC = () => {
     setNarrationUrls({});
   };
 
-  // Helper: clear BGM editing state
   const clearBGMState = () => {
     setBgmSegmentId(null);
     setBgmPrompt('');
@@ -102,23 +91,19 @@ export const StoryWorkbench: React.FC = () => {
     setBgmMode('instrumental');
   };
 
-  // Wrapper for setting selectedStoryId that also clears narration and BGM state
-  const switchStory = (storyId: string | null) => {
+  const switchStory = useCallback((storyId: string | null) => {
     if (storyId !== selectedStoryId) {
       clearNarrationState();
       clearBGMState();
     }
     setSelectedStoryId(storyId);
-  };
+  }, [selectedStoryId]);
 
-  // Reactive segments
   const segments = useLiveQuery(
     () => selectedStoryId ? db.segments.where('storyId').equals(selectedStoryId).toArray() : [],
-    [selectedStoryId],
-    []
+    [selectedStoryId], []
   );
 
-  // Only load video tasks for segments of the selected story
   const segmentIds = useMemo(() => (segments || []).map(s => s.id), [segments]);
   const videoTasks = useLiveQuery(
     () => segmentIds.length > 0 ? db.videoTasks.where('segmentId').anyOf(segmentIds).toArray() : [],
@@ -130,7 +115,6 @@ export const StoryWorkbench: React.FC = () => {
     [segments]
   );
 
-  // Map: segmentId -> latest VideoTask
   const latestTaskMap = useMemo(() => {
     const map = new Map<string, VideoTask>();
     if (!videoTasks) return map;
@@ -143,7 +127,6 @@ export const StoryWorkbench: React.FC = () => {
     return map;
   }, [videoTasks]);
 
-  // Map: characterId -> Character
   const characterMap = useMemo(() => {
     const map = new Map<string, Character>();
     if (!characters) return map;
@@ -153,13 +136,11 @@ export const StoryWorkbench: React.FC = () => {
     return map;
   }, [characters]);
 
-  // Currently selected story
   const selectedStory = useMemo(
     () => stories?.find(s => s.id === selectedStoryId) ?? null,
     [stories, selectedStoryId]
   );
 
-  // Progress stats
   const progressStats = useMemo(() => {
     if (sortedSegments.length === 0) return null;
     let success = 0, processing = 0, pending = 0, failed = 0, ready = 0;
@@ -179,22 +160,21 @@ export const StoryWorkbench: React.FC = () => {
     return { total: sortedSegments.length, success, processing, pending, failed, ready };
   }, [sortedSegments, latestTaskMap]);
 
+  // ---- Story CRUD handlers ----
+
   const handleCreateStory = async () => {
-    if (!title || !originalText || !currentSpaceId) return;
+    if (!currentSpaceId) return;
     setIsSplitting(true);
     let createdStoryId: string | null = null;
     try {
-      const story = await storyService.createStory(title, originalText, currentSpaceId);
+      const story = await storyService.createStory('', '', currentSpaceId);
       createdStoryId = story.id;
       switchStory(story.id);
       await storyService.splitStory(story.id);
-      setTitle('');
-      setOriginalText('');
     } catch (e) {
       console.error(e);
-      // Rollback: delete the created story if split failed
       if (createdStoryId) {
-        try { await storyService.deleteStory(createdStoryId); } catch { /* ignore rollback error */ }
+        try { await storyService.deleteStory(createdStoryId); } catch { }
         switchStory(null);
       }
       showToast('error', t('workbench.splitFailed'));
@@ -204,7 +184,7 @@ export const StoryWorkbench: React.FC = () => {
   };
 
   const handleCreateAndBreakdown = async () => {
-    if (!title || !originalText || !currentSpaceId) return;
+    if (!currentSpaceId) return;
     setIsBreakingDown(true);
     setDraftCharacters([]);
     setDraftBackgrounds([]);
@@ -214,7 +194,7 @@ export const StoryWorkbench: React.FC = () => {
     setConfirmedBgIndices(new Set());
     let createdStoryId: string | null = null;
     try {
-      const story = await storyService.createStory(title, originalText, currentSpaceId);
+      const story = await storyService.createStory('', '', currentSpaceId);
       createdStoryId = story.id;
       switchStory(story.id);
       const result = await storyService.previewBreakdown(story.id);
@@ -222,18 +202,63 @@ export const StoryWorkbench: React.FC = () => {
       setDraftBackgrounds(result.backgrounds);
       setDraftSegments(result.segments);
       setShowBreakdownPreview(true);
-      setTitle('');
-      setOriginalText('');
     } catch (e) {
       console.error(e);
-      // Rollback: delete the created story if breakdown preview failed
       if (createdStoryId) {
-        try { await storyService.deleteStory(createdStoryId); } catch { /* ignore rollback error */ }
+        try { await storyService.deleteStory(createdStoryId); } catch { }
         switchStory(null);
       }
       showToast('error', t('workbench.breakdownFailed'));
     } finally {
       setIsBreakingDown(false);
+    }
+  };
+
+  const handleQuickSplit = async (storyId: string) => {
+    switchStory(storyId);
+    setIsSplitting(true);
+    try {
+      await storyService.splitStory(storyId);
+    } catch (e) {
+      console.error(e);
+      showToast('error', t('workbench.splitFailed'));
+    } finally {
+      setIsSplitting(false);
+    }
+  };
+
+  const handleDeleteStory = async (storyId: string) => {
+    const ok = await confirm({
+      title: t('workbench.confirmDeleteTitle'),
+      message: t('workbench.confirmDelete'),
+      confirmLabel: t('workbench.deleteConfirmBtn'),
+      danger: true
+    });
+    if (!ok) return;
+    await storyService.deleteStory(storyId);
+    showToast('success', t('workbench.deleteSuccess'));
+    if (selectedStoryId === storyId) {
+      switchStory(null);
+    }
+  };
+
+  const handleReSplit = async () => {
+    if (!selectedStoryId) return;
+    const ok = await confirm({
+      title: t('workbench.confirmReSplitTitle'),
+      message: t('workbench.confirmReSplit'),
+      confirmLabel: t('workbench.reSplitBtn'),
+      danger: true
+    });
+    if (!ok) return;
+    setIsSplitting(true);
+    try {
+      await storyService.splitStory(selectedStoryId);
+    } catch (e) {
+      console.error(e);
+      showToast('error', t('workbench.splitFailed'));
+    } finally {
+      setIsSplitting(false);
     }
   };
 
@@ -267,25 +292,12 @@ export const StoryWorkbench: React.FC = () => {
     }
   };
 
-  const handleQuickSplit = async (storyId: string) => {
-    switchStory(storyId);
-    setIsSplitting(true);
-    try {
-      await storyService.splitStory(storyId);
-    } catch (e) {
-      console.error(e);
-      showToast('error', t('workbench.splitFailed'));
-    } finally {
-      setIsSplitting(false);
-    }
-  };
+  // ---- Breakdown draft handlers ----
 
-  // --- Breakdown draft editing helpers ---
   const updateDraftCharacter = (index: number, field: keyof CharacterDraft, value: string) => {
     setDraftCharacters(prev => {
       const next = [...prev];
       next[index] = { ...next[index], [field]: value };
-      // If name changed, also update segment references
       if (field === 'name') {
         const oldName = prev[index].name;
         setDraftSegments(segs => segs.map(seg => ({
@@ -318,7 +330,6 @@ export const StoryWorkbench: React.FC = () => {
     setDraftBackgrounds(prev => {
       const next = [...prev];
       next[index] = { ...next[index], [field]: value };
-      // If name changed, also update segment references
       if (field === 'name') {
         const oldName = prev[index].name;
         setDraftSegments(segs => segs.map(seg => ({
@@ -369,7 +380,6 @@ export const StoryWorkbench: React.FC = () => {
     if (!selectedStoryId) return;
     setIsApplyingBreakdown(true);
     try {
-      // Only apply confirmed drafts
       const confirmedChars = draftCharacters.filter((_, i) => confirmedCharIndices.has(i));
       const confirmedBgs = draftBackgrounds.filter((_, i) => confirmedBgIndices.has(i));
       await storyService.applyBreakdown(selectedStoryId, confirmedChars, confirmedBgs, draftSegments);
@@ -390,25 +400,7 @@ export const StoryWorkbench: React.FC = () => {
     }
   };
 
-  const handleReSplit = async () => {
-    if (!selectedStoryId) return;
-    const ok = await confirm({
-      title: t('workbench.confirmReSplitTitle'),
-      message: t('workbench.confirmReSplit'),
-      confirmLabel: t('workbench.reSplitBtn'),
-      danger: true
-    });
-    if (!ok) return;
-    setIsSplitting(true);
-    try {
-      await storyService.splitStory(selectedStoryId);
-    } catch (e) {
-      console.error(e);
-      showToast('error', t('workbench.splitFailed'));
-    } finally {
-      setIsSplitting(false);
-    }
-  };
+  // ---- Video generation handlers ----
 
   const handleSelectBackground = async (segmentId: string, bgId: string) => {
     await storyService.updateSegmentBackground(segmentId, bgId);
@@ -418,15 +410,11 @@ export const StoryWorkbench: React.FC = () => {
     if (!selectedStoryId) return;
     try {
       await videoGenerationService.generateVideo(segmentId, selectedStoryId, 'MINIMAX', {
-        mode: videoMode,
-        model: videoModel,
-        resolution: videoResolution,
-        duration: videoDuration,
-        promptOptimizer: videoPromptOptimizer,
+        mode: videoMode, model: videoModel, resolution: videoResolution,
+        duration: videoDuration, promptOptimizer: videoPromptOptimizer,
       });
     } catch (e: unknown) {
-      const message = getErrorMessage(e);
-      showToast('error', message);
+      showToast('error', getErrorMessage(e));
     }
   };
 
@@ -440,7 +428,6 @@ export const StoryWorkbench: React.FC = () => {
         return !task || task.status === 'FAILED';
       });
 
-      // Check readiness warnings
       const noVoice = eligible.filter(seg =>
         seg.mentionedCharacters.some(id => !characters?.find(c => c.id === id)?.voiceId)
       );
@@ -456,37 +443,26 @@ export const StoryWorkbench: React.FC = () => {
           confirmLabel: t('workbench.batchGenerateBtn'),
           danger: false
         });
-        if (!ok) return;
+        if (!ok) { setIsBatchGenerating(false); return; }
       }
 
-      let successCount = 0;
-      let failCount = 0;
+      let successCount = 0, failCount = 0;
       for (const seg of eligible) {
         try {
           await videoGenerationService.generateVideo(seg.id, selectedStoryId, 'MINIMAX', {
-            mode: videoMode,
-            model: videoModel,
-            resolution: videoResolution,
-            duration: videoDuration,
-            promptOptimizer: videoPromptOptimizer,
+            mode: videoMode, model: videoModel, resolution: videoResolution,
+            duration: videoDuration, promptOptimizer: videoPromptOptimizer,
           });
           successCount++;
         } catch {
           failCount++;
         }
       }
-      if (successCount > 0) {
-        showToast('info', t('workbench.batchStarted', { count: successCount }));
-      }
-      if (failCount > 0) {
-        showToast('warning', t('workbench.batchPartialFailed', { count: failCount }));
-      }
-      if (successCount === 0 && failCount === 0) {
-        showToast('warning', t('workbench.batchNoEligible'));
-      }
+      if (successCount > 0) showToast('info', t('workbench.batchStarted', { count: successCount }));
+      if (failCount > 0) showToast('warning', t('workbench.batchPartialFailed', { count: failCount }));
+      if (successCount === 0 && failCount === 0) showToast('warning', t('workbench.batchNoEligible'));
     } catch (e: unknown) {
-      const message = getErrorMessage(e);
-      showToast('error', message);
+      showToast('error', getErrorMessage(e));
     } finally {
       setIsBatchGenerating(false);
     }
@@ -501,84 +477,68 @@ export const StoryWorkbench: React.FC = () => {
       showToast('success', t('workbench.batchBgSuccess', { count: sortedSegments.length }));
       setBatchBgId('');
     } catch (e: unknown) {
-      const message = getErrorMessage(e);
-      showToast('error', message);
+      showToast('error', getErrorMessage(e));
     }
   };
 
-  const handleDeleteStory = async (storyId: string) => {
-    const ok = await confirm({
-      title: t('workbench.confirmDeleteTitle'),
-      message: t('workbench.confirmDelete'),
-      confirmLabel: t('workbench.deleteConfirmBtn'),
-      danger: true
-    });
-    if (!ok) return;
-    await storyService.deleteStory(storyId);
-    showToast('success', t('workbench.deleteSuccess'));
-    if (selectedStoryId === storyId) {
-      switchStory(null);
+  // ---- Narration handlers ----
+
+  const handleGenerateNarration = async (segmentId: string, content: string, characterIds: string[]) => {
+    const charWithVoice = characterIds
+      .map(id => characters?.find(c => c.id === id))
+      .find(c => c?.voiceId);
+    if (!charWithVoice?.voiceId) {
+      showToast('warning', t('character.noVoice'));
+      return;
+    }
+    setNarrationStatuses(prev => ({ ...prev, [segmentId]: 'running' }));
+    try {
+      const result = await voiceService.generateNarrationAudio(content, charWithVoice.voiceId);
+      if (result.audioUrl) {
+        setNarrationStatuses(prev => ({ ...prev, [segmentId]: 'done' }));
+        setNarrationUrls(prev => ({ ...prev, [segmentId]: result.audioUrl! }));
+        showToast('success', t('character.narrationGenerated'));
+      } else if (result.taskId) {
+        let pollRetries = 0;
+        const maxPollRetries = 60;
+        const pollInterval = setInterval(async () => {
+          try {
+            pollRetries++;
+            const pollResult = await voiceService.queryNarrationStatus(result.taskId!);
+            if (pollResult.status === 'done') {
+              clearInterval(pollInterval);
+              narrationPollersRef.current.delete(segmentId);
+              setNarrationStatuses(prev => ({ ...prev, [segmentId]: 'done' }));
+              if (pollResult.audioUrl) {
+                setNarrationUrls(prev => ({ ...prev, [segmentId]: pollResult.audioUrl! }));
+              }
+              showToast('success', t('character.narrationGenerated'));
+            } else if (pollResult.status === 'failed') {
+              clearInterval(pollInterval);
+              narrationPollersRef.current.delete(segmentId);
+              setNarrationStatuses(prev => ({ ...prev, [segmentId]: 'failed' }));
+              showToast('error', pollResult.errorMessage || t('character.narrationFailed'));
+            } else if (pollRetries >= maxPollRetries) {
+              clearInterval(pollInterval);
+              narrationPollersRef.current.delete(segmentId);
+              setNarrationStatuses(prev => ({ ...prev, [segmentId]: 'failed' }));
+              showToast('error', t('character.narrationFailed'));
+            }
+          } catch {
+            clearInterval(pollInterval);
+            narrationPollersRef.current.delete(segmentId);
+            setNarrationStatuses(prev => ({ ...prev, [segmentId]: 'failed' }));
+          }
+        }, 3000);
+        narrationPollersRef.current.set(segmentId, pollInterval);
+      }
+    } catch (e: unknown) {
+      setNarrationStatuses(prev => ({ ...prev, [segmentId]: 'failed' }));
+      showToast('error', getErrorMessage(e, t('character.narrationFailed')));
     }
   };
 
-  const openEditStory = (storyId: string) => {
-    const story = stories?.find(s => s.id === storyId);
-    if (!story) return;
-    setEditingStoryId(storyId);
-    setEditTitle(story.title);
-    setEditOriginalText(story.originalText);
-  };
-
-  const handleSaveEditStory = async () => {
-    if (!editingStoryId || !editTitle.trim()) return;
-    const story = stories?.find(s => s.id === editingStoryId);
-    const wasSplit = story?.status === 'SPLIT';
-    // Warn user if editing a split story — content changes will reset status
-    if (wasSplit && (editTitle.trim() !== story!.title || editOriginalText.trim() !== story!.originalText)) {
-      const ok = await confirm({
-        title: t('workbench.confirmEditSplitTitle'),
-        message: t('workbench.confirmEditSplit'),
-        confirmLabel: t('workbench.saveEditBtn'),
-        danger: true
-      });
-      if (!ok) return;
-    }
-    await storyService.updateStory(editingStoryId, editTitle.trim(), editOriginalText.trim());
-    setEditingStoryId(null);
-    if (wasSplit) {
-      showToast('warning', t('workbench.editResetToDraft'));
-    }
-  };
-
-  const getStatusColor = (status: VideoTask['status']) => {
-    switch (status) {
-      case 'SUCCESS': return '#34d399';
-      case 'FAILED': return '#f87171';
-      case 'PROCESSING': return '#fbbf24';
-      case 'PENDING': return '#9ca3af';
-    }
-  };
-
-  const getStatusLabel = (status: VideoTask['status']) => {
-    switch (status) {
-      case 'SUCCESS': return t('workbench.statusSuccess');
-      case 'FAILED': return t('workbench.statusFailed');
-      case 'PROCESSING': return t('workbench.statusProcessing');
-      case 'PENDING': return t('workbench.statusPending');
-    }
-  };
-
-  const hasCharacters = (characters?.length ?? 0) > 0;
-  const hasBackgrounds = (backgrounds?.length ?? 0) > 0;
-
-  // BGM style presets
-  const bgmStylePresets = [
-    { key: 'cinematic', prompt: 'Cinematic, Epic, Orchestral, Grand, Sweeping' },
-    { key: 'lighthearted', prompt: 'Lighthearted, Acoustic, Pop, Warm, Gentle' },
-    { key: 'suspense', prompt: 'Suspense, Dark, Thriller, Tension, Mysterious' },
-    { key: 'melancholic', prompt: 'Melancholic, Piano, Emotional, Sad, Reflective' },
-    { key: 'upbeat', prompt: 'Upbeat, Funky, Dance, Energetic, Joyful' },
-  ];
+  // ---- BGM handlers ----
 
   const handleGenerateBGM = async (segmentId: string) => {
     if (!bgmPrompt.trim()) {
@@ -588,17 +548,14 @@ export const StoryWorkbench: React.FC = () => {
     setIsGeneratingBGM(true);
     try {
       if (bgmMode === 'cover') {
-        // Cover mode: two-step flow
         if (!bgmCoverAudioUrl.trim()) {
           showToast('warning', t('music.coverAudioRequired'));
           return;
         }
         await musicService.generateCoverBGM(segmentId, bgmCoverAudioUrl.trim(), bgmPrompt.trim(), {
-          lyrics: bgmLyrics || undefined,
-          model: bgmModel,
+          lyrics: bgmLyrics || undefined, model: bgmModel,
         });
       } else {
-        // Standard music generation
         const options: { isInstrumental?: boolean; lyrics?: string; lyricsOptimizer?: boolean; model?: string } = { model: bgmModel };
         if (bgmMode === 'instrumental') {
           options.isInstrumental = true;
@@ -653,149 +610,143 @@ export const StoryWorkbench: React.FC = () => {
     }
   };
 
+  // ---- AI Refine handlers (for StoryListPanel) ----
+
+  const handleRefineStoryText = async (text: string): Promise<string> => {
+    setRefiningStoryText(true);
+    try {
+      const result = await textGenerationService.refineText(text);
+      showToast('success', t('textAI.textRefined'));
+      return result.content;
+    } catch (e) {
+      showToast('error', getErrorMessage(e, t('textAI.promptRefineFailed')));
+      return text;
+    } finally {
+      setRefiningStoryText(false);
+    }
+  };
+
+  // ---- AI Refine handlers (for BreakdownPreview) ----
+
+  const handleRefineCharAppearance = async (index: number, prompt: string) => {
+    setRefiningDraftCharField({ index, field: 'appearance' });
+    try {
+      const result = await textGenerationService.refinePrompt(prompt, 'character_appearance');
+      updateDraftCharacter(index, 'appearancePrompt', result.content);
+      showToast('success', t('textAI.promptRefined'));
+    } catch (e) {
+      showToast('error', getErrorMessage(e, t('textAI.promptRefineFailed')));
+    } finally {
+      setRefiningDraftCharField(null);
+    }
+  };
+
+  const handleRefineCharPersonality = async (index: number, prompt: string) => {
+    setRefiningDraftCharField({ index, field: 'personality' });
+    try {
+      const result = await textGenerationService.refinePrompt(prompt, 'character_personality');
+      updateDraftCharacter(index, 'personalityPrompt', result.content);
+      showToast('success', t('textAI.promptRefined'));
+    } catch (e) {
+      showToast('error', getErrorMessage(e, t('textAI.promptRefineFailed')));
+    } finally {
+      setRefiningDraftCharField(null);
+    }
+  };
+
+  const handleRefineBackground = async (index: number, prompt: string) => {
+    setRefiningDraftBgField({ index, field: 'environment' });
+    try {
+      const result = await textGenerationService.refinePrompt(prompt, 'background');
+      updateDraftBackground(index, 'environmentPrompt', result.content);
+      showToast('success', t('textAI.promptRefined'));
+    } catch (e) {
+      showToast('error', getErrorMessage(e, t('textAI.promptRefineFailed')));
+    } finally {
+      setRefiningDraftBgField(null);
+    }
+  };
+
+  // ---- Draft image generation handlers ----
+
+  const handleGenerateCharDraftImage = async (index: number, context: ImageGenerationContext) => {
+    setGeneratingDraftCharImageIndices(prev => new Set(prev).add(index));
+    try {
+      const result = await imageAdapter.generateImage(context);
+      setDraftCharacters(prev => {
+        const next = [...prev];
+        next[index] = { ...next[index], referenceImageUrl: result.imageDataUri || result.imageUrls?.[0] };
+        return next;
+      });
+      showToast('success', t('workbench.draftImageGenerated'));
+    } catch (e: unknown) {
+      showToast('error', getErrorMessage(e, t('workbench.breakdownApplyFailed')));
+    } finally {
+      setGeneratingDraftCharImageIndices(prev => {
+        const next = new Set(prev);
+        next.delete(index);
+        return next;
+      });
+    }
+  };
+
+  const handleGenerateBgDraftImage = async (index: number, context: ImageGenerationContext) => {
+    setGeneratingDraftBgImageIndices(prev => new Set(prev).add(index));
+    try {
+      const result = await imageAdapter.generateImage(context);
+      setDraftBackgrounds(prev => {
+        const next = [...prev];
+        next[index] = { ...next[index], referenceImageUrl: result.imageDataUri || result.imageUrls?.[0] };
+        return next;
+      });
+      showToast('success', t('workbench.draftImageGenerated'));
+    } catch (e: unknown) {
+      showToast('error', getErrorMessage(e, t('workbench.breakdownApplyFailed')));
+    } finally {
+      setGeneratingDraftBgImageIndices(prev => {
+        const next = new Set(prev);
+        next.delete(index);
+        return next;
+      });
+    }
+  };
+
+  // ---- BGM Style suggestion ----
+
+  const handleSuggestBGMStyle = async (segmentContent: string) => {
+    setSuggestingBGMStyle(true);
+    try {
+      const result = await textGenerationService.suggestBGMStyle(segmentContent);
+      setBgmPrompt(result.content);
+      showToast('success', t('textAI.bgmStyleSuggested'));
+    } catch (e) {
+      showToast('error', getErrorMessage(e, t('textAI.promptRefineFailed')));
+    } finally {
+      setSuggestingBGMStyle(false);
+    }
+  };
+
+  // ---- Derived UI state ----
+
+  const hasCharacters = (characters?.length ?? 0) > 0;
+  const hasBackgrounds = (backgrounds?.length ?? 0) > 0;
+
   return (
     <div style={{ display: 'flex', gap: '2rem', height: '100%', flexWrap: 'wrap' }}>
-      {/* Left panel: Stories list & creation */}
-      <div style={{ flex: '1 1 320px', maxWidth: '400px', minWidth: '280px', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        <div className="glass-panel" style={{ padding: '1.5rem' }}>
-          <h3>{t('workbench.newStory')}</h3>
-          <div className="form-group" style={{ marginTop: '1rem' }}>
-            <input className="form-input" placeholder={t('workbench.storyTitlePlaceholder')} value={title} onChange={e => setTitle(e.target.value)} />
-          </div>
-          <div className="form-group">
-            <textarea className="form-textarea" placeholder={t('workbench.storyContentPlaceholder')} value={originalText} onChange={e => setOriginalText(e.target.value)} />
-          </div>
-          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-            <button
-              className="btn btn-secondary"
-              style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#a78bfa' }}
-              disabled={refiningStoryText || !originalText.trim()}
-              onClick={async () => {
-                setRefiningStoryText(true);
-                try {
-                  const result = await textGenerationService.refineText(originalText);
-                  setOriginalText(result.content);
-                  showToast('success', t('textAI.textRefined'));
-                } catch (e) {
-                  showToast('error', getErrorMessage(e, t('textAI.promptRefineFailed')));
-                } finally {
-                  setRefiningStoryText(false);
-                }
-              }}
-            >
-              {refiningStoryText ? <RefreshCw size={14} className="spin" /> : <Wand2 size={14} />}
-              {refiningStoryText ? t('textAI.refiningText') : t('textAI.refineText')}
-            </button>
-          </div>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button
-              className="btn btn-primary"
-              style={{ flex: 1 }}
-              onClick={handleCreateAndBreakdown}
-              disabled={isBreakingDown || !title || !originalText}
-            >
-              {isBreakingDown ? t('workbench.breakingDown') : <><Sparkles size={16} /> {t('workbench.breakdownBtn')}</>}
-            </button>
-            <button
-              className="btn btn-secondary"
-              style={{ flex: 1 }}
-              onClick={handleCreateStory}
-              disabled={isSplitting || !title || !originalText}
-            >
-              {isSplitting ? t('workbench.splitting') : <><Spline size={16} /> {t('workbench.splitBtn')}</>}
-            </button>
-          </div>
-          <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.5rem', lineHeight: 1.4 }}>
-            {t('workbench.breakdownTip')}
-          </p>
-        </div>
+      <StoryListPanel
+        stories={stories}
+        selectedStoryId={selectedStoryId}
+        isSplitting={isSplitting}
+        isBreakingDown={isBreakingDown}
+        refiningStoryText={refiningStoryText}
+        onSwitchStory={switchStory}
+        onCreateStory={handleCreateStory}
+        onCreateAndBreakdown={handleCreateAndBreakdown}
+        onQuickSplit={handleQuickSplit}
+        onDeleteStory={handleDeleteStory}
+        onRefineStoryText={handleRefineStoryText}
+      />
 
-        <div className="glass-panel" style={{ padding: '1.5rem', flex: 1, overflowY: 'auto' }}>
-          <h3>{t('workbench.yourStories')}</h3>
-          <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {stories?.map(s => (
-              <div key={s.id}>
-                {editingStoryId === s.id ? (
-                  <div className="glass-panel" style={{ padding: '1rem' }}>
-                    <div className="form-group" style={{ marginBottom: '0.75rem' }}>
-                      <input className="form-input" value={editTitle} onChange={e => setEditTitle(e.target.value)} placeholder={t('workbench.storyTitlePlaceholder')} />
-                    </div>
-                    <div className="form-group" style={{ marginBottom: '0.75rem' }}>
-                      <textarea className="form-textarea" value={editOriginalText} onChange={e => setEditOriginalText(e.target.value)} placeholder={t('workbench.storyContentPlaceholder')} style={{ minHeight: '80px' }} />
-                    </div>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button className="btn btn-primary" style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem' }} onClick={handleSaveEditStory}>{t('workbench.saveEditBtn')}</button>
-                      <button className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem' }} onClick={() => setEditingStoryId(null)}>{t('workbench.cancelBtn')}</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div
-                    className="glass-panel interactive story-card"
-                    style={{
-                      padding: '1rem',
-                      cursor: 'pointer',
-                      borderColor: selectedStoryId === s.id ? 'var(--primary-color)' : 'var(--border-color)',
-                      background: selectedStoryId === s.id ? 'var(--bg-panel-hover)' : 'var(--bg-panel)',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center'
-                    }}
-                    onClick={() => switchStory(s.id)}
-                  >
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</div>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                        <span style={{
-                          display: 'inline-block', padding: '0.1rem 0.5rem', borderRadius: '999px',
-                          fontSize: '0.7rem', fontWeight: 600,
-                          background: s.status === 'SPLIT' ? 'rgba(52,211,153,0.15)' : 'rgba(251,191,36,0.15)',
-                          color: s.status === 'SPLIT' ? '#34d399' : '#fbbf24',
-                        }}>
-                          {s.status === 'SPLIT' ? t('workbench.statusSplit') : t('workbench.statusDraft')}
-                        </span>
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: '0.25rem', flexShrink: 0 }}>
-                      {s.status === 'DRAFT' && (
-                        <button
-                          className="btn btn-secondary"
-                          style={{ padding: '0.3rem', border: 'none' }}
-                          onClick={(e) => { e.stopPropagation(); handleQuickSplit(s.id); }}
-                          title={t('workbench.splitBtn')}
-                        >
-                          <Spline size={14} />
-                        </button>
-                      )}
-                      <button
-                        className="btn btn-secondary"
-                        style={{ padding: '0.3rem', border: 'none' }}
-                        onClick={(e) => { e.stopPropagation(); openEditStory(s.id); }}
-                      >
-                        <Pencil size={14} />
-                      </button>
-                      <button
-                        className="btn btn-secondary"
-                        style={{ padding: '0.3rem', border: 'none' }}
-                        onClick={(e) => { e.stopPropagation(); handleDeleteStory(s.id); }}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-            {stories?.length === 0 && (
-              <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-muted)' }}>
-                <BookOpen size={36} style={{ marginBottom: '0.75rem', opacity: 0.4 }} />
-                <p style={{ fontSize: '0.85rem' }}>{t('workbench.noStoriesHint')}</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Right panel: Segments and Video Generation */}
       <div className="glass-panel" style={{ flex: 1, padding: '2rem', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
         <div className="page-header" style={{ marginBottom: '1.5rem' }}>
           <h2>{t('workbench.segmentsTitle')}</h2>
@@ -805,12 +756,8 @@ export const StoryWorkbench: React.FC = () => {
                 <button className="btn btn-secondary" onClick={handleReSplit} disabled={isSplitting}>
                   <Spline size={16} /> {isSplitting ? t('workbench.splitting') : t('workbench.reSplitBtn')}
                 </button>
-                <button
-                  className="btn btn-primary"
-                  onClick={handleReBreakdown}
-                  disabled={isBreakingDown}
-                  style={{ background: 'linear-gradient(135deg, #6366f1, #ec4899)' }}
-                >
+                <button className="btn btn-primary" onClick={handleReBreakdown} disabled={isBreakingDown}
+                  style={{ background: 'linear-gradient(135deg, #6366f1, #ec4899)' }}>
                   <Sparkles size={16} />
                   {isBreakingDown ? t('workbench.breakingDown') : t('workbench.reBreakdownBtn')}
                 </button>
@@ -819,359 +766,59 @@ export const StoryWorkbench: React.FC = () => {
           </div>
         </div>
 
-        {/* Breakdown result preview — editable */}
         {showBreakdownPreview && (draftCharacters.length > 0 || draftBackgrounds.length > 0) && (
-          <div style={{
-            marginBottom: '1.5rem', padding: '1.5rem', borderRadius: 'var(--radius-lg)',
-            background: 'linear-gradient(135deg, rgba(99,102,241,0.1), rgba(236,72,153,0.1))',
-            border: '1px solid rgba(99,102,241,0.25)',
-            animation: 'fadeIn 0.3s ease'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <h3 style={{ margin: 0, fontSize: '1rem', color: '#a78bfa' }}>
-                <Sparkles size={18} style={{ verticalAlign: 'middle', marginRight: '0.5rem' }} />
-                {t('workbench.breakdownResult')}
-              </h3>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button
-                  className="btn btn-primary"
-                  style={{ fontSize: '0.8rem', padding: '0.4rem 1rem', background: 'linear-gradient(135deg, #6366f1, #ec4899)' }}
-                  onClick={handleApplyBreakdown}
-                  disabled={isApplyingBreakdown || (confirmedCharIndices.size === 0 && confirmedBgIndices.size === 0)}
-                >
-                  {isApplyingBreakdown ? t('workbench.applying') : t('workbench.applyBreakdownBtn')}
-                </button>
-                <button className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.8rem' }} onClick={handleCloseBreakdownPreview}>
-                  {t('workbench.closePreview')}
-                </button>
-              </div>
-            </div>
+          <BreakdownPreview
+          draftCharacters={draftCharacters}
+          draftBackgrounds={draftBackgrounds}
+          draftSegments={draftSegments}
+          confirmedCharIndices={confirmedCharIndices}
+          confirmedBgIndices={confirmedBgIndices}
+          generatingDraftCharImageIndices={generatingDraftCharImageIndices}
+          generatingDraftBgImageIndices={generatingDraftBgImageIndices}
+          refiningDraftCharField={refiningDraftCharField}
+          refiningDraftBgField={refiningDraftBgField}
+          isApplyingBreakdown={isApplyingBreakdown}
+          onUpdateDraftCharacter={updateDraftCharacter}
+          onRemoveDraftCharacter={removeDraftCharacter}
+          onToggleConfirmChar={(i) => {
+            setConfirmedCharIndices(prev => {
+              const next = new Set(prev);
+              if (next.has(i)) next.delete(i); else next.add(i);
+              return next;
+            });
+          }}
+          onToggleConfirmAllChars={() => {
+            if (confirmedCharIndices.size === draftCharacters.length) {
+              setConfirmedCharIndices(new Set());
+            } else {
+              setConfirmedCharIndices(new Set(draftCharacters.map((_, i) => i)));
+            }
+          }}
+          onUpdateDraftBackground={updateDraftBackground}
+          onRemoveDraftBackground={removeDraftBackground}
+          onToggleConfirmBg={(i) => {
+            setConfirmedBgIndices(prev => {
+              const next = new Set(prev);
+              if (next.has(i)) next.delete(i); else next.add(i);
+              return next;
+            });
+          }}
+          onToggleConfirmAllBgs={() => {
+            if (confirmedBgIndices.size === draftBackgrounds.length) {
+              setConfirmedBgIndices(new Set());
+            } else {
+              setConfirmedBgIndices(new Set(draftBackgrounds.map((_, i) => i)));
+            }
+          }}
+          onGenerateCharImage={handleGenerateCharDraftImage}
+          onGenerateBgImage={handleGenerateBgDraftImage}
+          onRefineCharAppearance={handleRefineCharAppearance}
+          onRefineCharPersonality={handleRefineCharPersonality}
+          onRefineBackground={handleRefineBackground}
+          onApplyBreakdown={handleApplyBreakdown}
+          onCloseBreakdownPreview={handleCloseBreakdownPreview}
+        />)}
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1rem' }}>
-              {/* Editable character cards */}
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <h4 style={{ fontSize: '0.85rem', color: '#818cf8', margin: 0 }}>
-                    <Users size={14} style={{ verticalAlign: 'middle', marginRight: '0.3rem' }} />
-                    {t('workbench.extractedCharacters')} ({draftCharacters.length})
-                  </h4>
-                  {draftCharacters.length > 0 && (
-                    <button
-                      className="btn btn-secondary"
-                      style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem' }}
-                      onClick={() => {
-                        if (confirmedCharIndices.size === draftCharacters.length) {
-                          setConfirmedCharIndices(new Set());
-                        } else {
-                          setConfirmedCharIndices(new Set(draftCharacters.map((_, i) => i)));
-                        }
-                      }}
-                    >
-                      <Check size={12} /> {t('workbench.confirmAllDrafts')}
-                    </button>
-                  )}
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  {draftCharacters.map((c, i) => {
-                    const isConfirmed = confirmedCharIndices.has(i);
-                    return (
-                    <div key={i} style={{
-                      padding: '0.75rem', borderRadius: 'var(--radius-md)',
-                      background: isConfirmed ? 'rgba(52,211,153,0.1)' : 'rgba(99,102,241,0.1)',
-                      fontSize: '0.8rem',
-                      border: isConfirmed ? '1px solid rgba(52,211,153,0.4)' : '1px solid rgba(99,102,241,0.2)',
-                      transition: 'all 0.2s'
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                        <input
-                          className="form-input"
-                          style={{ fontSize: '0.8rem', padding: '0.3rem 0.5rem', flex: 1, marginRight: '0.5rem' }}
-                          value={c.name}
-                          onChange={e => updateDraftCharacter(i, 'name', e.target.value)}
-                          placeholder={t('workbench.draftCharNamePlaceholder')}
-                        />
-                        <div style={{ display: 'flex', gap: '0.25rem' }}>
-                          <button
-                            className="btn btn-secondary"
-                            style={{
-                              padding: '0.2rem 0.4rem', border: 'none',
-                              color: isConfirmed ? '#34d399' : '#818cf8',
-                              background: isConfirmed ? 'rgba(52,211,153,0.15)' : 'rgba(99,102,241,0.15)'
-                            }}
-                            onClick={() => {
-                              setConfirmedCharIndices(prev => {
-                                const next = new Set(prev);
-                                if (next.has(i)) next.delete(i); else next.add(i);
-                                return next;
-                              });
-                            }}
-                            title={isConfirmed ? t('workbench.unconfirmDraft') : t('workbench.confirmDraft')}
-                          >
-                            {isConfirmed ? <CheckCircle2 size={14} /> : <Check size={14} />}
-                          </button>
-                          <button
-                            className="btn btn-secondary"
-                            style={{ padding: '0.2rem', border: 'none', color: '#f87171' }}
-                            onClick={() => removeDraftCharacter(i)}
-                            title={t('workbench.removeDraft')}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-                      <textarea
-                        className="form-textarea"
-                        style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem', minHeight: '40px', width: '100%', marginBottom: '0.3rem' }}
-                        value={c.appearancePrompt}
-                        onChange={e => updateDraftCharacter(i, 'appearancePrompt', e.target.value)}
-                        placeholder={t('workbench.draftAppearancePlaceholder')}
-                      />
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.2rem', color: '#a78bfa' }}
-                        disabled={!c.appearancePrompt || (refiningDraftCharField?.index === i && refiningDraftCharField?.field === 'appearance')}
-                        onClick={async () => {
-                          setRefiningDraftCharField({ index: i, field: 'appearance' });
-                          try {
-                            const result = await textGenerationService.refinePrompt(c.appearancePrompt, 'character_appearance');
-                            updateDraftCharacter(i, 'appearancePrompt', result.content);
-                            showToast('success', t('textAI.promptRefined'));
-                          } catch (e) {
-                            showToast('error', getErrorMessage(e, t('textAI.promptRefineFailed')));
-                          } finally {
-                            setRefiningDraftCharField(null);
-                          }
-                        }}
-                      >
-                        {refiningDraftCharField?.index === i && refiningDraftCharField?.field === 'appearance' ? <RefreshCw size={10} className="spin" /> : <Wand2 size={10} />}
-                        {refiningDraftCharField?.index === i && refiningDraftCharField?.field === 'appearance' ? t('textAI.refiningPrompt') : t('textAI.refineCharAppearance')}
-                      </button>
-                      <textarea
-                        className="form-textarea"
-                        style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem', minHeight: '40px', width: '100%', marginBottom: '0.3rem' }}
-                        value={c.personalityPrompt}
-                        onChange={e => updateDraftCharacter(i, 'personalityPrompt', e.target.value)}
-                        placeholder={t('workbench.draftPersonalityPlaceholder')}
-                      />
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.2rem', color: '#a78bfa' }}
-                        disabled={!c.personalityPrompt || (refiningDraftCharField?.index === i && refiningDraftCharField?.field === 'personality')}
-                        onClick={async () => {
-                          setRefiningDraftCharField({ index: i, field: 'personality' });
-                          try {
-                            const result = await textGenerationService.refinePrompt(c.personalityPrompt, 'character_personality');
-                            updateDraftCharacter(i, 'personalityPrompt', result.content);
-                            showToast('success', t('textAI.promptRefined'));
-                          } catch (e) {
-                            showToast('error', getErrorMessage(e, t('textAI.promptRefineFailed')));
-                          } finally {
-                            setRefiningDraftCharField(null);
-                          }
-                        }}
-                      >
-                        {refiningDraftCharField?.index === i && refiningDraftCharField?.field === 'personality' ? <RefreshCw size={10} className="spin" /> : <Wand2 size={10} />}
-                        {refiningDraftCharField?.index === i && refiningDraftCharField?.field === 'personality' ? t('textAI.refiningPrompt') : t('textAI.refineCharPersonality')}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', marginTop: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                        disabled={!c.appearancePrompt && !c.personalityPrompt || generatingDraftCharImageIndices.has(i)}
-                        onClick={async () => {
-                          setGeneratingDraftCharImageIndices(prev => new Set(prev).add(i));
-                          try {
-                            const context: ImageGenerationContext = {
-                              prompt: [c.appearancePrompt, c.personalityPrompt].filter(Boolean).join(', '),
-                              aspectRatio: '1:1',
-                              promptOptimizer: true,
-                            };
-                            const result = await imageAdapter.generateImage(context);
-                            setDraftCharacters(prev => {
-                              const next = [...prev];
-                              next[i] = { ...next[i], referenceImageUrl: result.imageDataUri || result.imageUrls?.[0] };
-                              return next;
-                            });
-                            showToast('success', t('workbench.draftImageGenerated'));
-                          } catch (e: unknown) {
-                            showToast('error', getErrorMessage(e, t('workbench.breakdownApplyFailed')));
-                          } finally {
-                            setGeneratingDraftCharImageIndices(prev => {
-                              const next = new Set(prev);
-                              next.delete(i);
-                              return next;
-                            });
-                          }
-                        }}
-                      >
-                        {generatingDraftCharImageIndices.has(i) ? <RefreshCw size={12} className="spin" /> : <Sparkles size={12} />}
-                        {generatingDraftCharImageIndices.has(i) ? t('workbench.generatingDraftImage') : t('workbench.generateDraftImage')}
-                      </button>
-                    </div>
-                    );
-                  })}
-                </div>
-                {draftCharacters.length > 0 && (
-                  <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.4rem' }}>
-                    {t('workbench.confirmedCount', { count: confirmedCharIndices.size })} / {t('workbench.unconfirmedCount', { count: draftCharacters.length - confirmedCharIndices.size })}
-                  </p>
-                )}
-              </div>
-
-              {/* Editable background cards */}
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <h4 style={{ fontSize: '0.85rem', color: '#f472b6', margin: 0 }}>
-                    <ImagePlus size={14} style={{ verticalAlign: 'middle', marginRight: '0.3rem' }} />
-                    {t('workbench.extractedBackgrounds')} ({draftBackgrounds.length})
-                  </h4>
-                  {draftBackgrounds.length > 0 && (
-                    <button
-                      className="btn btn-secondary"
-                      style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem' }}
-                      onClick={() => {
-                        if (confirmedBgIndices.size === draftBackgrounds.length) {
-                          setConfirmedBgIndices(new Set());
-                        } else {
-                          setConfirmedBgIndices(new Set(draftBackgrounds.map((_, i) => i)));
-                        }
-                      }}
-                    >
-                      <Check size={12} /> {t('workbench.confirmAllDrafts')}
-                    </button>
-                  )}
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  {draftBackgrounds.map((bg, i) => {
-                    const isConfirmed = confirmedBgIndices.has(i);
-                    return (
-                    <div key={i} style={{
-                      padding: '0.75rem', borderRadius: 'var(--radius-md)',
-                      background: isConfirmed ? 'rgba(52,211,153,0.1)' : 'rgba(236,72,153,0.1)',
-                      fontSize: '0.8rem',
-                      border: isConfirmed ? '1px solid rgba(52,211,153,0.4)' : '1px solid rgba(236,72,153,0.2)',
-                      transition: 'all 0.2s'
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                        <input
-                          className="form-input"
-                          style={{ fontSize: '0.8rem', padding: '0.3rem 0.5rem', flex: 1, marginRight: '0.5rem' }}
-                          value={bg.name}
-                          onChange={e => updateDraftBackground(i, 'name', e.target.value)}
-                          placeholder={t('workbench.draftBgNamePlaceholder')}
-                        />
-                        <div style={{ display: 'flex', gap: '0.25rem' }}>
-                          <button
-                            className="btn btn-secondary"
-                            style={{
-                              padding: '0.2rem 0.4rem', border: 'none',
-                              color: isConfirmed ? '#34d399' : '#f472b6',
-                              background: isConfirmed ? 'rgba(52,211,153,0.15)' : 'rgba(236,72,153,0.15)'
-                            }}
-                            onClick={() => {
-                              setConfirmedBgIndices(prev => {
-                                const next = new Set(prev);
-                                if (next.has(i)) next.delete(i); else next.add(i);
-                                return next;
-                              });
-                            }}
-                            title={isConfirmed ? t('workbench.unconfirmDraft') : t('workbench.confirmDraft')}
-                          >
-                            {isConfirmed ? <CheckCircle2 size={14} /> : <Check size={14} />}
-                          </button>
-                          <button
-                            className="btn btn-secondary"
-                            style={{ padding: '0.2rem', border: 'none', color: '#f87171' }}
-                            onClick={() => removeDraftBackground(i)}
-                            title={t('workbench.removeDraft')}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-                      <textarea
-                        className="form-textarea"
-                        style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem', minHeight: '50px', width: '100%', marginBottom: '0.3rem' }}
-                        value={bg.environmentPrompt}
-                        onChange={e => updateDraftBackground(i, 'environmentPrompt', e.target.value)}
-                        placeholder={t('workbench.draftEnvPlaceholder')}
-                      />
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.2rem', color: '#f472b6' }}
-                        disabled={!bg.environmentPrompt || (refiningDraftBgField?.index === i && refiningDraftBgField?.field === 'environment')}
-                        onClick={async () => {
-                          setRefiningDraftBgField({ index: i, field: 'environment' });
-                          try {
-                            const result = await textGenerationService.refinePrompt(bg.environmentPrompt, 'background');
-                            updateDraftBackground(i, 'environmentPrompt', result.content);
-                            showToast('success', t('textAI.promptRefined'));
-                          } catch (e) {
-                            showToast('error', getErrorMessage(e, t('textAI.promptRefineFailed')));
-                          } finally {
-                            setRefiningDraftBgField(null);
-                          }
-                        }}
-                      >
-                        {refiningDraftBgField?.index === i && refiningDraftBgField?.field === 'environment' ? <RefreshCw size={10} className="spin" /> : <Wand2 size={10} />}
-                        {refiningDraftBgField?.index === i && refiningDraftBgField?.field === 'environment' ? t('textAI.refiningPrompt') : t('textAI.refinePrompt')}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', marginTop: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                        disabled={!bg.environmentPrompt || generatingDraftBgImageIndices.has(i)}
-                        onClick={async () => {
-                          setGeneratingDraftBgImageIndices(prev => new Set(prev).add(i));
-                          try {
-                            const context: ImageGenerationContext = {
-                              prompt: bg.environmentPrompt,
-                              aspectRatio: '16:9',
-                              promptOptimizer: true,
-                            };
-                            const result = await imageAdapter.generateImage(context);
-                            setDraftBackgrounds(prev => {
-                              const next = [...prev];
-                              next[i] = { ...next[i], referenceImageUrl: result.imageDataUri || result.imageUrls?.[0] };
-                              return next;
-                            });
-                            showToast('success', t('workbench.draftImageGenerated'));
-                          } catch (e: unknown) {
-                            showToast('error', getErrorMessage(e, t('workbench.breakdownApplyFailed')));
-                          } finally {
-                            setGeneratingDraftBgImageIndices(prev => {
-                              const next = new Set(prev);
-                              next.delete(i);
-                              return next;
-                            });
-                          }
-                        }}
-                      >
-                        {generatingDraftBgImageIndices.has(i) ? <RefreshCw size={12} className="spin" /> : <Sparkles size={12} />}
-                        {generatingDraftBgImageIndices.has(i) ? t('workbench.generatingDraftImage') : t('workbench.generateDraftImage')}
-                      </button>
-                    </div>
-                    );
-                  })}
-                </div>
-                {draftBackgrounds.length > 0 && (
-                  <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.4rem' }}>
-                    {t('workbench.confirmedCount', { count: confirmedBgIndices.size })} / {t('workbench.unconfirmedCount', { count: draftBackgrounds.length - confirmedBgIndices.size })}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.75rem' }}>
-              {t('workbench.breakdownEditHint')}
-            </p>
-          </div>
-        )}
-
-        {/* Prerequisite warnings */}
         {selectedStory && sortedSegments.length > 0 && (!hasCharacters || !hasBackgrounds) && (
           <div style={{
             padding: '1rem 1.25rem', marginBottom: '1.5rem', borderRadius: 'var(--radius-md)',
@@ -1191,13 +838,13 @@ export const StoryWorkbench: React.FC = () => {
                 </span>
               )}
             </div>
-            <button className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.8rem' }} onClick={() => navigate(hasCharacters ? '/backgrounds' : '/characters')}>
+            <button className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.8rem' }}
+              onClick={() => navigate(hasCharacters ? '/backgrounds' : '/characters')}>
               {hasCharacters ? t('workbench.goBackgrounds') : t('workbench.goCharacters')}
             </button>
           </div>
         )}
 
-        {/* Progress bar */}
         {progressStats && progressStats.total > 0 && (
           <div style={{ marginBottom: '1.5rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
@@ -1206,10 +853,7 @@ export const StoryWorkbench: React.FC = () => {
                 {progressStats.success}/{progressStats.total} {t('workbench.completed')}
               </span>
             </div>
-            <div style={{
-              height: '6px', borderRadius: '3px', background: 'var(--border-color)',
-              overflow: 'hidden', display: 'flex'
-            }}>
+            <div style={{ height: '6px', borderRadius: '3px', background: 'var(--border-color)', overflow: 'hidden', display: 'flex' }}>
               {progressStats.success > 0 && (
                 <div style={{ width: `${(progressStats.success / progressStats.total) * 100}%`, background: '#34d399', transition: 'width 0.3s' }} />
               )}
@@ -1229,35 +873,23 @@ export const StoryWorkbench: React.FC = () => {
           </div>
         )}
 
-        {/* Batch operations toolbar */}
         {selectedStory && sortedSegments.length > 0 && (
           <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', alignItems: 'center' }}>
             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-              <select
-                className="form-select"
-                style={{ width: '160px', padding: '0.5rem 0.75rem', fontSize: '0.8rem' }}
-                value={batchBgId}
-                onChange={e => setBatchBgId(e.target.value)}
-              >
+              <select className="form-select" style={{ width: '160px', padding: '0.5rem 0.75rem', fontSize: '0.8rem' }}
+                value={batchBgId} onChange={e => setBatchBgId(e.target.value)}>
                 <option value="">{t('workbench.batchBgPlaceholder')}</option>
                 {backgrounds?.map(bg => (
                   <option key={bg.id} value={bg.id}>{bg.name}</option>
                 ))}
               </select>
-              <button
-                className="btn btn-secondary"
-                disabled={!batchBgId}
-                onClick={handleBatchSetBackground}
-                style={{ fontSize: '0.8rem', padding: '0.5rem 0.75rem' }}
-              >
+              <button className="btn btn-secondary" disabled={!batchBgId} onClick={handleBatchSetBackground}
+                style={{ fontSize: '0.8rem', padding: '0.5rem 0.75rem' }}>
                 <ImagePlus size={14} /> {t('workbench.batchBgBtn')}
               </button>
             </div>
-            <button
-              className="btn btn-primary"
-              onClick={handleBatchGenerate}
-              disabled={isBatchGenerating || !hasBackgrounds}
-            >
+            <button className="btn btn-primary" onClick={handleBatchGenerate}
+              disabled={isBatchGenerating || !hasBackgrounds}>
               <PlayCircle size={16} />
               {isBatchGenerating ? t('workbench.batchGenerating') : t('workbench.batchGenerateBtn')}
             </button>
@@ -1270,445 +902,47 @@ export const StoryWorkbench: React.FC = () => {
           <p style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: '2rem' }}>{t('workbench.noSegments')}</p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            {sortedSegments.map((seg, idx) => {
-              const task = latestTaskMap.get(seg.id);
-              const mentionedCharNames = seg.mentionedCharacters
-                .map(id => characterMap.get(id)?.name)
-                .filter((name): name is string => !!name);
-
-              return (
-                <div key={seg.id} className="glass-panel" style={{ padding: '1.5rem', display: 'flex', gap: '1.5rem' }}>
-                  <div style={{ flex: '0 0 60px', fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--text-muted)' }}>
-                    #{idx + 1}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ marginBottom: '1rem', lineHeight: 1.6 }}>{seg.content}</p>
-
-                    {/* Character tags */}
-                    {mentionedCharNames.length > 0 && (
-                      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-                        {mentionedCharNames.map(name => (
-                          <span key={name} style={{
-                            display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
-                            padding: '0.2rem 0.6rem', borderRadius: '999px',
-                            fontSize: '0.75rem', fontWeight: 500,
-                            background: 'rgba(99,102,241,0.15)', color: '#818cf8',
-                            border: '1px solid rgba(99,102,241,0.25)',
-                            cursor: 'pointer', transition: 'all 0.15s'
-                          }}
-                            onClick={() => navigate('/characters')}
-                            title={t('workbench.goCharacters')}
-                          >
-                            <Users size={12} /> {name}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    <div className="flex gap-4 items-center flex-wrap">
-                      <select
-                        className="form-select"
-                        style={{ width: '200px' }}
-                        value={seg.selectedBackgroundId || ''}
-                        onChange={(e) => handleSelectBackground(seg.id, e.target.value)}
-                      >
-                        <option value="">{t('workbench.selectBg')}</option>
-                        {backgrounds?.map(bg => (
-                          <option key={bg.id} value={bg.id}>{bg.name}</option>
-                        ))}
-                      </select>
-
-                      {/* Video generation config */}
-                      <select
-                        className="form-select"
-                        style={{ width: '110px', fontSize: '0.75rem' }}
-                        value={videoMode}
-                        onChange={e => {
-                          const mode = e.target.value as VideoGenerationMode;
-                          setVideoMode(mode);
-                          // Auto-select default model for mode
-                          if (mode === 'fl2v') setVideoModel('MiniMax-Hailuo-02');
-                          else if (mode === 's2v') setVideoModel('S2V-01');
-                          else setVideoModel('T2V-01-Director');
-                        }}
-                      >
-                        <option value="t2v">{t('video.modeT2V')}</option>
-                        <option value="fl2v">{t('video.modeFL2V')}</option>
-                        <option value="s2v">{t('video.modeS2V')}</option>
-                      </select>
-
-                      {videoMode === 't2v' && (
-                        <select
-                          className="form-select"
-                          style={{ width: '160px', fontSize: '0.75rem' }}
-                          value={videoModel}
-                          onChange={e => setVideoModel(e.target.value as VideoModel)}
-                        >
-                          <option value="MiniMax-Hailuo-2.3">Hailuo 2.3</option>
-                          <option value="MiniMax-Hailuo-02">Hailuo 02</option>
-                          <option value="T2V-01-Director">T2V-01 Director</option>
-                          <option value="T2V-01">T2V-01</option>
-                        </select>
-                      )}
-
-                      <select
-                        className="form-select"
-                        style={{ width: '80px', fontSize: '0.75rem' }}
-                        value={videoResolution}
-                        onChange={e => setVideoResolution(e.target.value as VideoResolution)}
-                      >
-                        {(videoMode === 't2v' && (videoModel === 'T2V-01-Director' || videoModel === 'T2V-01')) && (
-                          <option value="720P">720P</option>
-                        )}
-                        <option value="768P">768P</option>
-                        <option value="1080P">1080P</option>
-                      </select>
-
-                      <select
-                        className="form-select"
-                        style={{ width: '65px', fontSize: '0.75rem' }}
-                        value={videoDuration}
-                        onChange={e => setVideoDuration(Number(e.target.value) as 6 | 10)}
-                      >
-                        <option value={6}>6s</option>
-                        <option value={10}>10s</option>
-                      </select>
-
-                      <label style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '0.2rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
-                          checked={videoPromptOptimizer}
-                          onChange={e => setVideoPromptOptimizer(e.target.checked)}
-                          style={{ width: '12px', height: '12px' }}
-                        />
-                        {t('video.promptOptimizer')}
-                      </label>
-
-                      <button
-                        className="btn btn-primary"
-                        disabled={!seg.selectedBackgroundId || task?.status === 'PROCESSING' || task?.status === 'PENDING'}
-                        onClick={() => handleGenerateVideo(seg.id)}
-                      >
-                        <Play size={16} />
-                        {task?.status === 'PROCESSING' || task?.status === 'PENDING'
-                          ? t('workbench.generating')
-                          : t('workbench.generateBtn')}
-                      </button>
-
-                      {task?.status === 'FAILED' && (
-                        <button
-                          className="btn btn-secondary"
-                          disabled={!seg.selectedBackgroundId}
-                          onClick={() => handleGenerateVideo(seg.id)}
-                        >
-                          <RefreshCw size={16} /> {t('workbench.retryBtn')}
-                        </button>
-                      )}
-
-                      {task && (
-                        <div style={{
-                          fontSize: '0.875rem',
-                          color: getStatusColor(task.status),
-                          display: 'flex', alignItems: 'center', gap: '0.4rem'
-                        }}>
-                          <span style={{
-                            width: '8px', height: '8px', borderRadius: '50%',
-                            background: getStatusColor(task.status),
-                            animation: task.status === 'PROCESSING' || task.status === 'PENDING'
-                              ? 'pulse 1.5s ease-in-out infinite' : 'none'
-                          }} />
-                          {getStatusLabel(task.status)}
-                        </div>
-                      )}
-                    </div>
-
-                    {task?.status === 'FAILED' && task.errorMessage && (
-                      <p style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: '#f87171' }}>
-                        {task.errorMessage}
-                      </p>
-                    )}
-
-                    {task?.status === 'SUCCESS' && task.videoUrl && (
-                      <div style={{ marginTop: '1.5rem' }}>
-                        <video src={task.videoUrl} controls style={{ width: '100%', maxHeight: '300px', borderRadius: 'var(--radius-md)' }} />
-                        <a
-                          href={task.videoUrl}
-                          download
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
-                            marginTop: '0.75rem', fontSize: '0.8rem', color: 'var(--primary-color)',
-                            textDecoration: 'none'
-                          }}
-                        >
-                          <Download size={14} /> {t('workbench.downloadVideo')}
-                        </a>
-                      </div>
-                    )}
-
-                    {/* Narration Generation */}
-                    <button
-                      className="btn btn-secondary"
-                      style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                      disabled={narrationStatuses[seg.id] === 'running'}
-                      onClick={async () => {
-                        const charWithVoice = seg.mentionedCharacters
-                          .map(id => characters?.find(c => c.id === id))
-                          .find(c => c?.voiceId);
-                        if (!charWithVoice?.voiceId) {
-                          showToast('warning', t('character.noVoice'));
-                          return;
-                        }
-                        setNarrationStatuses(prev => ({ ...prev, [seg.id]: 'running' }));
-                        try {
-                          const result = await voiceService.generateNarrationAudio(seg.content, charWithVoice.voiceId);
-                          if (result.audioUrl) {
-                            // Sync T2A — instant result for short text
-                            setNarrationStatuses(prev => ({ ...prev, [seg.id]: 'done' }));
-                            setNarrationUrls(prev => ({ ...prev, [seg.id]: result.audioUrl! }));
-                            showToast('success', t('character.narrationGenerated'));
-                          } else if (result.taskId) {
-                            // Async T2A — poll for long text
-                            let pollRetries = 0;
-                            const maxPollRetries = 60;
-                            const pollInterval = setInterval(async () => {
-                              try {
-                                pollRetries++;
-                                const pollResult = await voiceService.queryNarrationStatus(result.taskId!);
-                                if (pollResult.status === 'done') {
-                                  clearInterval(pollInterval);
-                                  narrationPollersRef.current.delete(seg.id);
-                                  setNarrationStatuses(prev => ({ ...prev, [seg.id]: 'done' }));
-                                  if (pollResult.audioUrl) {
-                                    setNarrationUrls(prev => ({ ...prev, [seg.id]: pollResult.audioUrl! }));
-                                  }
-                                  showToast('success', t('character.narrationGenerated'));
-                                } else if (pollResult.status === 'failed') {
-                                  clearInterval(pollInterval);
-                                  narrationPollersRef.current.delete(seg.id);
-                                  setNarrationStatuses(prev => ({ ...prev, [seg.id]: 'failed' }));
-                                  showToast('error', pollResult.errorMessage || t('character.narrationFailed'));
-                                } else if (pollRetries >= maxPollRetries) {
-                                  clearInterval(pollInterval);
-                                  narrationPollersRef.current.delete(seg.id);
-                                  setNarrationStatuses(prev => ({ ...prev, [seg.id]: 'failed' }));
-                                  showToast('error', t('character.narrationFailed'));
-                                }
-                              } catch {
-                                clearInterval(pollInterval);
-                                narrationPollersRef.current.delete(seg.id);
-                                setNarrationStatuses(prev => ({ ...prev, [seg.id]: 'failed' }));
-                              }
-                            }, 3000);
-                            narrationPollersRef.current.set(seg.id, pollInterval);
-                          }
-                        } catch (e: unknown) {
-                          setNarrationStatuses(prev => ({ ...prev, [seg.id]: 'failed' }));
-                          showToast('error', getErrorMessage(e, t('character.narrationFailed')));
-                        }
-                      }}
-                    >
-                      {narrationStatuses[seg.id] === 'running' ? <RefreshCw size={14} className="spin" /> : <Volume2 size={14} />}
-                      {narrationStatuses[seg.id] === 'running' ? t('character.generatingNarration') : t('character.generateNarration')}
-                    </button>
-                    {narrationUrls[seg.id] && (
-                      <audio controls style={{ width: '100%', marginTop: '0.5rem', height: '32px' }} src={narrationUrls[seg.id]} />
-                    )}
-
-                    {/* BGM Section */}
-                    <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-color)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                        <Music size={14} style={{ color: '#f472b6' }} />
-                        <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f472b6' }}>{t('music.title')}</span>
-                      </div>
-
-                      {seg.bgmAudioUrl ? (
-                        <div>
-                          <audio controls style={{ width: '100%', height: '32px' }} src={seg.bgmAudioUrl} />
-                          {seg.bgmPrompt && (
-                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
-                              {seg.bgmIsInstrumental ? '🎵' : '🎤'} {seg.bgmPrompt}
-                            </span>
-                          )}
-                          <button
-                            className="btn btn-secondary"
-                            style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', marginTop: '0.3rem', color: '#f87171' }}
-                            onClick={() => handleRemoveBGM(seg.id)}
-                          >
-                            <Trash2 size={12} /> {t('music.removeBGMBtn')}
-                          </button>
-                        </div>
-                      ) : bgmSegmentId === seg.id ? (
-                        <div style={{ padding: '0.75rem', borderRadius: 'var(--radius-md)', background: 'rgba(244,114,182,0.08)', border: '1px solid rgba(244,114,182,0.2)' }}>
-                          {/* Mode selection */}
-                          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
-                            {(['instrumental', 'autoLyrics', 'customLyrics', 'cover'] as const).map(mode => (
-                              <button
-                                key={mode}
-                                className="btn btn-secondary"
-                                style={{
-                                  fontSize: '0.7rem', padding: '0.2rem 0.5rem',
-                                  background: bgmMode === mode ? 'rgba(244,114,182,0.2)' : undefined,
-                                  borderColor: bgmMode === mode ? '#f472b6' : undefined,
-                                  color: bgmMode === mode ? '#f472b6' : undefined,
-                                }}
-                                onClick={() => {
-                                  setBgmMode(mode);
-                                  // Auto-select model for cover mode
-                                  if (mode === 'cover') setBgmModel('music-cover');
-                                  else setBgmModel('music-2.6');
-                                }}
-                              >
-                                {t(`music.mode${mode.charAt(0).toUpperCase() + mode.slice(1)}`)}
-                              </button>
-                            ))}
-                          </div>
-
-                          {/* Model selection */}
-                          <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.5rem', alignItems: 'center' }}>
-                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{t('music.modelLabel')}</span>
-                            <select
-                              className="form-select"
-                              style={{ fontSize: '0.7rem', padding: '0.15rem 0.3rem', width: 'auto' }}
-                              value={bgmModel}
-                              onChange={e => setBgmModel(e.target.value as typeof bgmModel)}
-                            >
-                              {bgmMode !== 'cover' && (
-                                <>
-                                  <option value="music-2.6">music-2.6</option>
-                                  <option value="music-2.6-free">music-2.6-free</option>
-                                </>
-                              )}
-                              {bgmMode === 'cover' && (
-                                <>
-                                  <option value="music-cover">music-cover</option>
-                                  <option value="music-cover-free">music-cover-free</option>
-                                </>
-                              )}
-                            </select>
-                          </div>
-
-                          {/* Style presets */}
-                          <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
-                            {bgmStylePresets.map(preset => (
-                              <button
-                                key={preset.key}
-                                className="btn btn-secondary"
-                                style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem' }}
-                                onClick={() => setBgmPrompt(preset.prompt)}
-                              >
-                                {t(`music.style${preset.key.charAt(0).toUpperCase() + preset.key.slice(1)}`)}
-                              </button>
-                            ))}
-                            <button
-                              className="btn btn-secondary"
-                              style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem', display: 'flex', alignItems: 'center', gap: '0.2rem', color: '#f472b6' }}
-                              disabled={suggestingBGMStyle}
-                              onClick={async () => {
-                                const seg = sortedSegments.find(s => s.id === bgmSegmentId);
-                                if (!seg?.content) return;
-                                setSuggestingBGMStyle(true);
-                                try {
-                                  const result = await textGenerationService.suggestBGMStyle(seg.content);
-                                  setBgmPrompt(result.content);
-                                  showToast('success', t('textAI.bgmStyleSuggested'));
-                                } catch (e) {
-                                  showToast('error', getErrorMessage(e, t('textAI.promptRefineFailed')));
-                                } finally {
-                                  setSuggestingBGMStyle(false);
-                                }
-                              }}
-                            >
-                              {suggestingBGMStyle ? <RefreshCw size={10} className="spin" /> : <Wand2 size={10} />}
-                              {suggestingBGMStyle ? t('textAI.suggestingBGMStyle') : t('textAI.suggestBGMStyle')}
-                            </button>
-                          </div>
-
-                          {/* Prompt input */}
-                          <input
-                            className="form-input"
-                            style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem', width: '100%', marginBottom: '0.5rem' }}
-                            value={bgmPrompt}
-                            onChange={e => setBgmPrompt(e.target.value)}
-                            placeholder={t('music.promptPlaceholder')}
-                          />
-
-                          {/* Lyrics (for autoLyrics, customLyrics and cover modes) */}
-                          {bgmMode !== 'instrumental' && (
-                            <div style={{ marginBottom: '0.5rem' }}>
-                              <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.3rem' }}>
-                                {bgmMode === 'autoLyrics' && (
-                                  <button
-                                    className="btn btn-secondary"
-                                    style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem', display: 'flex', alignItems: 'center', gap: '0.2rem' }}
-                                    disabled={isGeneratingLyrics || !bgmPrompt.trim()}
-                                    onClick={handleGenerateLyrics}
-                                  >
-                                    {isGeneratingLyrics ? <RefreshCw size={10} className="spin" /> : <Sparkles size={10} />}
-                                    {isGeneratingLyrics ? t('music.generatingLyrics') : t('music.generateLyricsBtn')}
-                                  </button>
-                                )}
-                              </div>
-                              <textarea
-                                className="form-textarea"
-                                style={{ fontSize: '0.7rem', padding: '0.3rem 0.5rem', minHeight: '60px', width: '100%' }}
-                                value={bgmLyrics}
-                                onChange={e => setBgmLyrics(e.target.value)}
-                                placeholder={t('music.lyricsPlaceholder')}
-                              />
-                            </div>
-                          )}
-
-                          {/* Cover audio URL (for cover mode) */}
-                          {bgmMode === 'cover' && (
-                            <div style={{ marginBottom: '0.5rem' }}>
-                              <input
-                                className="form-input"
-                                style={{ fontSize: '0.7rem', padding: '0.3rem 0.5rem', width: '100%' }}
-                                type="url"
-                                value={bgmCoverAudioUrl}
-                                onChange={e => setBgmCoverAudioUrl(e.target.value)}
-                                placeholder={t('music.coverAudioPlaceholder')}
-                              />
-                              <p style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>{t('music.coverAudioHint')}</p>
-                            </div>
-                          )}
-
-                          {/* Generate & Cancel buttons */}
-                          <div style={{ display: 'flex', gap: '0.5rem' }}>
-                            <button
-                              className="btn btn-primary"
-                              style={{ fontSize: '0.7rem', padding: '0.3rem 0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem', background: 'linear-gradient(135deg, #f472b6, #ec4899)' }}
-                              disabled={isGeneratingBGM || !bgmPrompt.trim()}
-                              onClick={() => handleGenerateBGM(seg.id)}
-                            >
-                              {isGeneratingBGM ? <RefreshCw size={12} className="spin" /> : <Music size={12} />}
-                              {isGeneratingBGM ? t('music.generatingBGM') : t('music.generateBGM')}
-                            </button>
-                            <button
-                              className="btn btn-secondary"
-                              style={{ fontSize: '0.7rem', padding: '0.3rem 0.5rem' }}
-                              onClick={() => { setBgmSegmentId(null); setBgmPrompt(''); setBgmLyrics(''); }}
-                            >
-                              {t('workbench.cancelBtn')}
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button
-                          className="btn btn-secondary"
-                          style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                          onClick={() => { setBgmSegmentId(seg.id); setBgmMode('instrumental'); setBgmPrompt(''); setBgmLyrics(''); }}
-                        >
-                          <Music size={14} /> {t('music.generateBGM')}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+            {sortedSegments.map((seg, idx) => (
+              <SegmentCard
+                key={seg.id}
+                segment={seg}
+                index={idx}
+                task={latestTaskMap.get(seg.id)}
+                characterMap={characterMap}
+                characters={characters}
+                backgrounds={backgrounds}
+                videoMode={videoMode}
+                videoModel={videoModel}
+                videoResolution={videoResolution}
+                videoDuration={videoDuration}
+                videoPromptOptimizer={videoPromptOptimizer}
+                narrationStatus={narrationStatuses[seg.id]}
+                narrationUrl={narrationUrls[seg.id]}
+                isBGMEditing={bgmSegmentId === seg.id}
+                bgmPrompt={bgmPrompt}
+                bgmMode={bgmMode}
+                bgmLyrics={bgmLyrics}
+                bgmModel={bgmModel}
+                bgmCoverAudioUrl={bgmCoverAudioUrl}
+                isGeneratingBGM={isGeneratingBGM}
+                isGeneratingLyrics={isGeneratingLyrics}
+                suggestingBGMStyle={suggestingBGMStyle}
+                onSelectBackground={handleSelectBackground}
+                onGenerateVideo={handleGenerateVideo}
+                onGenerateNarration={handleGenerateNarration}
+                onRemoveBGM={handleRemoveBGM}
+                onBGMEditStart={() => { setBgmSegmentId(seg.id); setBgmMode('instrumental'); setBgmPrompt(''); setBgmLyrics(''); }}
+                onBGMEditCancel={() => { setBgmSegmentId(null); setBgmPrompt(''); setBgmLyrics(''); }}
+                onBgmPromptChange={setBgmPrompt}
+                onBgmModeChange={setBgmMode}
+                onBgmModelChange={setBgmModel}
+                onBgmLyricsChange={setBgmLyrics}
+                onBgmCoverAudioUrlChange={setBgmCoverAudioUrl}
+                onGenerateBGM={() => handleGenerateBGM(seg.id)}
+                onGenerateLyrics={handleGenerateLyrics}
+                onSuggestBGMStyle={handleSuggestBGMStyle}
+              />
+            ))}
           </div>
         )}
       </div>
