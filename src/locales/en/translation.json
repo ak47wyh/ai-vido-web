@@ -1,7 +1,9 @@
 {
   "common": {
     "cancel": "Cancel",
-    "confirm": "Confirm"
+    "confirm": "Confirm",
+    "expand": "Expand",
+    "collapse": "Collapse"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -75,7 +77,20 @@
     "deleteConfirmBtn": "Delete",
     "deleteSuccess": "Character deleted",
     "copyToSpace": "Copy to Space",
-    "copySuccess": "Copied to target space"
+    "copySuccess": "Copied to target space",
+    "generateImage": "AI Generate Portrait",
+    "generatingImage": "Generating...",
+    "generateImageFailed": "Portrait generation failed",
+    "generateImageSuccess": "Portrait generated",
+    "imageSourceGenerate": "AI Generate",
+    "aspectRatioLabel": "Aspect Ratio",
+    "aspectRatio1_1": "1:1 Square",
+    "aspectRatio16_9": "16:9 Landscape",
+    "aspectRatio4_3": "4:3 Landscape",
+    "aspectRatio3_4": "3:4 Portrait",
+    "aspectRatio9_16": "9:16 Portrait",
+    "generateBtn": "Generate",
+    "noPromptForImage": "Please fill in appearance or personality prompt first"
   },
   "background": {
     "title": "Background Management",
@@ -109,7 +124,20 @@
     "deleteConfirmBtn": "Delete",
     "deleteSuccess": "Background deleted",
     "copyToSpace": "Copy to Space",
-    "copySuccess": "Copied to target space"
+    "copySuccess": "Copied to target space",
+    "generateImage": "AI Generate Background",
+    "generatingImage": "Generating...",
+    "generateImageFailed": "Background generation failed",
+    "generateImageSuccess": "Background generated",
+    "imageSourceGenerate": "AI Generate",
+    "aspectRatioLabel": "Aspect Ratio",
+    "aspectRatio1_1": "1:1 Square",
+    "aspectRatio16_9": "16:9 Landscape",
+    "aspectRatio4_3": "4:3 Landscape",
+    "aspectRatio3_4": "3:4 Portrait",
+    "aspectRatio9_16": "9:16 Portrait",
+    "generateBtn": "Generate",
+    "noPromptForImage": "Please fill in environment prompt first"
   },
   "workbench": {
     "newStory": "New Story",
@@ -152,7 +180,8 @@
     "statusReady": "Ready",
     "noCharactersWarning": "No characters created yet. Segments won't auto-match characters.",
     "noBackgroundsWarning": "No backgrounds created yet. Cannot generate videos.",
-    "goCharacters": "Create Characters",
+    "goCharacters": "Go to Characters",
+    "downloadVideo": "Download Video",
     "goBackgrounds": "Create Backgrounds",
     "batchBgPlaceholder": "Batch set background...",
     "batchBgBtn": "Apply to All",
@@ -166,6 +195,8 @@
     "confirmReBreakdown": "Re-breakdown will delete existing segments and video tasks, and re-extract characters and backgrounds. Continue?",
     "breakdownResult": "Breakdown Result",
     "closePreview": "Close Preview",
+    "confirmClosePreviewTitle": "Discard Changes",
+    "confirmClosePreview": "Closing the preview will discard all edits. Are you sure?",
     "extractedCharacters": "Extracted Characters",
     "extractedBackgrounds": "Extracted Backgrounds",
     "breakdownSaved": "Auto-saved to character and background libraries. Edit details on their respective pages.",
@@ -179,10 +210,17 @@
     "draftPersonalityPlaceholder": "Personality description...",
     "draftBgNamePlaceholder": "Background name",
     "draftEnvPlaceholder": "Environment description...",
-    "breakdownEditHint": "Edit or remove unwanted characters and backgrounds. On apply, they will be saved to libraries. Existing same-name entities will not be overwritten.",
+    "breakdownEditHint": "Edit or remove unwanted characters and backgrounds. Confirm each item then click \"Apply\" — unconfirmed items won't be saved. Existing same-name entities will not be overwritten.",
+    "confirmDraft": "Confirm",
+    "unconfirmDraft": "Unconfirm",
+    "confirmAllDrafts": "Confirm All",
+    "unconfirmedCount": "{{count}} unconfirmed",
+    "confirmedCount": "{{count}} confirmed",
     "saveEditBtn": "Save Changes",
     "cancelBtn": "Cancel",
-    "editResetToDraft": "Story content modified — status reset to Draft, please re-split"
+    "editResetToDraft": "Story content modified — status reset to Draft, please re-split",
+    "generateDraftImage": "Generate Image",
+    "draftImageGenerated": "Image generated"
   },
   "space": {
     "title": "Story Space Management",
@@ -221,7 +259,7 @@
     "groupIdLabel": "Group ID",
     "groupIdPlaceholder": "Enter your MiniMax Group ID",
     "baseUrlLabel": "API Base URL",
-    "baseUrlPlaceholder": "https://api.minimax.chat/v1",
+    "baseUrlPlaceholder": "https://api.minimaxi.com/v1",
     "saveBtn": "Save Configuration",
     "savedMsg": "Configuration saved successfully",
     "mockBadge": "Mock Mode",

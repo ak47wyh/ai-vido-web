@@ -14,7 +14,7 @@ const STORAGE_KEY = 'ai_video_studio_api_config';
 const DEFAULT_CONFIG: ApiConfig = {
   minimaxApiKey: '',
   minimaxGroupId: '',
-  minimaxBaseUrl: 'https://api.minimax.chat/v1'
+  minimaxBaseUrl: 'https://api.minimaxi.com/v1'
 };
 
 export const ApiConfigStore = {

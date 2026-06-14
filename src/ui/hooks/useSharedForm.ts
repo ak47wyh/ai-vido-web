@@ -1,15 +1,18 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-type ImageInputMode = 'url' | 'upload';
+type ImageInputMode = 'url' | 'upload' | 'generate';
 
 const MAX_UPLOAD_SIZE_BYTES = 5 * 1024 * 1024;
 
-export function useImageUpload(prefix: 'character' | 'background') {
+type GenerateImageFn = (aspectRatio: string) => Promise<string>;
+
+export function useImageUpload(prefix: 'character' | 'background', generateFn?: GenerateImageFn) {
   const { t } = useTranslation();
   const [imageInputMode, setImageInputMode] = useState<ImageInputMode>('url');
   const [imageUrl, setImageUrl] = useState('');
   const [imageUploadError, setImageUploadError] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -42,6 +45,22 @@ export function useImageUpload(prefix: 'character' | 'background') {
     reader.readAsDataURL(file);
   };
 
+  const handleGenerateImage = async (aspectRatio: string = prefix === 'character' ? '1:1' : '16:9') => {
+    if (!generateFn) return;
+    setIsGenerating(true);
+    setImageUploadError('');
+    try {
+      const dataUri = await generateFn(aspectRatio);
+      setImageUrl(dataUri);
+      setImageInputMode('url');
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Image generation failed';
+      setImageUploadError(message);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const switchImageMode = (mode: ImageInputMode) => {
     setImageInputMode(mode);
     setImageUploadError('');
@@ -52,14 +71,17 @@ export function useImageUpload(prefix: 'character' | 'background') {
     setImageInputMode('url');
     setImageUrl('');
     setImageUploadError('');
+    setIsGenerating(false);
   };
 
   return {
     imageInputMode,
     imageUrl,
     imageUploadError,
+    isGenerating,
     setImageUrl,
     handleImageUpload,
+    handleGenerateImage,
     switchImageMode,
     resetImageState,
   };

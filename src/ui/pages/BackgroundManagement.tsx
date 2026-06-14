@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../adapters/outbound/repositories/DexieDatabase';
-import { backgroundRepo, storyService, storySpaceService } from '../../dependencies';
+import { backgroundRepo, storyService, storySpaceService, imageGenerationService, imageAdapter } from '../../dependencies';
 import { v4 as uuidv4 } from 'uuid';
-import { Pencil, Plus, Trash2, Copy, Image as ImageIcon } from 'lucide-react';
+import { Pencil, Plus, Trash2, Copy, Image as ImageIcon, ChevronDown, ChevronUp, Sparkles, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { Background } from '../../domain/entities/models';
 import { useSpace } from '../contexts/SpaceContext';
@@ -22,8 +22,19 @@ export const BackgroundManagement: React.FC = () => {
   const [editingBackgroundId, setEditingBackgroundId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [environmentPrompt, setEnvironmentPrompt] = useState('');
-  const { imageInputMode, imageUrl, imageUploadError, setImageUrl, handleImageUpload, switchImageMode, resetImageState } = useImageUpload('background');
+  const [generatingBgId, setGeneratingBgId] = useState<string | null>(null);
+  const [generateAspectRatio, setGenerateAspectRatio] = useState('16:9');
+  const { imageInputMode, imageUrl, imageUploadError, isGenerating, setImageUrl, handleImageUpload, switchImageMode, resetImageState } = useImageUpload('background');
   const { copyingId, copyTargetSpaceId, setCopyTargetSpaceId, startCopy, finishCopy } = useCopyToSpace();
+  const [expandedFields, setExpandedFields] = useState<Set<string>>(new Set());
+
+  const toggleExpand = useCallback((key: string) => {
+    setExpandedFields(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }, []);
 
   const resetForm = () => {
     setEditingBackgroundId(null);
@@ -96,6 +107,19 @@ export const BackgroundManagement: React.FC = () => {
 
   const otherSpaces = allSpaces?.filter(s => s.id !== currentSpaceId) ?? [];
 
+  const handleGenerateBackgroundImage = async (bgId: string) => {
+    setGeneratingBgId(bgId);
+    try {
+      await imageGenerationService.generateBackgroundImage(bgId, generateAspectRatio);
+      showToast('success', t('background.generateImageSuccess'));
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : t('background.generateImageFailed');
+      showToast('error', message);
+    } finally {
+      setGeneratingBgId(null);
+    }
+  };
+
   return (
     <div>
       <div className="page-header">
@@ -126,10 +150,11 @@ export const BackgroundManagement: React.FC = () => {
             <select
               className="form-select"
               value={imageInputMode}
-              onChange={e => switchImageMode(e.target.value as 'url' | 'upload')}
+              onChange={e => switchImageMode(e.target.value as 'url' | 'upload' | 'generate')}
             >
               <option value="url">{t('background.imageSourceUrl')}</option>
               <option value="upload">{t('background.imageSourceUpload')}</option>
+              <option value="generate">{t('background.imageSourceGenerate')}</option>
             </select>
           </div>
           {imageInputMode === 'url' ? (
@@ -137,13 +162,46 @@ export const BackgroundManagement: React.FC = () => {
               <label className="form-label">{t('background.imageLabel')}</label>
               <input className="form-input" value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder={t('background.imagePlaceholder')} />
             </div>
-          ) : (
+          ) : imageInputMode === 'upload' ? (
             <div className="form-group">
               <label className="form-label">{t('background.uploadLabel')}</label>
               <input className="form-input" type="file" accept="image/*" onChange={handleImageUpload} />
               {imageUploadError && (
                 <p style={{ marginTop: '0.5rem', color: 'lightcoral', fontSize: '0.875rem' }}>{imageUploadError}</p>
               )}
+            </div>
+          ) : (
+            <div className="form-group">
+              <label className="form-label">{t('background.aspectRatioLabel')}</label>
+              <select className="form-select" value={generateAspectRatio} onChange={e => setGenerateAspectRatio(e.target.value)}>
+                <option value="16:9">{t('background.aspectRatio16_9')}</option>
+                <option value="1:1">{t('background.aspectRatio1_1')}</option>
+                <option value="4:3">{t('background.aspectRatio4_3')}</option>
+                <option value="3:4">{t('background.aspectRatio3_4')}</option>
+                <option value="9:16">{t('background.aspectRatio9_16')}</option>
+              </select>
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                disabled={isGenerating || !environmentPrompt.trim()}
+                onClick={async () => {
+                  if (!environmentPrompt.trim()) {
+                    showToast('warning', t('background.noPromptForImage'));
+                    return;
+                  }
+                  try {
+                    const result = await imageAdapter.generateImage({ prompt: environmentPrompt.trim(), aspectRatio: generateAspectRatio });
+                    setImageUrl(result.imageDataUri);
+                  } catch (err: unknown) {
+                    const msg = err instanceof Error ? err.message : 'Image generation failed';
+                    showToast('error', msg);
+                  }
+                }}
+              >
+                <Sparkles size={14} />
+                {isGenerating ? t('background.generatingImage') : t('background.generateBtn')}
+              </button>
             </div>
           )}
           {imageUrl && (
@@ -177,8 +235,27 @@ export const BackgroundManagement: React.FC = () => {
               />
             )}
             <h3 style={{ marginBottom: '0.5rem' }}>{bg.name}</h3>
-            <p style={{ fontSize: '0.875rem', marginBottom: '0.5rem', opacity: 0.8 }}><strong>{t('background.environment')}</strong> {bg.environmentPrompt || 'N/A'}</p>
+            {bg.environmentPrompt && (
+              <div style={{ fontSize: '0.875rem', marginBottom: '0.5rem', opacity: 0.8 }}>
+                <strong>{t('background.environment')}</strong>
+                <span style={expandedFields.has(`${bg.id}-env`) ? undefined : { display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{bg.environmentPrompt}</span>
+                {bg.environmentPrompt.length > 80 && (
+                  <button onClick={() => toggleExpand(`${bg.id}-env`)} style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.75rem', padding: '0 0.25rem', verticalAlign: 'middle' }}>
+                    {expandedFields.has(`${bg.id}-env`) ? <><ChevronUp size={12} /> {t('common.collapse')}</> : <><ChevronDown size={12} /> {t('common.expand')}</>}
+                  </button>
+                )}
+              </div>
+            )}
             <div style={{ position: 'absolute', top: '1rem', right: '1rem', display: 'flex', gap: '0.5rem' }}>
+              <button
+                className="btn btn-secondary"
+                style={{ padding: '0.4rem', border: 'none', color: '#f472b6' }}
+                onClick={() => handleGenerateBackgroundImage(bg.id)}
+                disabled={generatingBgId === bg.id}
+                title={t('background.generateImage')}
+              >
+                {generatingBgId === bg.id ? <RefreshCw size={16} className="spin" /> : <Sparkles size={16} />}
+              </button>
               <button
                 className="btn btn-secondary"
                 style={{ padding: '0.4rem', border: 'none' }}

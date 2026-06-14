@@ -104,7 +104,7 @@ export const Dashboard: React.FC = () => {
 
       {/* Workflow guide cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1.5rem', marginTop: '1rem' }}>
-        {steps.map((step) => (
+        {steps.map((step, index) => (
           <div
             key={step.path}
             className="glass-panel interactive"
@@ -115,9 +115,17 @@ export const Dashboard: React.FC = () => {
               <div style={{
                 width: '40px', height: '40px', borderRadius: 'var(--radius-md)',
                 background: `${step.color}20`, color: step.color,
-                display: 'flex', alignItems: 'center', justifyContent: 'center'
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                position: 'relative'
               }}>
                 {step.icon}
+                <span style={{
+                  position: 'absolute', top: '-6px', right: '-6px',
+                  width: '18px', height: '18px', borderRadius: '50%',
+                  background: step.color, color: '#fff',
+                  fontSize: '0.65rem', fontWeight: 700,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}>{index + 1}</span>
               </div>
               <h3 style={{ fontSize: '1rem', margin: 0 }}>{step.title}</h3>
             </div>

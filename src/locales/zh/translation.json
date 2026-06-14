@@ -1,7 +1,9 @@
 {
   "common": {
     "cancel": "取消",
-    "confirm": "确认"
+    "confirm": "确认",
+    "expand": "展开",
+    "collapse": "收起"
   },
   "nav": {
     "dashboard": "控制台",
@@ -75,7 +77,20 @@
     "deleteConfirmBtn": "删除",
     "deleteSuccess": "角色已删除",
     "copyToSpace": "复制到空间",
-    "copySuccess": "已复制到目标空间"
+    "copySuccess": "已复制到目标空间",
+    "generateImage": "AI 生成形象",
+    "generatingImage": "生成中...",
+    "generateImageFailed": "形象图生成失败",
+    "generateImageSuccess": "形象图已生成",
+    "imageSourceGenerate": "AI 生成",
+    "aspectRatioLabel": "宽高比",
+    "aspectRatio1_1": "1:1 正方形",
+    "aspectRatio16_9": "16:9 横屏",
+    "aspectRatio4_3": "4:3 横屏",
+    "aspectRatio3_4": "3:4 竖屏",
+    "aspectRatio9_16": "9:16 竖屏",
+    "generateBtn": "生成",
+    "noPromptForImage": "请先填写外貌描述或性格描述"
   },
   "background": {
     "title": "背景管理",
@@ -109,7 +124,20 @@
     "deleteConfirmBtn": "删除",
     "deleteSuccess": "背景已删除",
     "copyToSpace": "复制到空间",
-    "copySuccess": "已复制到目标空间"
+    "copySuccess": "已复制到目标空间",
+    "generateImage": "AI 生成背景",
+    "generatingImage": "生成中...",
+    "generateImageFailed": "背景图生成失败",
+    "generateImageSuccess": "背景图已生成",
+    "imageSourceGenerate": "AI 生成",
+    "aspectRatioLabel": "宽高比",
+    "aspectRatio1_1": "1:1 正方形",
+    "aspectRatio16_9": "16:9 横屏",
+    "aspectRatio4_3": "4:3 横屏",
+    "aspectRatio3_4": "3:4 竖屏",
+    "aspectRatio9_16": "9:16 竖屏",
+    "generateBtn": "生成",
+    "noPromptForImage": "请先填写环境描述"
   },
   "workbench": {
     "newStory": "新建故事",
@@ -152,7 +180,8 @@
     "statusReady": "待生成",
     "noCharactersWarning": "尚未创建角色，分镜将无法自动匹配角色。",
     "noBackgroundsWarning": "尚未创建背景，无法生成视频。",
-    "goCharacters": "去创建角色",
+    "goCharacters": "前往角色管理",
+    "downloadVideo": "下载视频",
     "goBackgrounds": "去创建背景",
     "batchBgPlaceholder": "批量设置背景...",
     "batchBgBtn": "应用到全部",
@@ -166,6 +195,8 @@
     "confirmReBreakdown": "重新拆解将删除现有分镜和视频任务，并重新提取角色和背景。确定继续？",
     "breakdownResult": "拆解结果",
     "closePreview": "关闭预览",
+    "confirmClosePreviewTitle": "放弃编辑",
+    "confirmClosePreview": "关闭预览将丢弃所有编辑，确定放弃？",
     "extractedCharacters": "提取的角色",
     "extractedBackgrounds": "提取的背景",
     "breakdownSaved": "已自动保存到角色库和背景库，可在对应页面编辑详情。",
@@ -179,10 +210,17 @@
     "draftPersonalityPlaceholder": "性格描述...",
     "draftBgNamePlaceholder": "背景名称",
     "draftEnvPlaceholder": "环境描述...",
-    "breakdownEditHint": "编辑或删除不需要的角色和背景，确认后将保存到角色库和背景库。已存在的同名角色/背景不会被覆盖。",
+    "breakdownEditHint": "编辑或删除不需要的角色和背景。逐条确认后点击「确认应用」，未确认的记录不会被保存。已存在的同名角色/背景不会被覆盖。",
+    "confirmDraft": "确认",
+    "unconfirmDraft": "取消确认",
+    "confirmAllDrafts": "全部确认",
+    "unconfirmedCount": "{{count}} 条未确认",
+    "confirmedCount": "{{count}} 条已确认",
     "saveEditBtn": "保存修改",
     "cancelBtn": "取消",
-    "editResetToDraft": "故事内容已修改，状态已重置为草稿，需重新拆分"
+    "editResetToDraft": "故事内容已修改，状态已重置为草稿，需重新拆分",
+    "generateDraftImage": "生成图片",
+    "draftImageGenerated": "图片已生成"
   },
   "space": {
     "title": "故事空间管理",
@@ -221,7 +259,7 @@
     "groupIdLabel": "Group ID",
     "groupIdPlaceholder": "输入 MiniMax Group ID",
     "baseUrlLabel": "API Base URL",
-    "baseUrlPlaceholder": "https://api.minimax.chat/v1",
+    "baseUrlPlaceholder": "https://api.minimaxi.com/v1",
     "saveBtn": "保存配置",
     "savedMsg": "配置已保存",
     "mockBadge": "模拟模式",

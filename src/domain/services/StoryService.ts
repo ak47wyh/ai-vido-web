@@ -152,6 +152,7 @@ export class StoryService {
           appearancePrompt: draft.appearancePrompt,
           personalityPrompt: draft.personalityPrompt,
           characterBackground: draft.characterBackground,
+          referenceImageUrl: draft.referenceImageUrl,
           createdAt: Date.now()
         };
         await this.characterRepo.save(character);
@@ -173,6 +174,7 @@ export class StoryService {
           spaceId: story.spaceId,
           name: draft.name,
           environmentPrompt: draft.environmentPrompt,
+          referenceImageUrl: draft.referenceImageUrl,
           createdAt: Date.now()
         };
         await this.backgroundRepo.save(background);

@@ -85,11 +85,13 @@ export interface CharacterDraft {
   appearancePrompt: string;
   personalityPrompt: string;
   characterBackground: string;
+  referenceImageUrl?: string;
 }
 
 export interface BackgroundDraft {
   name: string;
   environmentPrompt: string;
+  referenceImageUrl?: string;
 }
 
 export interface BreakdownSegmentDraft {
@@ -106,4 +108,20 @@ export interface StoryBreakdownResult {
 
 export interface IStoryBreakdownPort {
   breakdownStory(text: string): Promise<StoryBreakdownResult>;
+}
+
+// --- Image Generation ---
+
+export interface ImageGenerationContext {
+  prompt: string;
+  aspectRatio: string;
+  subjectReferenceUrl?: string;
+}
+
+export interface ImageGenerationResult {
+  imageDataUri: string;
+}
+
+export interface IImageGeneratorPort {
+  generateImage(context: ImageGenerationContext): Promise<ImageGenerationResult>;
 }

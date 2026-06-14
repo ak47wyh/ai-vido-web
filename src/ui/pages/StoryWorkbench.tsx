@@ -1,12 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../adapters/outbound/repositories/DexieDatabase';
-import { storyService, videoGenerationService } from '../../dependencies';
-import { Play, Spline, Trash2, RefreshCw, Users, PlayCircle, AlertTriangle, ImagePlus, Sparkles, Pencil, BookOpen } from 'lucide-react';
+import { storyService, videoGenerationService, imageAdapter } from '../../dependencies';
+import { Play, Spline, Trash2, RefreshCw, Users, PlayCircle, AlertTriangle, ImagePlus, Sparkles, Pencil, BookOpen, Download, Check, CheckCircle2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { VideoTask, Character } from '../../domain/entities/models';
-import type { CharacterDraft, BackgroundDraft, BreakdownSegmentDraft } from '../../domain/ports/OutboundPorts';
+import type { CharacterDraft, BackgroundDraft, BreakdownSegmentDraft, ImageGenerationContext } from '../../domain/ports/OutboundPorts';
 import { useSpace } from '../contexts/SpaceContext';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -37,6 +37,8 @@ export const StoryWorkbench: React.FC = () => {
   const [draftSegments, setDraftSegments] = useState<BreakdownSegmentDraft[]>([]);
   const [showBreakdownPreview, setShowBreakdownPreview] = useState(false);
   const [isApplyingBreakdown, setIsApplyingBreakdown] = useState(false);
+  const [confirmedCharIndices, setConfirmedCharIndices] = useState<Set<number>>(new Set());
+  const [confirmedBgIndices, setConfirmedBgIndices] = useState<Set<number>>(new Set());
   const [editingStoryId, setEditingStoryId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editOriginalText, setEditOriginalText] = useState('');
@@ -133,6 +135,8 @@ export const StoryWorkbench: React.FC = () => {
     setDraftBackgrounds([]);
     setDraftSegments([]);
     setShowBreakdownPreview(false);
+    setConfirmedCharIndices(new Set());
+    setConfirmedBgIndices(new Set());
     try {
       const story = await storyService.createStory(title, originalText, currentSpaceId);
       setSelectedStoryId(story.id);
@@ -165,6 +169,8 @@ export const StoryWorkbench: React.FC = () => {
     setDraftBackgrounds([]);
     setDraftSegments([]);
     setShowBreakdownPreview(false);
+    setConfirmedCharIndices(new Set());
+    setConfirmedBgIndices(new Set());
     try {
       const result = await storyService.previewBreakdown(selectedStoryId);
       setDraftCharacters(result.characters);
@@ -212,6 +218,14 @@ export const StoryWorkbench: React.FC = () => {
   const removeDraftCharacter = (index: number) => {
     const name = draftCharacters[index].name;
     setDraftCharacters(prev => prev.filter((_, i) => i !== index));
+    setConfirmedCharIndices(prev => {
+      const next = new Set<number>();
+      for (const i of prev) {
+        if (i < index) next.add(i);
+        else if (i > index) next.add(i - 1);
+      }
+      return next;
+    });
     setDraftSegments(prev => prev.map(seg => ({
       ...seg,
       mentionedCharacterNames: seg.mentionedCharacterNames.filter(n => n !== name)
@@ -237,21 +251,50 @@ export const StoryWorkbench: React.FC = () => {
   const removeDraftBackground = (index: number) => {
     const name = draftBackgrounds[index].name;
     setDraftBackgrounds(prev => prev.filter((_, i) => i !== index));
+    setConfirmedBgIndices(prev => {
+      const next = new Set<number>();
+      for (const i of prev) {
+        if (i < index) next.add(i);
+        else if (i > index) next.add(i - 1);
+      }
+      return next;
+    });
     setDraftSegments(prev => prev.map(seg => ({
       ...seg,
       suggestedBackgroundName: seg.suggestedBackgroundName === name ? '' : seg.suggestedBackgroundName
     })));
   };
 
+  const handleCloseBreakdownPreview = async () => {
+    const ok = await confirm({
+      title: t('workbench.confirmClosePreviewTitle'),
+      message: t('workbench.confirmClosePreview'),
+      confirmLabel: t('workbench.closePreview'),
+      danger: true
+    });
+    if (!ok) return;
+    setShowBreakdownPreview(false);
+    setDraftCharacters([]);
+    setDraftBackgrounds([]);
+    setDraftSegments([]);
+    setConfirmedCharIndices(new Set());
+    setConfirmedBgIndices(new Set());
+  };
+
   const handleApplyBreakdown = async () => {
     if (!selectedStoryId) return;
     setIsApplyingBreakdown(true);
     try {
-      await storyService.applyBreakdown(selectedStoryId, draftCharacters, draftBackgrounds, draftSegments);
+      // Only apply confirmed drafts
+      const confirmedChars = draftCharacters.filter((_, i) => confirmedCharIndices.has(i));
+      const confirmedBgs = draftBackgrounds.filter((_, i) => confirmedBgIndices.has(i));
+      await storyService.applyBreakdown(selectedStoryId, confirmedChars, confirmedBgs, draftSegments);
       setShowBreakdownPreview(false);
       setDraftCharacters([]);
       setDraftBackgrounds([]);
       setDraftSegments([]);
+      setConfirmedCharIndices(new Set());
+      setConfirmedBgIndices(new Set());
       showToast('success', t('workbench.breakdownApplied'));
     } catch (e) {
       console.error(e);
@@ -552,11 +595,11 @@ export const StoryWorkbench: React.FC = () => {
                   className="btn btn-primary"
                   style={{ fontSize: '0.8rem', padding: '0.4rem 1rem', background: 'linear-gradient(135deg, #6366f1, #ec4899)' }}
                   onClick={handleApplyBreakdown}
-                  disabled={isApplyingBreakdown}
+                  disabled={isApplyingBreakdown || (confirmedCharIndices.size === 0 && confirmedBgIndices.size === 0)}
                 >
                   {isApplyingBreakdown ? t('workbench.applying') : t('workbench.applyBreakdownBtn')}
                 </button>
-                <button className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.8rem' }} onClick={() => setShowBreakdownPreview(false)}>
+                <button className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.8rem' }} onClick={handleCloseBreakdownPreview}>
                   {t('workbench.closePreview')}
                 </button>
               </div>
@@ -565,16 +608,37 @@ export const StoryWorkbench: React.FC = () => {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1rem' }}>
               {/* Editable character cards */}
               <div>
-                <h4 style={{ fontSize: '0.85rem', color: '#818cf8', marginBottom: '0.5rem' }}>
-                  <Users size={14} style={{ verticalAlign: 'middle', marginRight: '0.3rem' }} />
-                  {t('workbench.extractedCharacters')} ({draftCharacters.length})
-                </h4>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <h4 style={{ fontSize: '0.85rem', color: '#818cf8', margin: 0 }}>
+                    <Users size={14} style={{ verticalAlign: 'middle', marginRight: '0.3rem' }} />
+                    {t('workbench.extractedCharacters')} ({draftCharacters.length})
+                  </h4>
+                  {draftCharacters.length > 0 && (
+                    <button
+                      className="btn btn-secondary"
+                      style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem' }}
+                      onClick={() => {
+                        if (confirmedCharIndices.size === draftCharacters.length) {
+                          setConfirmedCharIndices(new Set());
+                        } else {
+                          setConfirmedCharIndices(new Set(draftCharacters.map((_, i) => i)));
+                        }
+                      }}
+                    >
+                      <Check size={12} /> {t('workbench.confirmAllDrafts')}
+                    </button>
+                  )}
+                </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  {draftCharacters.map((c, i) => (
+                  {draftCharacters.map((c, i) => {
+                    const isConfirmed = confirmedCharIndices.has(i);
+                    return (
                     <div key={i} style={{
                       padding: '0.75rem', borderRadius: 'var(--radius-md)',
-                      background: 'rgba(99,102,241,0.1)', fontSize: '0.8rem',
-                      border: '1px solid rgba(99,102,241,0.2)'
+                      background: isConfirmed ? 'rgba(52,211,153,0.1)' : 'rgba(99,102,241,0.1)',
+                      fontSize: '0.8rem',
+                      border: isConfirmed ? '1px solid rgba(52,211,153,0.4)' : '1px solid rgba(99,102,241,0.2)',
+                      transition: 'all 0.2s'
                     }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                         <input
@@ -584,14 +648,34 @@ export const StoryWorkbench: React.FC = () => {
                           onChange={e => updateDraftCharacter(i, 'name', e.target.value)}
                           placeholder={t('workbench.draftCharNamePlaceholder')}
                         />
-                        <button
-                          className="btn btn-secondary"
-                          style={{ padding: '0.2rem', border: 'none', color: '#f87171' }}
-                          onClick={() => removeDraftCharacter(i)}
-                          title={t('workbench.removeDraft')}
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        <div style={{ display: 'flex', gap: '0.25rem' }}>
+                          <button
+                            className="btn btn-secondary"
+                            style={{
+                              padding: '0.2rem 0.4rem', border: 'none',
+                              color: isConfirmed ? '#34d399' : '#818cf8',
+                              background: isConfirmed ? 'rgba(52,211,153,0.15)' : 'rgba(99,102,241,0.15)'
+                            }}
+                            onClick={() => {
+                              setConfirmedCharIndices(prev => {
+                                const next = new Set(prev);
+                                if (next.has(i)) next.delete(i); else next.add(i);
+                                return next;
+                              });
+                            }}
+                            title={isConfirmed ? t('workbench.unconfirmDraft') : t('workbench.confirmDraft')}
+                          >
+                            {isConfirmed ? <CheckCircle2 size={14} /> : <Check size={14} />}
+                          </button>
+                          <button
+                            className="btn btn-secondary"
+                            style={{ padding: '0.2rem', border: 'none', color: '#f87171' }}
+                            onClick={() => removeDraftCharacter(i)}
+                            title={t('workbench.removeDraft')}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </div>
                       <textarea
                         className="form-textarea"
@@ -607,23 +691,76 @@ export const StoryWorkbench: React.FC = () => {
                         onChange={e => updateDraftCharacter(i, 'personalityPrompt', e.target.value)}
                         placeholder={t('workbench.draftPersonalityPlaceholder')}
                       />
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', marginTop: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                        disabled={!c.appearancePrompt && !c.personalityPrompt}
+                        onClick={async () => {
+                          try {
+                            const context: ImageGenerationContext = {
+                              prompt: [c.appearancePrompt, c.personalityPrompt].filter(Boolean).join(', '),
+                              aspectRatio: '1:1',
+                            };
+                            const result = await imageAdapter.generateImage(context);
+                            // 使用 referenceImageUrl 存储（CharacterDraft 已扩展）
+                            setDraftCharacters(prev => {
+                              const next = [...prev];
+                              next[i] = { ...next[i], referenceImageUrl: result.imageDataUri };
+                              return next;
+                            });
+                            showToast('success', t('workbench.draftImageGenerated'));
+                          } catch (e: unknown) {
+                            showToast('error', e instanceof Error ? e.message : t('workbench.breakdownApplyFailed'));
+                          }
+                        }}
+                      >
+                        <Sparkles size={12} /> {t('workbench.generateDraftImage')}
+                      </button>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
+                {draftCharacters.length > 0 && (
+                  <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.4rem' }}>
+                    {t('workbench.confirmedCount', { count: confirmedCharIndices.size })} / {t('workbench.unconfirmedCount', { count: draftCharacters.length - confirmedCharIndices.size })}
+                  </p>
+                )}
               </div>
 
               {/* Editable background cards */}
               <div>
-                <h4 style={{ fontSize: '0.85rem', color: '#f472b6', marginBottom: '0.5rem' }}>
-                  <ImagePlus size={14} style={{ verticalAlign: 'middle', marginRight: '0.3rem' }} />
-                  {t('workbench.extractedBackgrounds')} ({draftBackgrounds.length})
-                </h4>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <h4 style={{ fontSize: '0.85rem', color: '#f472b6', margin: 0 }}>
+                    <ImagePlus size={14} style={{ verticalAlign: 'middle', marginRight: '0.3rem' }} />
+                    {t('workbench.extractedBackgrounds')} ({draftBackgrounds.length})
+                  </h4>
+                  {draftBackgrounds.length > 0 && (
+                    <button
+                      className="btn btn-secondary"
+                      style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem' }}
+                      onClick={() => {
+                        if (confirmedBgIndices.size === draftBackgrounds.length) {
+                          setConfirmedBgIndices(new Set());
+                        } else {
+                          setConfirmedBgIndices(new Set(draftBackgrounds.map((_, i) => i)));
+                        }
+                      }}
+                    >
+                      <Check size={12} /> {t('workbench.confirmAllDrafts')}
+                    </button>
+                  )}
+                </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  {draftBackgrounds.map((bg, i) => (
+                  {draftBackgrounds.map((bg, i) => {
+                    const isConfirmed = confirmedBgIndices.has(i);
+                    return (
                     <div key={i} style={{
                       padding: '0.75rem', borderRadius: 'var(--radius-md)',
-                      background: 'rgba(236,72,153,0.1)', fontSize: '0.8rem',
-                      border: '1px solid rgba(236,72,153,0.2)'
+                      background: isConfirmed ? 'rgba(52,211,153,0.1)' : 'rgba(236,72,153,0.1)',
+                      fontSize: '0.8rem',
+                      border: isConfirmed ? '1px solid rgba(52,211,153,0.4)' : '1px solid rgba(236,72,153,0.2)',
+                      transition: 'all 0.2s'
                     }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                         <input
@@ -633,14 +770,34 @@ export const StoryWorkbench: React.FC = () => {
                           onChange={e => updateDraftBackground(i, 'name', e.target.value)}
                           placeholder={t('workbench.draftBgNamePlaceholder')}
                         />
-                        <button
-                          className="btn btn-secondary"
-                          style={{ padding: '0.2rem', border: 'none', color: '#f87171' }}
-                          onClick={() => removeDraftBackground(i)}
-                          title={t('workbench.removeDraft')}
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        <div style={{ display: 'flex', gap: '0.25rem' }}>
+                          <button
+                            className="btn btn-secondary"
+                            style={{
+                              padding: '0.2rem 0.4rem', border: 'none',
+                              color: isConfirmed ? '#34d399' : '#f472b6',
+                              background: isConfirmed ? 'rgba(52,211,153,0.15)' : 'rgba(236,72,153,0.15)'
+                            }}
+                            onClick={() => {
+                              setConfirmedBgIndices(prev => {
+                                const next = new Set(prev);
+                                if (next.has(i)) next.delete(i); else next.add(i);
+                                return next;
+                              });
+                            }}
+                            title={isConfirmed ? t('workbench.unconfirmDraft') : t('workbench.confirmDraft')}
+                          >
+                            {isConfirmed ? <CheckCircle2 size={14} /> : <Check size={14} />}
+                          </button>
+                          <button
+                            className="btn btn-secondary"
+                            style={{ padding: '0.2rem', border: 'none', color: '#f87171' }}
+                            onClick={() => removeDraftBackground(i)}
+                            title={t('workbench.removeDraft')}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </div>
                       <textarea
                         className="form-textarea"
@@ -649,9 +806,41 @@ export const StoryWorkbench: React.FC = () => {
                         onChange={e => updateDraftBackground(i, 'environmentPrompt', e.target.value)}
                         placeholder={t('workbench.draftEnvPlaceholder')}
                       />
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', marginTop: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                        disabled={!bg.environmentPrompt}
+                        onClick={async () => {
+                          try {
+                            const context: ImageGenerationContext = {
+                              prompt: bg.environmentPrompt,
+                              aspectRatio: '16:9',
+                            };
+                            const result = await imageAdapter.generateImage(context);
+                            // 使用 referenceImageUrl 存储（BackgroundDraft 已扩展）
+                            setDraftBackgrounds(prev => {
+                              const next = [...prev];
+                              next[i] = { ...next[i], referenceImageUrl: result.imageDataUri };
+                              return next;
+                            });
+                            showToast('success', t('workbench.draftImageGenerated'));
+                          } catch (e: unknown) {
+                            showToast('error', e instanceof Error ? e.message : t('workbench.breakdownApplyFailed'));
+                          }
+                        }}
+                      >
+                        <Sparkles size={12} /> {t('workbench.generateDraftImage')}
+                      </button>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
+                {draftBackgrounds.length > 0 && (
+                  <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.4rem' }}>
+                    {t('workbench.confirmedCount', { count: confirmedBgIndices.size })} / {t('workbench.unconfirmedCount', { count: draftBackgrounds.length - confirmedBgIndices.size })}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -783,8 +972,12 @@ export const StoryWorkbench: React.FC = () => {
                             padding: '0.2rem 0.6rem', borderRadius: '999px',
                             fontSize: '0.75rem', fontWeight: 500,
                             background: 'rgba(99,102,241,0.15)', color: '#818cf8',
-                            border: '1px solid rgba(99,102,241,0.25)'
-                          }}>
+                            border: '1px solid rgba(99,102,241,0.25)',
+                            cursor: 'pointer', transition: 'all 0.15s'
+                          }}
+                            onClick={() => navigate('/characters')}
+                            title={t('workbench.goCharacters')}
+                          >
                             <Users size={12} /> {name}
                           </span>
                         ))}
@@ -851,6 +1044,19 @@ export const StoryWorkbench: React.FC = () => {
                     {task?.status === 'SUCCESS' && task.videoUrl && (
                       <div style={{ marginTop: '1.5rem' }}>
                         <video src={task.videoUrl} controls style={{ width: '100%', maxHeight: '300px', borderRadius: 'var(--radius-md)' }} />
+                        <a
+                          href={task.videoUrl}
+                          download
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+                            marginTop: '0.75rem', fontSize: '0.8rem', color: 'var(--primary-color)',
+                            textDecoration: 'none'
+                          }}
+                        >
+                          <Download size={14} /> {t('workbench.downloadVideo')}
+                        </a>
                       </div>
                     )}
                   </div>
