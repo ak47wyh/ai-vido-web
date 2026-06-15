@@ -269,9 +269,37 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
       responseType: 'arraybuffer',
     });
 
-    const contentType = String(response.headers?.['content-type'] || 'audio/mpeg');
-    const blob = new Blob([response.data], { type: contentType });
+    // 验证响应是否为音频数据（而非 JSON 错误响应）
+    const contentType = String(response.headers?.['content-type'] || '');
+    const data = response.data as ArrayBuffer;
+
+    // 如果响应是 JSON（错误响应），解析错误信息
+    if (contentType.includes('application/json') || (data.byteLength < 1024 && this.isJsonArrayBuffer(data))) {
+      const text = new TextDecoder().decode(data);
+      let parsed: Record<string, unknown>;
+      try { parsed = JSON.parse(text); } catch { /* ignore */ }
+      if (parsed) {
+        const statusCode = (parsed?.base_resp as Record<string, unknown>)?.status_code;
+        const statusMsg = (parsed?.base_resp as Record<string, unknown>)?.status_msg;
+        const errorMsg = getMiniMaxErrorMessage(statusCode as number, statusMsg as string, 'Audio fetch error');
+        throw new Error(errorMsg || `Audio fetch failed: ${text.substring(0, 200)}`);
+      }
+    }
+
+    // 确定正确的 MIME type：优先使用响应头，降级为 audio/mpeg
+    const audioContentType = contentType.startsWith('audio/') ? contentType : 'audio/mpeg';
+    const blob = new Blob([data], { type: audioContentType });
     return URL.createObjectURL(blob);
+  }
+
+  /** 检测 ArrayBuffer 是否为 JSON 内容 */
+  private isJsonArrayBuffer(data: ArrayBuffer): boolean {
+    try {
+      const text = new TextDecoder().decode(data);
+      return text.trimStart().startsWith('{') || text.trimStart().startsWith('[');
+    } catch {
+      return false;
+    }
   }
 
   // --- Synchronous T2A ---
@@ -333,8 +361,15 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
     const error = getMiniMaxErrorMessage(statusCode, data?.base_resp?.status_msg, 'MiniMax Sync T2A error');
     if (error) throw new Error(error);
 
-    const audioUrl = data?.data?.audio_url;
-    const audioHex = data?.data?.audio;
+    // 音频数据解析：hex 优先（最可靠），URL 降级
+    // MiniMax API 响应结构：
+    //   - data.audio: hex 编码音频（output_format='hex' 时）或 URL 字符串（output_format='url' 时）
+    //   - data.audio_url: 部分版本返回的 URL 字段
+    //   - extra_info.audio_url: 部分版本返回的 URL 字段
+    const rawAudio = data?.data?.audio;
+    const audioUrl = data?.data?.audio_url || data?.extra_info?.audio_url;
+    const audioHex = (rawAudio && !rawAudio.startsWith('http')) ? rawAudio : undefined;
+    const resolvedAudioUrl = (rawAudio && rawAudio.startsWith('http')) ? rawAudio : audioUrl;
     const extraInfo = data?.extra_info;
 
     // 解析字幕
@@ -349,7 +384,7 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
     }
 
     return {
-      audioUrl,
+      audioUrl: resolvedAudioUrl,
       audioHex,
       audioLength: extraInfo?.audio_length,
       audioSize: extraInfo?.audio_size,

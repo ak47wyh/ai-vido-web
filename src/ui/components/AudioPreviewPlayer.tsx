@@ -10,10 +10,12 @@
  * - 下载按钮
  * - 自动播放支持
  * - 加载状态
+ * - 自动重试（最多 2 次）
+ * - 延迟错误显示（避免短暂加载失败误报）
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Play, Pause, Download, Volume2, VolumeX, Loader2 } from 'lucide-react';
+import { Play, Pause, Download, Volume2, VolumeX, Loader2, AlertCircle, RotateCw } from 'lucide-react';
 
 interface AudioPreviewPlayerProps {
   /** 音频 Blob URL 或可访问的音频 URL */
@@ -46,6 +48,9 @@ function formatTime(seconds: number): string {
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
 
+const MAX_RETRY = 2;
+const ERROR_DELAY_MS = 3000;
+
 export const AudioPreviewPlayer: React.FC<AudioPreviewPlayerProps> = ({
   src,
   autoPlay = false,
@@ -70,13 +75,97 @@ export const AudioPreviewPlayer: React.FC<AudioPreviewPlayerProps> = ({
   const [isMuted, setIsMuted] = useState(false);
   const [waveformData, setWaveformData] = useState<number[]>([]);
   const [audioError, setAudioError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const [canPlayReady, setCanPlayReady] = useState(false);
 
-  // 解码音频生成波形数据
+  const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingErrorRef = useRef<string | null>(null);
+
+  // Audio 事件监听
   useEffect(() => {
-    if (!src || !showWaveform) return;
+    const audio = audioRef.current;
+    if (!audio) return;
 
-    const audioContext = new (window.AudioContext || (window as unknown as Record<string, unknown>).webkitAudioContext as typeof AudioContext)();
+    const onLoadedMetadata = () => {
+      setDuration(audio.duration);
+      setIsLoading(false);
+    };
+    const onTimeUpdate = () => setCurrentTime(audio.currentTime);
+    const onPlay = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
+    const onEnded = () => setIsPlaying(false);
+    const onWaiting = () => setIsLoading(true);
+    const onCanPlay = () => {
+      setIsLoading(false);
+      setCanPlayReady(true);
+      // 清除待显示的错误（如果音频最终加载成功了）
+      if (errorTimerRef.current) {
+        clearTimeout(errorTimerRef.current);
+        errorTimerRef.current = null;
+        pendingErrorRef.current = null;
+      }
+      setAudioError(null);
+    };
+    const onError = () => {
+      const err = audio.error;
+      let msg = '音频加载失败';
+      if (err) {
+        switch (err.code) {
+          case MediaError.MEDIA_ERR_ABORTED: msg = '音频加载被中断'; break;
+          case MediaError.MEDIA_ERR_NETWORK: msg = '网络错误，无法加载音频'; break;
+          case MediaError.MEDIA_ERR_DECODE: msg = '音频解码失败，格式可能不受支持'; break;
+          case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED: msg = '音频格式不受浏览器支持'; break;
+          default: msg = `音频加载失败 (code: ${err.code})`;
+        }
+      }
+
+      // 延迟显示错误：3s 内如果 canplay 事件触发则取消
+      pendingErrorRef.current = msg;
+      if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+      errorTimerRef.current = setTimeout(() => {
+        // 如果还在加载中，尝试重试
+        if (retryCount < MAX_RETRY) {
+          console.log(`[AudioPreviewPlayer] Retrying audio load (${retryCount + 1}/${MAX_RETRY})`);
+          setRetryCount(prev => prev + 1);
+          audio.load(); // 触发重新加载
+          return;
+        }
+        setAudioError(pendingErrorRef.current);
+        setIsLoading(false);
+      }, ERROR_DELAY_MS);
+    };
+
+    audio.addEventListener('loadedmetadata', onLoadedMetadata);
+    audio.addEventListener('timeupdate', onTimeUpdate);
+    audio.addEventListener('play', onPlay);
+    audio.addEventListener('pause', onPause);
+    audio.addEventListener('ended', onEnded);
+    audio.addEventListener('waiting', onWaiting);
+    audio.addEventListener('canplay', onCanPlay);
+    audio.addEventListener('error', onError);
+
+    return () => {
+      audio.removeEventListener('loadedmetadata', onLoadedMetadata);
+      audio.removeEventListener('timeupdate', onTimeUpdate);
+      audio.removeEventListener('play', onPlay);
+      audio.removeEventListener('pause', onPause);
+      audio.removeEventListener('ended', onEnded);
+      audio.removeEventListener('waiting', onWaiting);
+      audio.removeEventListener('canplay', onCanPlay);
+      audio.removeEventListener('error', onError);
+      if (errorTimerRef.current) {
+        clearTimeout(errorTimerRef.current);
+      }
+    };
+  }, [src, retryCount]);
+
+  // ====== 波形生成（延迟到 canplay 后，避免与 <audio> 竞争） ======
+
+  useEffect(() => {
+    if (!src || !showWaveform || !canPlayReady) return;
+
     let cancelled = false;
+    const audioContext = new (window.AudioContext || (window as unknown as Record<string, unknown>).webkitAudioContext as typeof AudioContext)();
 
     const loadWaveform = async () => {
       try {
@@ -116,9 +205,10 @@ export const AudioPreviewPlayer: React.FC<AudioPreviewPlayerProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [src, showWaveform, compact]);
+  }, [src, showWaveform, compact, canPlayReady]);
 
-  // 绘制波形
+  // ====== 绘制波形 ======
+
   useEffect(() => {
     if (!canvasRef.current || waveformData.length === 0) return;
 
@@ -177,46 +267,7 @@ export const AudioPreviewPlayer: React.FC<AudioPreviewPlayerProps> = ({
     ctx.globalAlpha = 1;
   }, [waveformData, currentTime, duration, accentColor, compact]);
 
-  // Audio 事件监听
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    const onLoadedMetadata = () => {
-      setDuration(audio.duration);
-      setIsLoading(false);
-    };
-    const onTimeUpdate = () => setCurrentTime(audio.currentTime);
-    const onPlay = () => setIsPlaying(true);
-    const onPause = () => setIsPlaying(false);
-    const onEnded = () => setIsPlaying(false);
-    const onWaiting = () => setIsLoading(true);
-    const onCanPlay = () => setIsLoading(false);
-    const onError = () => {
-      setAudioError('音频加载失败');
-      setIsLoading(false);
-    };
-
-    audio.addEventListener('loadedmetadata', onLoadedMetadata);
-    audio.addEventListener('timeupdate', onTimeUpdate);
-    audio.addEventListener('play', onPlay);
-    audio.addEventListener('pause', onPause);
-    audio.addEventListener('ended', onEnded);
-    audio.addEventListener('waiting', onWaiting);
-    audio.addEventListener('canplay', onCanPlay);
-    audio.addEventListener('error', onError);
-
-    return () => {
-      audio.removeEventListener('loadedmetadata', onLoadedMetadata);
-      audio.removeEventListener('timeupdate', onTimeUpdate);
-      audio.removeEventListener('play', onPlay);
-      audio.removeEventListener('pause', onPause);
-      audio.removeEventListener('ended', onEnded);
-      audio.removeEventListener('waiting', onWaiting);
-      audio.removeEventListener('canplay', onCanPlay);
-      audio.removeEventListener('error', onError);
-    };
-  }, [src]);
+  // ====== 控制方法 ======
 
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
@@ -270,22 +321,55 @@ export const AudioPreviewPlayer: React.FC<AudioPreviewPlayerProps> = ({
     }
   }, [src, downloadFilename, onDownload]);
 
+  const handleRetry = useCallback(() => {
+    setAudioError(null);
+    setRetryCount(0);
+    setIsLoading(true);
+    if (audioRef.current) {
+      audioRef.current.load();
+    }
+  }, []);
+
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  // ====== 错误状态 ======
 
   if (audioError) {
     return (
       <div style={{
         padding: compact ? '0.5rem' : '0.75rem',
         background: 'rgba(239,68,68,0.1)',
+        border: '1px solid rgba(239,68,68,0.2)',
         borderRadius: 'var(--radius-md)',
-        color: '#ef4444',
-        fontSize: '0.8rem',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.5rem',
         ...style,
       }}>
-        {audioError}
+        <AlertCircle size={compact ? 14 : 16} style={{ color: '#ef4444', flexShrink: 0 }} />
+        <span style={{ color: '#ef4444', fontSize: '0.8rem', flex: 1 }}>{audioError}</span>
+        <button
+          onClick={handleRetry}
+          style={{
+            background: 'none',
+            border: '1px solid rgba(239,68,68,0.3)',
+            borderRadius: 'var(--radius-sm)',
+            color: '#ef4444',
+            cursor: 'pointer',
+            padding: '0.2rem 0.5rem',
+            fontSize: '0.75rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.25rem',
+          }}
+        >
+          <RotateCw size={12} /> 重试
+        </button>
       </div>
     );
   }
+
+  // ====== 正常渲染 ======
 
   return (
     <div style={{
@@ -302,7 +386,7 @@ export const AudioPreviewPlayer: React.FC<AudioPreviewPlayerProps> = ({
       <audio
         ref={audioRef}
         src={src}
-        preload="metadata"
+        preload="auto"
         autoPlay={autoPlay}
         style={{ display: 'none' }}
       />

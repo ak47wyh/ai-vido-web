@@ -576,6 +576,7 @@ export const VoiceLab: React.FC = () => {
               <p style={{ color: '#34d399', margin: '0 0 0.5rem 0' }}>克隆成功！Voice ID: <strong>{clonedVoiceId}</strong></p>
               {clonePreviewAudioUrl && (
                 <AudioPreviewPlayer
+                  key={clonePreviewAudioUrl}
                   src={clonePreviewAudioUrl}
                   autoPlay
                   accentColor="#34d399"
@@ -642,6 +643,7 @@ export const VoiceLab: React.FC = () => {
             <div style={{ padding: '1rem', background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 'var(--radius-md)' }}>
               <p style={{ color: '#8b5cf6', margin: '0 0 0.5rem 0' }}>音色设计成功！Voice ID: <strong>{designResult.voiceId}</strong></p>
               <AudioPreviewPlayer
+                key={designResult.audioUrl}
                 src={designResult.audioUrl}
                 autoPlay
                 accentColor="#8b5cf6"
@@ -724,6 +726,7 @@ export const VoiceLab: React.FC = () => {
                       <span style={{ color: '#34d399', fontSize: '0.85rem' }}>已完成</span>
                       {task.audioUrl && (
                         <AudioPreviewPlayer
+                          key={task.audioUrl}
                           src={task.audioUrl}
                           compact
                           accentColor="#f59e0b"
@@ -846,6 +849,7 @@ export const VoiceLab: React.FC = () => {
           {/* 试听播放器 */}
           {previewAudioUrl && (
             <AudioPreviewPlayer
+              key={previewAudioUrl}
               src={previewAudioUrl}
               autoPlay
               accentColor="#06b6d4"
@@ -862,6 +866,7 @@ export const VoiceLab: React.FC = () => {
         <div className="glass-panel slide-up" style={{ marginTop: '2rem', padding: '1.5rem' }}>
           <h3 style={{ margin: '0 0 1rem 0', color: 'var(--text-muted)' }}>生成结果</h3>
           <AudioPreviewPlayer
+            key={ttsAudioUrl}
             src={ttsAudioUrl}
             autoPlay
             downloadFilename={`tts_${ttsVoiceId}.${ttsAudioFormat}`}
