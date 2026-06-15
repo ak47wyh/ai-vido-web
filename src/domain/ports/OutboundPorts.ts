@@ -191,23 +191,51 @@ export interface IImageGeneratorPort {
 
 // --- Voice ---
 
-export type T2ASyncModel = 'speech-2.8-hd' | 'speech-2.8-turbo' | 'speech-2.6-hd' | 'speech-2.6-turbo';
+export type T2ASyncModel = 'speech-2.8-hd' | 'speech-2.8-turbo' | 'speech-2.6-hd' | 'speech-2.6-turbo' | 'speech-02-hd' | 'speech-02-turbo' | 'speech-01-hd' | 'speech-01-turbo';
+
+export interface VoiceModify {
+  pitch?: number;
+  intensity?: number;
+  timbre?: number;
+  sound_effects?: string;
+}
+
+export interface PronunciationDict {
+  tone: string[];
+}
+
+export interface VoiceSubtitle {
+  text: string;
+  startTime: number;
+  endTime: number;
+}
 
 export interface VoiceCloneContext {
   fileId: string;
   voiceId: string;
-  text: string;
+  text?: string;
+  model?: string;
   promptAudioFileId?: string;
   promptText?: string;
+  languageBoost?: string;
+  needNoiseReduction?: boolean;
+  needVolumeNormalization?: boolean;
+  aigcWatermark?: boolean;
 }
 
 export interface VoiceCloneResult {
   voiceId: string;
   previewAudioUrl?: string;
+  previewAudioHex?: string;
+  inputSensitive?: boolean;
+  inputSensitiveType?: number;
+  usageCharacters?: number;
+  audioLength?: number;
 }
 
 export interface T2AAsyncContext {
-  text: string;
+  text?: string;
+  textFileId?: string;
   voiceId: string;
   model?: string;
   speed?: number;
@@ -215,15 +243,23 @@ export interface T2AAsyncContext {
   pitch?: number;
   audioFormat?: string;
   sampleRate?: number;
+  channel?: number;
+  languageBoost?: string;
+  pronunciationDict?: PronunciationDict;
+  voiceModify?: VoiceModify;
+  aigcWatermark?: boolean;
 }
 
 export interface T2AAsyncResult {
   taskId: string;
+  taskToken?: string;
+  fileId?: string;
+  usageCharacters?: number;
 }
 
 export interface T2AAsyncStatus {
-  status: 'pending' | 'running' | 'done' | 'failed';
-  audioFileId?: string;
+  status: 'processing' | 'success' | 'failed' | 'expired';
+  fileId?: string;
   audioUrl?: string;
   audioDuration?: number;
   errorMessage?: string;
@@ -243,6 +279,11 @@ export interface T2ASyncContext {
   outputFormat?: 'hex' | 'url';
   languageBoost?: string;
   aigcWatermark?: boolean;
+  pronunciationDict?: PronunciationDict;
+  voiceModify?: VoiceModify;
+  subtitleEnable?: boolean;
+  subtitleType?: 'sentence' | 'word' | 'word_streaming';
+  channel?: number;
 }
 
 export interface T2ASyncResult {
@@ -251,6 +292,7 @@ export interface T2ASyncResult {
   audioLength?: number;
   audioSize?: number;
   usageCharacters?: number;
+  subtitles?: VoiceSubtitle[];
 }
 
 export interface VoiceDesignResult {
@@ -265,6 +307,9 @@ export interface VoiceInfo {
   description: string;
   voiceName: string;
   createdTime?: string;
+  type: 'system' | 'voice_cloning' | 'voice_generation';
+  isActive?: boolean;
+  usedByCharacters?: string[];
 }
 
 export interface VoiceListResult {
@@ -281,10 +326,13 @@ export interface T2AStreamCallbacks {
   onAudioChunk: (chunk: ArrayBuffer) => void;
   onComplete?: (totalLength?: number) => void;
   onError?: (error: Error) => void;
+  onSubtitle?: (subtitle: VoiceSubtitle) => void;
 }
 
 export interface T2AStreamHandle {
   close: () => void;
+  sendText?: (text: string) => void;
+  finish?: () => void;
 }
 
 export interface IVoicePort {
@@ -293,8 +341,10 @@ export interface IVoicePort {
   createT2ATask(context: T2AAsyncContext): Promise<T2AAsyncResult>;
   queryT2ATask(taskId: string): Promise<T2AAsyncStatus>;
   getFileUrl(fileId: string): string;
+  /** 带 Bearer 认证下载音频文件，返回 Blob URL（可直接用于 <audio> 播放和下载） */
+  fetchAudioAsBlobUrl(audioUrl: string): Promise<string>;
   synthesizeSpeechSync(context: T2ASyncContext): Promise<T2ASyncResult>;
-  designVoice(prompt: string, previewText: string, voiceId?: string): Promise<VoiceDesignResult>;
+  designVoice(prompt: string, previewText: string, voiceId?: string, aigcWatermark?: boolean): Promise<VoiceDesignResult>;
   getAvailableVoices(voiceType: VoiceType): Promise<VoiceListResult>;
   deleteVoice(voiceType: 'voice_cloning' | 'voice_generation', voiceId: string): Promise<void>;
   /** WebSocket 流式合成 — 边生成边推送音频块。返回 handle 用于中止 */

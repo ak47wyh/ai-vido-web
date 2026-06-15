@@ -12,7 +12,7 @@ import type {
   VoiceListResult,
   FileUploadResult,
   T2AStreamCallbacks,
-  T2AStreamHandle
+  T2AStreamHandle,
 } from '../../../domain/ports/OutboundPorts';
 import { ApiConfigStore } from '../config/ApiConfigStore';
 import { getMiniMaxErrorMessage } from './MiniMaxErrorUtils';
@@ -47,6 +47,8 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
     return { fileId };
   }
 
+  // --- Voice Clone (enhanced) ---
+
   async cloneVoice(context: VoiceCloneContext): Promise<VoiceCloneResult> {
     const config = ApiConfigStore.load();
     if (!config.minimaxApiKey) {
@@ -58,16 +60,27 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
     const payload: Record<string, unknown> = {
       file_id: context.fileId,
       voice_id: context.voiceId,
-      text: context.text,
-      model: 'speech-2.8-hd',
     };
 
+    // 试听参数
+    if (context.text) {
+      payload.text = context.text;
+      payload.model = context.model || 'speech-2.8-hd';
+    }
+
+    // 示例音频
     if (context.promptAudioFileId) {
       payload.clone_prompt = {
         prompt_audio: context.promptAudioFileId,
         ...(context.promptText ? { prompt_text: context.promptText } : {}),
       };
     }
+
+    // 音频处理选项
+    if (context.needNoiseReduction) payload.need_noise_reduction = true;
+    if (context.needVolumeNormalization) payload.need_volume_normalization = true;
+    if (context.languageBoost) payload.language_boost = context.languageBoost;
+    if (context.aigcWatermark) payload.aigc_watermark = true;
 
     console.log('[MiniMaxVoiceAdapter] Cloning voice:', context.voiceId);
 
@@ -85,13 +98,21 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
     const error = getMiniMaxErrorMessage(statusCode, data?.base_resp?.status_msg, 'MiniMax Voice Clone error');
     if (error) throw new Error(error);
 
-    const previewAudioUrl = data?.data?.audio_url || data?.extra_info?.audio_url;
+    const previewAudioUrl = data?.demo_audio || data?.data?.audio_url || data?.extra_info?.audio_url;
+    const extraInfo = data?.extra_info;
 
     return {
       voiceId: context.voiceId,
       previewAudioUrl,
+      previewAudioHex: data?.data?.audio,
+      inputSensitive: data?.input_sensitive,
+      inputSensitiveType: data?.input_sensitive_type,
+      usageCharacters: extraInfo?.usage_characters,
+      audioLength: extraInfo?.audio_length,
     };
   }
+
+  // --- Async T2A (enhanced) ---
 
   async createT2ATask(context: T2AAsyncContext): Promise<T2AAsyncResult> {
     const config = ApiConfigStore.load();
@@ -101,9 +122,8 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
 
     const baseUrl = config.minimaxBaseUrl.replace(/\/+$/, '');
 
-    const payload = {
+    const payload: Record<string, unknown> = {
       model: context.model || 'speech-2.8-hd',
-      text: context.text,
       voice_setting: {
         voice_id: context.voiceId,
         speed: context.speed ?? 1,
@@ -114,12 +134,23 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
         audio_sample_rate: context.sampleRate ?? 32000,
         bitrate: 128000,
         format: context.audioFormat || 'mp3',
-        channel: 1,
+        channel: context.channel ?? 1,
       },
-      language_boost: 'auto',
+      ...(context.languageBoost ? { language_boost: context.languageBoost } : { language_boost: 'auto' }),
     };
 
-    console.log('[MiniMaxVoiceAdapter] Creating T2A task, voice:', context.voiceId, 'text length:', context.text.length);
+    // 文本输入：直接文本 或 文件 ID
+    if (context.textFileId) {
+      payload.text_file_id = context.textFileId;
+    } else if (context.text) {
+      payload.text = context.text;
+    }
+
+    if (context.pronunciationDict) payload.pronunciation_dict = context.pronunciationDict;
+    if (context.voiceModify) payload.voice_modify = context.voiceModify;
+    if (context.aigcWatermark) payload.aigc_watermark = true;
+
+    console.log('[MiniMaxVoiceAdapter] Creating T2A task, voice:', context.voiceId, 'text length:', context.text?.length || 0);
 
     const response = await axios.post(`${baseUrl}/t2a_async_v2`, payload, {
       headers: {
@@ -141,7 +172,12 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
       throw new Error('T2A task creation failed — no task_id returned');
     }
 
-    return { taskId };
+    return {
+      taskId,
+      taskToken: data?.data?.task_token || data?.task_token,
+      fileId: data?.data?.file_id || data?.file_id,
+      usageCharacters: data?.data?.usage_characters || data?.usage_characters,
+    };
   }
 
   async queryT2ATask(taskId: string): Promise<T2AAsyncStatus> {
@@ -173,29 +209,37 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
       };
     }
 
-    const taskStatus = data?.data?.status || data?.status || '';
+    const taskStatus = (data?.data?.status || data?.status || '').toLowerCase();
 
-    if (taskStatus === 'done' || taskStatus === 'Success') {
+    if (taskStatus === 'success') {
       const audioFileId = data?.data?.audio_file_id || data?.file_id;
       const audioUrl = audioFileId ? this.getFileUrl(audioFileId) : undefined;
       const audioDuration = data?.data?.audio_duration;
 
       return {
-        status: 'done',
-        audioFileId,
+        status: 'success',
+        fileId: audioFileId,
         audioUrl,
         audioDuration,
       };
     }
 
-    if (taskStatus === 'failed' || taskStatus === 'Fail') {
+    if (taskStatus === 'failed' || taskStatus === 'fail') {
       return {
         status: 'failed',
         errorMessage: data?.data?.error_msg || 'T2A task failed',
       };
     }
 
-    return { status: 'running' };
+    if (taskStatus === 'expired') {
+      return {
+        status: 'expired',
+        errorMessage: '任务已过期',
+      };
+    }
+
+    // processing / pending / running / preparing / queueing
+    return { status: 'processing' };
   }
 
   getFileUrl(fileId: string): string {
@@ -204,7 +248,35 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
     return `${baseUrl}/files/retrieve_content?file_id=${fileId}`;
   }
 
+  /**
+   * 带 Bearer 认证下载音频文件，返回 Blob URL
+   * MiniMax API 返回的音频 URL 和文件下载 URL 均需要 Authorization header，
+   * 浏览器 <audio> 标签无法携带自定义 header，因此需要先 fetch 再创建 Blob URL。
+   */
+  async fetchAudioAsBlobUrl(audioUrl: string): Promise<string> {
+    const config = ApiConfigStore.load();
+    if (!config.minimaxApiKey) {
+      throw new Error('API Key not configured — cannot fetch audio');
+    }
+
+    console.log('[MiniMaxVoiceAdapter] Fetching audio as blob:', audioUrl.substring(0, 80));
+
+    const response = await axios.get(audioUrl, {
+      headers: {
+        Authorization: `Bearer ${config.minimaxApiKey}`,
+      },
+      params: config.minimaxGroupId ? { group_id: config.minimaxGroupId } : undefined,
+      responseType: 'arraybuffer',
+    });
+
+    const contentType = String(response.headers?.['content-type'] || 'audio/mpeg');
+    const blob = new Blob([response.data], { type: contentType });
+    return URL.createObjectURL(blob);
+  }
+
   // --- Synchronous T2A ---
+  // 所有模型（含 speech-2.8）统一使用 MiniMax 官方端点 POST /v1/t2a_v2
+  // 参考文档: https://platform.minimaxi.com/docs/api-reference/speech-t2a-http
 
   async synthesizeSpeechSync(context: T2ASyncContext): Promise<T2ASyncResult> {
     const config = ApiConfigStore.load();
@@ -215,99 +287,37 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
     const baseUrl = config.minimaxBaseUrl.replace(/\/+$/, '');
     const model = context.model || 'speech-2.8-turbo';
 
-    // speech-2.8 uses OpenAI-compatible /v1/audio/speech (binary response)
-    // speech-02 / speech-01 uses /v1/t2a_v2 (JSON response)
-    if (model.startsWith('speech-2.8')) {
-      return this.synthesizeSpeechV28(baseUrl, config, context, model);
-    }
-
-    return this.synthesizeSpeechV2(baseUrl, config, context, model);
-  }
-
-  /**
-   * speech-2.8 — OpenAI-compatible endpoint, returns binary audio
-   */
-  private async synthesizeSpeechV28(
-    baseUrl: string,
-    config: ReturnType<typeof ApiConfigStore.load>,
-    context: T2ASyncContext,
-    model: string,
-  ): Promise<T2ASyncResult> {
-    const payload: Record<string, unknown> = {
-      model,
-      input: context.text,
-      voice: context.voiceId,
+    const voiceSetting: Record<string, unknown> = {
+      voice_id: context.voiceId,
       speed: context.speed ?? 1,
+      vol: context.volume ?? 1,
       pitch: context.pitch ?? 0,
-      volume: context.volume ?? 1,
-      response_format: context.audioFormat || 'mp3',
-      sample_rate: context.sampleRate ?? 32000,
     };
+    if (context.emotion) voiceSetting.emotion = context.emotion;
 
-    console.log('[MiniMaxVoiceAdapter] speech-2.8 Sync T2A, voice:', context.voiceId, 'text length:', context.text.length);
-
-    const response = await axios.post(`${baseUrl}/audio/speech`, payload, {
-      headers: {
-        Authorization: `Bearer ${config.minimaxApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      params: config.minimaxGroupId ? { GroupId: config.minimaxGroupId } : undefined,
-      responseType: 'arraybuffer',
-    });
-
-    const contentType = String(response.headers?.['content-type'] || '');
-
-    // If the response is JSON, it's an error
-    if (contentType.includes('application/json')) {
-      const text = new TextDecoder().decode(response.data);
-      let parsed: Record<string, unknown>;
-      try { parsed = JSON.parse(text); } catch { throw new Error(`speech-2.8 error: ${text}`); }
-      const statusCode = (parsed?.base_resp as Record<string, unknown>)?.status_code;
-      const statusMsg = (parsed?.base_resp as Record<string, unknown>)?.status_msg;
-      const error = getMiniMaxErrorMessage(statusCode as number, statusMsg as string, 'MiniMax speech-2.8 error');
-      throw new Error(error || `speech-2.8 error: ${text}`);
-    }
-
-    // Binary audio response — convert to blob URL
-    const blob = new Blob([response.data], { type: `audio/${context.audioFormat || 'mp3'}` });
-    const audioUrl = URL.createObjectURL(blob);
-
-    return {
-      audioUrl,
-      audioHex: undefined,
-    };
-  }
-
-  /**
-   * speech-02 / speech-01 — /v1/t2a_v2 endpoint, returns JSON
-   */
-  private async synthesizeSpeechV2(
-    baseUrl: string,
-    config: ReturnType<typeof ApiConfigStore.load>,
-    context: T2ASyncContext,
-    model: string,
-  ): Promise<T2ASyncResult> {
     const payload: Record<string, unknown> = {
       model,
       text: context.text,
-      voice_setting: {
-        voice_id: context.voiceId,
-        speed: context.speed ?? 1,
-        vol: context.volume ?? 1,
-        pitch: context.pitch ?? 0,
-      },
+      voice_setting: voiceSetting,
       audio_setting: {
-        audio_sample_rate: context.sampleRate ?? 32000,
+        sample_rate: context.sampleRate ?? 32000,
         bitrate: 128000,
         format: context.audioFormat || 'mp3',
-        channel: 1,
+        channel: context.channel ?? 1,
       },
       output_format: context.outputFormat || 'url',
       ...(context.languageBoost ? { language_boost: context.languageBoost } : { language_boost: 'auto' }),
       ...(context.aigcWatermark !== undefined ? { aigc_watermark: context.aigcWatermark } : {}),
     };
 
-    console.log('[MiniMaxVoiceAdapter] Sync T2A v2, voice:', context.voiceId, 'text length:', context.text.length);
+    if (context.pronunciationDict) payload.pronunciation_dict = context.pronunciationDict;
+    if (context.voiceModify) payload.voice_modify = context.voiceModify;
+    if (context.subtitleEnable) {
+      payload.subtitle_enable = true;
+      if (context.subtitleType) payload.subtitle_type = context.subtitleType;
+    }
+
+    console.log('[MiniMaxVoiceAdapter] Sync T2A, model:', model, 'voice:', context.voiceId, 'text length:', context.text.length);
 
     const response = await axios.post(`${baseUrl}/t2a_v2`, payload, {
       headers: {
@@ -327,16 +337,28 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
     const audioHex = data?.data?.audio;
     const extraInfo = data?.extra_info;
 
+    // 解析字幕
+    let subtitles: Array<{ text: string; startTime: number; endTime: number }> | undefined;
+    const subtitleData = data?.data?.subtitle || data?.subtitle;
+    if (subtitleData && Array.isArray(subtitleData)) {
+      subtitles = subtitleData.map((s: Record<string, unknown>) => ({
+        text: s.text as string || s.content as string || '',
+        startTime: s.begin_time as number || s.startTime as number || 0,
+        endTime: s.end_time as number || s.endTime as number || 0,
+      }));
+    }
+
     return {
       audioUrl,
       audioHex,
       audioLength: extraInfo?.audio_length,
       audioSize: extraInfo?.audio_size,
       usageCharacters: extraInfo?.usage_characters,
+      subtitles,
     };
   }
 
-  // --- WebSocket Streaming T2A ---
+  // --- WebSocket Streaming T2A (enhanced: proper task_start/task_continue/task_finish protocol) ---
 
   synthesizeSpeechStream(context: T2ASyncContext, callbacks: T2AStreamCallbacks): T2AStreamHandle {
     const config = ApiConfigStore.load();
@@ -346,12 +368,14 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
       return { close: () => {} };
     }
 
-    // Convert https://... to wss://...
-    const baseUrl = config.minimaxBaseUrl.replace(/\/+$/, '').replace(/^https?:/, (m) => m === 'https:' ? 'wss:' : 'ws:');
-    const wsUrl = `${baseUrl}/t2a_v2`;
+    // WebSocket 端点: wss://api.minimaxi.com/ws/v1/t2a_v2
+    // 注意: baseUrl 是 https://api.minimaxi.com/v1，需要去掉 /v1 再拼接 /ws/v1/t2a_v2
+    const baseHost = config.minimaxBaseUrl.replace(/\/+$/, '').replace(/\/v\d+$/, '');
+    const wsUrl = `${baseHost.replace(/^https?:/, (m) => m === 'https:' ? 'wss:' : 'ws:')}/ws/v1/t2a_v2`;
 
     let ws: WebSocket | null = null;
     let closed = false;
+    let taskStarted = false;
 
     const close = () => {
       if (closed) return;
@@ -366,35 +390,59 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
       ws = null;
     };
 
+    const sendText = (text: string) => {
+      if (closed || !ws || ws.readyState !== WebSocket.OPEN || !taskStarted) return;
+      try {
+        ws.send(JSON.stringify({ event: 'task_continue', text }));
+      } catch (e) {
+        callbacks.onError?.(e instanceof Error ? e : new Error(String(e)));
+      }
+    };
+
+    const finish = () => {
+      if (closed || !ws || ws.readyState !== WebSocket.OPEN || !taskStarted) return;
+      try {
+        ws.send(JSON.stringify({ event: 'task_finish' }));
+      } catch (e) {
+        callbacks.onError?.(e instanceof Error ? e : new Error(String(e)));
+      }
+    };
+
     try {
       ws = new WebSocket(wsUrl);
     } catch (e) {
       callbacks.onError?.(e instanceof Error ? e : new Error(String(e)));
-      return { close };
+      return { close, sendText, finish };
     }
 
     ws.binaryType = 'arraybuffer';
 
     ws.onopen = () => {
       if (closed || !ws) return;
-      const payload = {
+      // 发送 task_start 事件
+      const voiceSetting: Record<string, unknown> = {
+        voice_id: context.voiceId,
+        speed: context.speed ?? 1,
+        vol: context.volume ?? 1,
+        pitch: context.pitch ?? 0,
+      };
+      if (context.emotion) voiceSetting.emotion = context.emotion;
+
+      const payload: Record<string, unknown> = {
+        event: 'task_start',
         model: context.model || 'speech-2.8-turbo',
-        text: context.text,
-        voice_setting: {
-          voice_id: context.voiceId,
-          speed: context.speed ?? 1,
-          vol: context.volume ?? 1,
-          pitch: context.pitch ?? 0,
-        },
+        voice_setting: voiceSetting,
         audio_setting: {
           audio_sample_rate: context.sampleRate ?? 32000,
           bitrate: 128000,
           format: context.audioFormat || 'mp3',
-          channel: 1,
+          channel: context.channel ?? 1,
         },
-        stream: true,
         ...(context.languageBoost ? { language_boost: context.languageBoost } : { language_boost: 'auto' }),
       };
+
+      if (context.pronunciationDict) payload.pronunciation_dict = context.pronunciationDict;
+
       try {
         ws.send(JSON.stringify(payload));
       } catch (e) {
@@ -405,14 +453,87 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
 
     ws.onmessage = (event) => {
       if (closed) return;
-      // Server may send binary audio chunks or JSON control messages
+
       if (event.data instanceof ArrayBuffer) {
         callbacks.onAudioChunk(event.data);
-      } else if (event.data instanceof Blob) {
+        return;
+      }
+
+      if (event.data instanceof Blob) {
         event.data.arrayBuffer().then(buf => callbacks.onAudioChunk(buf)).catch(() => {});
-      } else if (typeof event.data === 'string') {
+        return;
+      }
+
+      if (typeof event.data === 'string') {
         try {
           const parsed = JSON.parse(event.data);
+          const eventType = parsed.event;
+
+          if (eventType === 'connected_success') {
+            // 建连成功
+            return;
+          }
+
+          if (eventType === 'task_started') {
+            taskStarted = true;
+            // 如果有初始文本，发送 task_continue
+            if (context.text) {
+              try {
+                ws?.send(JSON.stringify({ event: 'task_continue', text: context.text }));
+              } catch (e) {
+                callbacks.onError?.(e instanceof Error ? e : new Error(String(e)));
+              }
+            }
+            return;
+          }
+
+          if (eventType === 'task_continued') {
+            // 收到音频 chunk
+            if (parsed.data?.audio) {
+              // hex 编码音频
+              const hex = parsed.data.audio as string;
+              const bytes = new Uint8Array(hex.length / 2);
+              for (let i = 0; i < hex.length; i += 2) {
+                bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
+              }
+              callbacks.onAudioChunk(bytes.buffer);
+            }
+
+            // 字幕
+            if (parsed.data?.subtitle) {
+              const sub = parsed.data.subtitle;
+              if (Array.isArray(sub)) {
+                for (const s of sub) {
+                  callbacks.onSubtitle?.({
+                    text: s.text || s.content || '',
+                    startTime: s.begin_time || s.startTime || 0,
+                    endTime: s.end_time || s.endTime || 0,
+                  });
+                }
+              }
+            }
+
+            if (parsed.is_final) {
+              callbacks.onComplete?.(parsed.extra_info?.audio_length);
+              close();
+            }
+            return;
+          }
+
+          if (eventType === 'task_finished') {
+            callbacks.onComplete?.();
+            close();
+            return;
+          }
+
+          if (eventType === 'task_failed') {
+            const msg = getMiniMaxErrorMessage(parsed.base_resp?.status_code, parsed.base_resp?.status_msg, 'T2A Stream task failed');
+            callbacks.onError?.(new Error(msg || 'T2A stream task failed'));
+            close();
+            return;
+          }
+
+          // 兼容旧协议
           if (parsed.base_resp?.status_code && parsed.base_resp.status_code !== 0) {
             const msg = getMiniMaxErrorMessage(parsed.base_resp.status_code, parsed.base_resp.status_msg, 'T2A Stream error');
             if (msg) {
@@ -441,12 +562,12 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
       callbacks.onComplete?.();
     };
 
-    return { close };
+    return { close, sendText, finish };
   }
 
-  // --- Voice Design ---
+  // --- Voice Design (enhanced) ---
 
-  async designVoice(prompt: string, previewText: string, voiceId?: string): Promise<VoiceDesignResult> {
+  async designVoice(prompt: string, previewText: string, voiceId?: string, aigcWatermark?: boolean): Promise<VoiceDesignResult> {
     const config = ApiConfigStore.load();
     if (!config.minimaxApiKey) {
       throw new Error('API Key not configured — cannot design voice');
@@ -457,11 +578,14 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
     const payload: Record<string, unknown> = {
       prompt,
       preview_text: previewText,
-      model: 'speech-02-turbo',
     };
 
     if (voiceId) {
       payload.voice_id = voiceId;
+    }
+
+    if (aigcWatermark) {
+      payload.aigc_watermark = true;
     }
 
     console.log('[MiniMaxVoiceAdapter] Designing voice, prompt:', prompt.substring(0, 50));
@@ -494,7 +618,7 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
     };
   }
 
-  // --- Get Available Voices ---
+  // --- Get Available Voices (enhanced) ---
 
   async getAvailableVoices(voiceType: VoiceType): Promise<VoiceListResult> {
     const config = ApiConfigStore.load();
@@ -530,8 +654,11 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
     if (systemVoices && Array.isArray(systemVoices)) {
       result.systemVoices = systemVoices.map((v: Record<string, unknown>) => ({
         voiceId: v.voice_id as string,
-        description: (v.description || v.voice_desc || '') as string,
+        description: Array.isArray(v.description) ? v.description.join('；') : (v.description || v.voice_desc || '') as string,
         voiceName: (v.voice_name || v.name || v.voice_id) as string,
+        createdTime: (v.created_time || v.create_time) as string | undefined,
+        type: 'system' as const,
+        isActive: true,
       }));
     }
 
@@ -539,9 +666,11 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
     if (clonedVoices && Array.isArray(clonedVoices)) {
       result.clonedVoices = clonedVoices.map((v: Record<string, unknown>) => ({
         voiceId: v.voice_id as string,
-        description: (v.description || v.voice_desc || '') as string,
+        description: Array.isArray(v.description) ? v.description.join('；') : (v.description || v.voice_desc || '') as string,
         voiceName: (v.voice_name || v.name || v.voice_id) as string,
         createdTime: (v.created_time || v.create_time) as string | undefined,
+        type: 'voice_cloning' as const,
+        isActive: true,
       }));
     }
 
@@ -549,9 +678,11 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
     if (designedVoices && Array.isArray(designedVoices)) {
       result.designedVoices = designedVoices.map((v: Record<string, unknown>) => ({
         voiceId: v.voice_id as string,
-        description: (v.description || v.voice_desc || '') as string,
+        description: Array.isArray(v.description) ? v.description.join('；') : (v.description || v.voice_desc || '') as string,
         voiceName: (v.voice_name || v.name || v.voice_id) as string,
         createdTime: (v.created_time || v.create_time) as string | undefined,
+        type: 'voice_generation' as const,
+        isActive: true,
       }));
     }
 
