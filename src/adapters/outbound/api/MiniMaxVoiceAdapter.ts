@@ -213,9 +213,82 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
     }
 
     const baseUrl = config.minimaxBaseUrl.replace(/\/+$/, '');
+    const model = context.model || 'speech-2.8-turbo';
 
+    // speech-2.8 uses OpenAI-compatible /v1/audio/speech (binary response)
+    // speech-02 / speech-01 uses /v1/t2a_v2 (JSON response)
+    if (model.startsWith('speech-2.8')) {
+      return this.synthesizeSpeechV28(baseUrl, config, context, model);
+    }
+
+    return this.synthesizeSpeechV2(baseUrl, config, context, model);
+  }
+
+  /**
+   * speech-2.8 — OpenAI-compatible endpoint, returns binary audio
+   */
+  private async synthesizeSpeechV28(
+    baseUrl: string,
+    config: ReturnType<typeof ApiConfigStore.load>,
+    context: T2ASyncContext,
+    model: string,
+  ): Promise<T2ASyncResult> {
     const payload: Record<string, unknown> = {
-      model: context.model || 'speech-2.8-turbo',
+      model,
+      input: context.text,
+      voice: context.voiceId,
+      speed: context.speed ?? 1,
+      pitch: context.pitch ?? 0,
+      volume: context.volume ?? 1,
+      response_format: context.audioFormat || 'mp3',
+      sample_rate: context.sampleRate ?? 32000,
+    };
+
+    console.log('[MiniMaxVoiceAdapter] speech-2.8 Sync T2A, voice:', context.voiceId, 'text length:', context.text.length);
+
+    const response = await axios.post(`${baseUrl}/audio/speech`, payload, {
+      headers: {
+        Authorization: `Bearer ${config.minimaxApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      params: config.minimaxGroupId ? { GroupId: config.minimaxGroupId } : undefined,
+      responseType: 'arraybuffer',
+    });
+
+    const contentType = String(response.headers?.['content-type'] || '');
+
+    // If the response is JSON, it's an error
+    if (contentType.includes('application/json')) {
+      const text = new TextDecoder().decode(response.data);
+      let parsed: Record<string, unknown>;
+      try { parsed = JSON.parse(text); } catch { throw new Error(`speech-2.8 error: ${text}`); }
+      const statusCode = (parsed?.base_resp as Record<string, unknown>)?.status_code;
+      const statusMsg = (parsed?.base_resp as Record<string, unknown>)?.status_msg;
+      const error = getMiniMaxErrorMessage(statusCode as number, statusMsg as string, 'MiniMax speech-2.8 error');
+      throw new Error(error || `speech-2.8 error: ${text}`);
+    }
+
+    // Binary audio response — convert to blob URL
+    const blob = new Blob([response.data], { type: `audio/${context.audioFormat || 'mp3'}` });
+    const audioUrl = URL.createObjectURL(blob);
+
+    return {
+      audioUrl,
+      audioHex: undefined,
+    };
+  }
+
+  /**
+   * speech-02 / speech-01 — /v1/t2a_v2 endpoint, returns JSON
+   */
+  private async synthesizeSpeechV2(
+    baseUrl: string,
+    config: ReturnType<typeof ApiConfigStore.load>,
+    context: T2ASyncContext,
+    model: string,
+  ): Promise<T2ASyncResult> {
+    const payload: Record<string, unknown> = {
+      model,
       text: context.text,
       voice_setting: {
         voice_id: context.voiceId,
@@ -234,7 +307,7 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
       ...(context.aigcWatermark !== undefined ? { aigc_watermark: context.aigcWatermark } : {}),
     };
 
-    console.log('[MiniMaxVoiceAdapter] Sync T2A, voice:', context.voiceId, 'text length:', context.text.length);
+    console.log('[MiniMaxVoiceAdapter] Sync T2A v2, voice:', context.voiceId, 'text length:', context.text.length);
 
     const response = await axios.post(`${baseUrl}/t2a_v2`, payload, {
       headers: {
