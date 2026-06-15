@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { MessageSquare, Send, Bot, User, RefreshCw, Sparkles } from 'lucide-react';
-import { textGenerationService } from '../../dependencies';
+import { MessageSquare, Send, Bot, User, RefreshCw, Sparkles, BookmarkPlus } from 'lucide-react';
+import { textGenerationService, assetLibraryService } from '../../dependencies';
 import type { TextGenerationMessage } from '../../domain/ports/OutboundPorts';
 import { useToast } from '../contexts/ToastContext';
 import { getErrorMessage } from '../utils/errorUtils';
+import { useSpace } from '../contexts/SpaceContext';
+import { AssetSaveDialog } from '../components/AssetPicker';
 
 export const TextLab: React.FC = () => {
   const { t } = useTranslation();
@@ -16,6 +18,9 @@ export const TextLab: React.FC = () => {
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [model, setModel] = useState<'MiniMax-M3' | 'MiniMax-M2.5'>('MiniMax-M3');
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [saveContent, setSaveContent] = useState('');
+  const { currentSpaceId } = useSpace();
   
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -62,6 +67,29 @@ export const TextLab: React.FC = () => {
     ]);
   };
 
+  const handleCollectPrompt = (content: string) => {
+    setSaveContent(content);
+    setShowSaveDialog(true);
+  };
+
+  const handleSavePrompt = async (name: string, tags: string) => {
+    if (!currentSpaceId || !saveContent) return;
+    try {
+      await assetLibraryService.savePrompt({
+        spaceId: currentSpaceId,
+        name,
+        content: saveContent,
+        category: 'other',
+        tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+        sourceType: 'lab',
+      });
+      showToast('success', t('assetLibrary.collectSuccess', '提示词收藏成功'));
+      setShowSaveDialog(false);
+    } catch (e) {
+      showToast('error', getErrorMessage(e, t('assetLibrary.saveFailed', '素材保存失败')));
+    }
+  };
+
   return (
     <div className="fade-in" style={{ padding: '2rem', maxWidth: '1000px', margin: '0 auto', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 4rem)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
@@ -103,15 +131,29 @@ export const TextLab: React.FC = () => {
               }}>
                 {msg.role === 'user' ? <User size={20} /> : <Bot size={20} />}
               </div>
-              <div style={{ 
+              <div style={{
                 maxWidth: '75%', padding: '1rem', borderRadius: 'var(--radius-lg)',
                 background: msg.role === 'user' ? 'var(--primary-color)' : 'rgba(0,0,0,0.2)',
                 border: msg.role === 'user' ? 'none' : '1px solid var(--border-color)',
                 lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
                 borderTopRightRadius: msg.role === 'user' ? 0 : 'var(--radius-lg)',
                 borderTopLeftRadius: msg.role === 'assistant' ? 0 : 'var(--radius-lg)',
+                position: 'relative',
               }}>
                 {msg.content}
+                {msg.role === 'assistant' && idx > 0 && (
+                  <button
+                    onClick={() => handleCollectPrompt(msg.content)}
+                    style={{
+                      position: 'absolute', top: '0.5rem', right: '0.5rem',
+                      background: 'transparent', border: 'none', cursor: 'pointer',
+                      color: 'var(--text-muted)', padding: '0.2rem', opacity: 0.5,
+                    }}
+                    title={t('assetLibrary.collectBtn', '收藏')}
+                  >
+                    <BookmarkPlus size={14} />
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -151,6 +193,15 @@ export const TextLab: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {showSaveDialog && (
+        <AssetSaveDialog
+          title={t('assetLibrary.collectBtn', '收藏提示词')}
+          defaultName={saveContent.slice(0, 20) + (saveContent.length > 20 ? '...' : '')}
+          onSave={handleSavePrompt}
+          onCancel={() => setShowSaveDialog(false)}
+        />
+      )}
     </div>
   );
 };

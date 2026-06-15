@@ -3,7 +3,7 @@ import { storyService, videoGenerationService, imageAdapter, voiceService, music
 import { Spline, Sparkles, AlertTriangle, ImagePlus, PlayCircle, Film } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import type { VideoTask, Character } from '../../domain/entities/models';
+import type { VideoTask, Character, SavedImage, SavedPrompt } from '../../domain/entities/models';
 import type { ImageGenerationContext } from '../../domain/ports/OutboundPorts';
 import { useSpace } from '../contexts/SpaceContext';
 import { useToast } from '../contexts/ToastContext';
@@ -15,6 +15,8 @@ import { BreakdownPreview } from '../components/BreakdownPreview';
 import { SegmentCard } from '../components/SegmentCard';
 import { PipelinePanel } from '../components/PipelinePanel';
 import { workbenchReducer, initialWorkbenchState, breakdownReducer, initialBreakdownState, bgmReducer, initialBGMState } from '../hooks/useWorkbenchState';
+import { AssetPicker } from '../components/AssetPicker';
+import { useAssetPicker } from '../hooks/useAssetPicker';
 
 export const StoryWorkbench: React.FC = () => {
   const { t } = useTranslation();
@@ -22,6 +24,7 @@ export const StoryWorkbench: React.FC = () => {
   const { currentSpaceId } = useSpace();
   const { showToast } = useToast();
   const { confirm } = useConfirm();
+  const { state: assetPickerState, openPicker, closePicker } = useAssetPicker();
 
   // 数据层：通过 hooks 获取，不直调 db
   const stories = useSpaceScopedStories();
@@ -656,11 +659,22 @@ export const StoryWorkbench: React.FC = () => {
                 onSuggestBGMStyle={handleSuggestBGMStyle}
                 onUpdateActionContent={handleUpdateActionContent}
                 onUpdateFirstFrameImage={handleUpdateFirstFrameImage}
+                onPickImage={() => openPicker('image', (asset: SavedImage) => { handleUpdateFirstFrameImage(seg.id, asset.blobKey || ''); })}
+                onPickNarrationPrompt={() => openPicker('prompt', (asset: SavedPrompt) => { handleUpdateActionContent(seg.id, asset.content || ''); }, 'narration')}
               />
             ))}
           </div>
         )}
       </div>
+      {assetPickerState.isOpen && currentSpaceId && (
+        <AssetPicker
+          type={assetPickerState.type}
+          spaceId={currentSpaceId}
+          category={assetPickerState.category}
+          onSelect={assetPickerState.onSelect!}
+          onClose={closePicker}
+        />
+      )}
     </div>
   );
 };

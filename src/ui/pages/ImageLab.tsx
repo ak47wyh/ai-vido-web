@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Image as ImageIcon, Sparkles, Download, RefreshCw } from 'lucide-react';
-import { imageAdapter } from '../../dependencies';
+import { Image as ImageIcon, Sparkles, Download, RefreshCw, BookmarkPlus } from 'lucide-react';
+import { imageAdapter, assetLibraryService } from '../../dependencies';
 import type { ImageModel, ImageAspectRatio } from '../../domain/ports/OutboundPorts';
 import { useToast } from '../contexts/ToastContext';
 import { getErrorMessage } from '../utils/errorUtils';
+import { useSpace } from '../contexts/SpaceContext';
+import { AssetSaveDialog } from '../components/AssetPicker';
 
 export const ImageLab: React.FC = () => {
   const { t } = useTranslation();
@@ -16,6 +18,8 @@ export const ImageLab: React.FC = () => {
   const [promptOptimizer, setPromptOptimizer] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [resultImage, setResultImage] = useState<string | null>(null);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const { currentSpaceId } = useSpace();
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
@@ -40,6 +44,26 @@ export const ImageLab: React.FC = () => {
       showToast('error', getErrorMessage(e, t('imageLab.generateFailed', '图片生成失败')));
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleSaveToLibrary = async (name: string, tags: string) => {
+    if (!resultImage || !currentSpaceId) return;
+    try {
+      await assetLibraryService.saveImageFromUrl({
+        spaceId: currentSpaceId,
+        name,
+        imageUrl: resultImage,
+        prompt,
+        model,
+        aspectRatio,
+        tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+        sourceType: 'lab',
+      });
+      showToast('success', t('assetLibrary.saveSuccess', '素材保存成功'));
+      setShowSaveDialog(false);
+    } catch (e) {
+      showToast('error', getErrorMessage(e, t('assetLibrary.saveFailed', '素材保存失败')));
     }
   };
 
@@ -134,19 +158,34 @@ export const ImageLab: React.FC = () => {
               alt="Generated" 
               style={{ maxWidth: '100%', maxHeight: '600px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', boxShadow: '0 10px 30px rgba(0,0,0,0.3)' }} 
             />
-            <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'center' }}>
-              <a 
-                href={resultImage} 
-                download="ai-generated-image.jpg" 
-                target="_blank" 
+            <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'center', gap: '0.75rem' }}>
+              <a
+                href={resultImage}
+                download="ai-generated-image.jpg"
+                target="_blank"
                 rel="noopener noreferrer"
                 className="btn btn-secondary"
               >
                 <Download size={16} /> {t('imageLab.download', '下载图片')}
               </a>
+              <button
+                className="btn btn-primary"
+                onClick={() => setShowSaveDialog(true)}
+              >
+                <BookmarkPlus size={16} /> {t('assetLibrary.saveBtn', '保存到素材库')}
+              </button>
             </div>
           </div>
         </div>
+      )}
+
+      {showSaveDialog && (
+        <AssetSaveDialog
+          title={t('assetLibrary.saveBtn', '保存到素材库')}
+          defaultName={prompt.slice(0, 20) + (prompt.length > 20 ? '...' : '')}
+          onSave={handleSaveToLibrary}
+          onCancel={() => setShowSaveDialog(false)}
+        />
       )}
     </div>
   );

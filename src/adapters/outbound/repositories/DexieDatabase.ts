@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { Character, Background, Story, StorySegment, StorySpace, VideoTask, PipelineTask, FinalCut } from '../../../domain/entities/models';
+import type { Character, Background, Story, StorySegment, StorySpace, VideoTask, PipelineTask, FinalCut, SavedImage, SavedVoice, SavedPrompt } from '../../../domain/entities/models';
 
 export class AiVideoDatabase extends Dexie {
   storySpaces!: Table<StorySpace, string>;
@@ -10,6 +10,9 @@ export class AiVideoDatabase extends Dexie {
   videoTasks!: Table<VideoTask, string>;
   pipelineTasks!: Table<PipelineTask, string>;
   finalCuts!: Table<FinalCut, string>;
+  savedImages!: Table<SavedImage, string>;
+  savedVoices!: Table<SavedVoice, string>;
+  savedPrompts!: Table<SavedPrompt, string>;
 
   constructor() {
     super('AiVideoDatabase');
@@ -92,6 +95,20 @@ export class AiVideoDatabase extends Dexie {
       videoTasks: 'id, segmentId, status, createdAt',
       pipelineTasks: 'id, storyId, status, createdAt',
       finalCuts: 'id, storyId, pipelineTaskId, createdAt'
+    });
+    // Version 8: Add Asset Library tables (savedImages, savedVoices, savedPrompts)
+    this.version(8).stores({
+      storySpaces: 'id, name, createdAt',
+      characters: 'id, spaceId, name, createdAt',
+      backgrounds: 'id, spaceId, name, createdAt',
+      stories: 'id, spaceId, status, createdAt',
+      segments: 'id, storyId, sequenceOrder',
+      videoTasks: 'id, segmentId, status, createdAt',
+      pipelineTasks: 'id, storyId, status, createdAt',
+      finalCuts: 'id, storyId, pipelineTaskId, createdAt',
+      savedImages: 'id, spaceId, name, sourceType, createdAt',
+      savedVoices: 'id, spaceId, name, sourceType, createdAt',
+      savedPrompts: 'id, spaceId, name, category, createdAt'
     });
   }
 }

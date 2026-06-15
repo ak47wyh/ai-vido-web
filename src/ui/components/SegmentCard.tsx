@@ -1,9 +1,12 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Play, RefreshCw, Users, Download, Volume2, Music, Trash2, ChevronDown, ChevronUp, Image as ImageIcon } from 'lucide-react';
+import { Play, RefreshCw, Users, Download, Volume2, Music, Trash2, ChevronDown, ChevronUp, Image as ImageIcon, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { StorySegment, Character, VideoTask, Background } from '../../domain/entities/models';
 import { BGMPanel } from './BGMPanel';
+import { AssetPicker } from './AssetPicker';
+import { useAssetPicker } from '../hooks/useAssetPicker';
+import { useSpace } from '../contexts/SpaceContext';
 
 interface SegmentCardProps {
   segment: StorySegment;
@@ -38,6 +41,8 @@ interface SegmentCardProps {
   onSuggestBGMStyle: (segmentContent: string) => Promise<void>;
   onUpdateActionContent?: (segmentId: string, content: string) => void;
   onUpdateFirstFrameImage?: (segmentId: string, imageUrl: string) => void;
+  onPickImage?: () => void;
+  onPickNarrationPrompt?: () => void;
 }
 
 const getStatusColor = (status: VideoTask['status']) => {
@@ -69,10 +74,13 @@ export const SegmentCard: React.FC<SegmentCardProps> = ({
   onBgmLyricsChange, onBgmCoverAudioUrlChange,
   onGenerateBGM, onGenerateLyrics, onSuggestBGMStyle,
   onUpdateActionContent, onUpdateFirstFrameImage,
+  onPickImage, onPickNarrationPrompt,
 }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { currentSpaceId } = useSpace();
   const [showAdvanced, setShowAdvanced] = React.useState(false);
+  const { state: assetPickerState, closePicker } = useAssetPicker();
 
   const mentionedCharNames = segment.mentionedCharacters
     .map(id => characterMap.get(id)?.name)
@@ -172,14 +180,22 @@ export const SegmentCard: React.FC<SegmentCardProps> = ({
                 <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
                   <ImageIcon size={14} /> {t('workbench.firstFrameImage', '视频参考图 (首帧/尾帧 URL)')}
                 </label>
-                <input 
-                  type="text" 
-                  className="form-input" 
+                <input
+                  type="text"
+                  className="form-input"
                   placeholder={t('workbench.firstFrameImagePlaceholder', '输入图片链接 (可选)')}
                   value={segment.firstFrameImage || ''}
                   onChange={(e) => onUpdateFirstFrameImage?.(segment.id, e.target.value)}
                   style={{ width: '100%', fontSize: '0.85rem', padding: '0.5rem' }}
                 />
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', marginTop: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                  onClick={() => onPickImage?.()}
+                >
+                  <ImageIcon size={12} /> {t('assetLibrary.pickerTitle', '从素材库选择').replace('{{type}}', t('assetLibrary.typeImage', '图片'))}
+                </button>
               </div>
             </div>
           )}
@@ -207,6 +223,12 @@ export const SegmentCard: React.FC<SegmentCardProps> = ({
           {narrationStatus === 'running' ? <RefreshCw size={14} className="spin" /> : <Volume2 size={14} />}
           {narrationStatus === 'running' ? t('character.generatingNarration') : t('character.generateNarration')}
         </button>
+        {onPickNarrationPrompt && (
+          <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', display: 'flex', alignItems: 'center', gap: '0.3rem', marginLeft: '0.5rem' }}
+            onClick={() => onPickNarrationPrompt()}>
+            <FileText size={14} /> {t('assetLibrary.pickerTitle', '从素材库选择提示词').replace('{{type}}', t('assetLibrary.typePrompt', '提示词'))}
+          </button>
+        )}
         {narrationUrl && (
           <audio controls style={{ width: '100%', marginTop: '0.5rem', height: '32px' }} src={narrationUrl} />
         )}
@@ -258,6 +280,15 @@ export const SegmentCard: React.FC<SegmentCardProps> = ({
           )}
         </div>
       </div>
+      {assetPickerState.isOpen && currentSpaceId && (
+        <AssetPicker
+          type={assetPickerState.type}
+          spaceId={currentSpaceId}
+          category={assetPickerState.category}
+          onSelect={assetPickerState.onSelect!}
+          onClose={closePicker}
+        />
+      )}
     </div>
   );
 };

@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Mic, Volume2, Upload, RefreshCw, Save } from 'lucide-react';
-import { voiceService } from '../../dependencies';
+import { Mic, Volume2, Upload, RefreshCw, Save, BookmarkPlus } from 'lucide-react';
+import { voiceService, assetLibraryService } from '../../dependencies';
 import type { T2ASyncModel } from '../../domain/ports/OutboundPorts';
 import { useToast } from '../contexts/ToastContext';
 import { getErrorMessage } from '../utils/errorUtils';
+import { useSpace } from '../contexts/SpaceContext';
+import { AssetSaveDialog } from '../components/AssetPicker';
 
 export const VoiceLab: React.FC = () => {
   const { t } = useTranslation();
@@ -19,6 +21,8 @@ export const VoiceLab: React.FC = () => {
   const [ttsSpeed, setTtsSpeed] = useState(1);
   const [isGeneratingTTS, setIsGeneratingTTS] = useState(false);
   const [ttsAudioUrl, setTtsAudioUrl] = useState<string | null>(null);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const { currentSpaceId } = useSpace();
 
   // Clone State
   const [cloneFile, setCloneFile] = useState<File | null>(null);
@@ -56,11 +60,31 @@ export const VoiceLab: React.FC = () => {
       setClonedVoiceId(newVoiceId);
       setTtsVoiceId(newVoiceId);
       showToast('success', `音色克隆成功！ID: ${newVoiceId}`);
-      // NOTE: cloneVoice doesn't return previewAudioUrl in this implementation, so we don't set audio url.
     } catch (e) {
       showToast('error', getErrorMessage(e, '克隆失败'));
     } finally {
       setIsCloning(false);
+    }
+  };
+
+  const handleSaveToLibrary = async (name: string, tags: string) => {
+    if (!ttsAudioUrl || !currentSpaceId) return;
+    try {
+      await assetLibraryService.saveVoiceFromUrl({
+        spaceId: currentSpaceId,
+        name,
+        audioUrl: ttsAudioUrl,
+        voiceId: ttsVoiceId,
+        model: ttsModel,
+        speed: ttsSpeed,
+        sampleText: ttsText,
+        tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+        sourceType: 'lab',
+      });
+      showToast('success', t('assetLibrary.saveSuccess', '素材保存成功'));
+      setShowSaveDialog(false);
+    } catch (e) {
+      showToast('error', getErrorMessage(e, t('assetLibrary.saveFailed', '素材保存失败')));
     }
   };
 
@@ -222,7 +246,21 @@ export const VoiceLab: React.FC = () => {
         <div className="glass-panel slide-up" style={{ marginTop: '2rem', padding: '1.5rem', textAlign: 'center' }}>
           <h3 style={{ margin: '0 0 1rem 0', color: 'var(--text-muted)' }}>生成结果</h3>
           <audio src={ttsAudioUrl} controls autoPlay style={{ width: '100%', maxWidth: '600px', height: '40px' }} />
+          <div style={{ marginTop: '1rem' }}>
+            <button className="btn btn-primary" onClick={() => setShowSaveDialog(true)}>
+              <BookmarkPlus size={16} /> {t('assetLibrary.saveBtn', '保存到素材库')}
+            </button>
+          </div>
         </div>
+      )}
+
+      {showSaveDialog && (
+        <AssetSaveDialog
+          title={t('assetLibrary.saveBtn', '保存到素材库')}
+          defaultName={`${ttsVoiceId} - ${ttsModel}`}
+          onSave={handleSaveToLibrary}
+          onCancel={() => setShowSaveDialog(false)}
+        />
       )}
     </div>
   );

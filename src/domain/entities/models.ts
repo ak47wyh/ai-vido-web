@@ -128,3 +128,51 @@ export interface FinalCut {
   srtContent?: string;
   createdAt: number;
 }
+
+// --- Asset Library (v8) ---
+
+export type SavedImageSource = 'lab' | 'pipeline' | 'character' | 'background';
+export type SavedVoiceSource = 'lab' | 'clone' | 'pipeline';
+export type PromptCategory = 'image' | 'voice' | 'story' | 'scene' | 'narration' | 'other';
+export type SavedPromptSource = 'lab' | 'pipeline' | 'manual';
+
+export interface SavedImage {
+  id: string;
+  spaceId: string;
+  name: string;
+  prompt: string;
+  model: string;
+  aspectRatio: string;
+  blobKey: string;
+  thumbnailBlobKey?: string;
+  tags: string[];
+  sourceType: SavedImageSource;
+  sourceId?: string;
+  createdAt: number;
+}
+
+export interface SavedVoice {
+  id: string;
+  spaceId: string;
+  name: string;
+  voiceId: string;
+  model: string;
+  speed: number;
+  sampleText: string;
+  audioBlobKey: string;
+  tags: string[];
+  sourceType: SavedVoiceSource;
+  sourceId?: string;
+  createdAt: number;
+}
+
+export interface SavedPrompt {
+  id: string;
+  spaceId: string;
+  name: string;
+  content: string;
+  category: PromptCategory;
+  tags: string[];
+  sourceType: SavedPromptSource;
+  createdAt: number;
+}

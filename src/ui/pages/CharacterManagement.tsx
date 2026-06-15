@@ -4,19 +4,22 @@ import { characterRepo, storyService, storySpaceService, imageGenerationService,
 import { v4 as uuidv4 } from 'uuid';
 import { Pencil, Plus, Trash2, Copy, Users, ChevronDown, ChevronUp, Sparkles, RefreshCw, Mic, Upload, Volume2, Wand2, Palette, Play } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { Character } from '../../domain/entities/models';
+import type { Character, SavedVoice } from '../../domain/entities/models';
 import { useSpace } from '../contexts/SpaceContext';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useImageUpload, useCopyToSpace } from '../hooks/useSharedForm';
 import { SYSTEM_VOICES, VOICES_BY_LANGUAGE, LANGUAGE_LABELS } from '../../domain/data/systemVoices';
 import { getErrorMessage } from '../utils/errorUtils';
+import { AssetPicker } from '../components/AssetPicker';
+import { useAssetPicker } from '../hooks/useAssetPicker';
 
 export const CharacterManagement: React.FC = () => {
   const { t } = useTranslation();
   const { currentSpaceId } = useSpace();
   const { showToast } = useToast();
   const { confirm } = useConfirm();
+  const { state: assetPickerState, openPicker, closePicker } = useAssetPicker();
   const characters = useSpaceScopedCharacters();
   const allSpaces = useAllSpaces();
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -236,6 +239,14 @@ export const CharacterManagement: React.FC = () => {
                 </optgroup>
               ))}
             </select>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', marginTop: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+              onClick={() => openPicker('voice', (asset: SavedVoice) => { setSelectedVoiceId(asset.voiceId || ''); })}
+            >
+              {t('assetLibrary.pickerTitle', '从素材库选择').replace('{{type}}', t('assetLibrary.typeVoice', '音色'))}
+            </button>
           </div>
 
           {/* Voice Clone */}
@@ -547,6 +558,15 @@ export const CharacterManagement: React.FC = () => {
           </div>
         )}
       </div>
+      {assetPickerState.isOpen && currentSpaceId && (
+        <AssetPicker
+          type={assetPickerState.type}
+          spaceId={currentSpaceId}
+          category={assetPickerState.category}
+          onSelect={assetPickerState.onSelect!}
+          onClose={closePicker}
+        />
+      )}
     </div>
   );
 };

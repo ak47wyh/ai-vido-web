@@ -124,9 +124,20 @@ export const modelManagementService = new ModelManagementService(modelAdapter);
 export const fileManagementService = new FileManagementService(fileAdapter);
 
 // ========================================
-// AI 增强服务（Agent / 自动剪辑 / 摄影指导 / BGM推荐）
-// ========================================
+// ==================== AI 增强服务（Agent / 自动剪辑 / 摄影指导 / BGM推荐） ====================
 export const agentService = new AgentService(textAdapter);
 export const autoEditService = new AutoEditService(ffmpegAdapter);
 export const cinematographyService = new CinematographyService(textAdapter);
 export const bgmRecommendationService = new BGMRecommendationService(textAdapter);
+
+// ==================== 素材库（离线存储） ====================
+import { AssetLibraryService } from './domain/services/AssetLibraryService';
+import { SavedImageRepository, SavedVoiceRepository, SavedPromptRepository } from './adapters/outbound/repositories/AssetLibraryRepositories';
+
+export const savedImageRepo = new SavedImageRepository();
+export const savedVoiceRepo = new SavedVoiceRepository();
+export const savedPromptRepo = new SavedPromptRepository();
+
+export const assetLibraryService = new AssetLibraryService(
+  savedImageRepo, savedVoiceRepo, savedPromptRepo
+);
