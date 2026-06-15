@@ -30,17 +30,35 @@ export class MiniMaxImageAdapter implements IImageGeneratorPort {
 
     // ── Build request payload ──────────────────────────────────────────────
     const model = context.model || 'image-01';
-    const responseFormat = context.responseFormat || 'base64';
+    const responseFormat = context.responseFormat || 'url';
+    const MAX_PROMPT_LENGTH = 1500;
+
+    // Truncate prompt to API limit
+    let prompt = context.prompt;
+    if (prompt.length > MAX_PROMPT_LENGTH) {
+      console.warn(`[MiniMaxImageAdapter] Prompt too long (${prompt.length}), truncating to ${MAX_PROMPT_LENGTH}`);
+      prompt = prompt.slice(0, MAX_PROMPT_LENGTH);
+    }
 
     const payload: Record<string, unknown> = {
       model,
-      prompt: context.prompt,
-      response_format: responseFormat,
+      prompt,
     };
 
-    // Aspect ratio
+    // Response format (API default is 'url')
+    if (responseFormat) {
+      payload.response_format = responseFormat;
+    }
+
+    // Aspect ratio — 21:9 only valid for image-01
+    const LIVE_UNSUPPORTED_RATIOS = ['21:9'];
     if (context.aspectRatio) {
-      payload.aspect_ratio = context.aspectRatio;
+      if (model === 'image-01-live' && LIVE_UNSUPPORTED_RATIOS.includes(context.aspectRatio)) {
+        console.warn(`[MiniMaxImageAdapter] aspect_ratio "${context.aspectRatio}" not supported by ${model}, falling back to 16:9`);
+        payload.aspect_ratio = '16:9';
+      } else {
+        payload.aspect_ratio = context.aspectRatio;
+      }
     }
 
     // Custom width/height (only for image-01)
@@ -82,6 +100,7 @@ export class MiniMaxImageAdapter implements IImageGeneratorPort {
     }
 
     console.log(`[MiniMaxImageAdapter] Generating image, model: ${model}, format: ${responseFormat}`);
+    console.log(`[MiniMaxImageAdapter] Payload:`, JSON.stringify(payload, null, 2));
 
     // ── Real API call ─────────────────────────────────────────────────────
     const baseUrl = config.minimaxBaseUrl.replace(/\/+$/, '');
@@ -101,8 +120,13 @@ export class MiniMaxImageAdapter implements IImageGeneratorPort {
 
     // Check base_resp error codes
     const statusCode = data?.base_resp?.status_code;
-    const error = getMiniMaxErrorMessage(statusCode, data?.base_resp?.status_msg, 'MiniMax Image Generation error');
-    if (error) throw new Error(error);
+    const statusMsg = data?.base_resp?.status_msg;
+    const error = getMiniMaxErrorMessage(statusCode, statusMsg, 'MiniMax Image Generation error');
+    if (error) {
+      console.error(`[MiniMaxImageAdapter] API error: status_code=${statusCode}, status_msg=${statusMsg}`);
+      console.error(`[MiniMaxImageAdapter] Request payload was:`, JSON.stringify(payload, null, 2));
+      throw new Error(error);
+    }
 
     // Parse metadata
     const metadata = data?.metadata ? {

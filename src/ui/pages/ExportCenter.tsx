@@ -1,40 +1,28 @@
 import React, { useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { Download, Trash2, Film, Filter, RefreshCw, FilmIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { db } from '../../adapters/outbound/repositories/DexieDatabase';
-import { useSpace } from '../contexts/SpaceContext';
+import { useSpaceScopedStories, useSpaceScopedFinalCuts } from '../hooks/useSpaceScopedQuery';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { getErrorMessage } from '../utils/errorUtils';
+import { PostProductionPanel } from '../components/PostProductionPanel';
 import type { FinalCut } from '../../domain/entities/models';
 
 type FilterRange = 'all' | 'today' | 'week' | 'month';
 
 export const ExportCenter: React.FC = () => {
   const { t } = useTranslation();
-  const { currentSpaceId } = useSpace();
   const { showToast } = useToast();
   const { confirm } = useConfirm();
   const [filterRange, setFilterRange] = useState<FilterRange>('all');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [previewCutId, setPreviewCutId] = useState<string | null>(null);
 
-  const stories = useLiveQuery(
-    () => currentSpaceId ? db.stories.where('spaceId').equals(currentSpaceId).toArray() : [],
-    [currentSpaceId]
-  );
+  const stories = useSpaceScopedStories();
+  const allCuts = useSpaceScopedFinalCuts();
 
-  const finalCuts = useLiveQuery(
-    () => currentSpaceId
-      ? db.finalCuts
-          .filter(cut => stories ? stories.some(s => s.id === cut.storyId) : false)
-          .toArray()
-      : [],
-    [currentSpaceId, stories]
-  );
-
-  const filteredCuts = filterCuts(finalCuts ?? [], filterRange);
+  const filteredCuts = filterCuts(allCuts, filterRange);
 
   const handleDownload = (cut: FinalCut) => {
     try {
@@ -92,7 +80,7 @@ export const ExportCenter: React.FC = () => {
   const formatDate = (timestamp: number) => new Date(timestamp).toLocaleString();
 
   const getStoryTitle = (storyId: string): string => {
-    return stories?.find(s => s.id === storyId)?.title || t('export.untitledStory');
+    return stories.find(s => s.id === storyId)?.title || t('export.untitledStory');
   };
 
   return (
@@ -153,6 +141,17 @@ export const ExportCenter: React.FC = () => {
             />
             <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
               {formatSize(cut.size)} · {formatDuration(cut.duration)} · {cut.hasSubtitles ? t('export.withSubs') : t('export.noSubs')} · {formatDate(cut.createdAt)}
+            </div>
+            <div style={{ marginTop: '1rem' }}>
+              <PostProductionPanel
+                videoBlob={cut.videoBlob}
+                videoUrl={null}
+                onVideoProcessed={({ blob }) => {
+                  cut.videoBlob = blob;
+                  db.finalCuts.put(cut);
+                  showToast('success', t('export.videoUpdated'));
+                }}
+              />
             </div>
           </div>
         );

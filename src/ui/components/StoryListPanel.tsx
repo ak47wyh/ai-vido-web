@@ -15,11 +15,12 @@ interface StoryListPanelProps {
   onQuickSplit: (storyId: string) => Promise<void>;
   onDeleteStory: (storyId: string) => Promise<void>;
   onRefineStoryText: (text: string) => Promise<string>;
+  onSaveStory: (storyId: string, title: string, originalText: string) => Promise<void>;
 }
 
 export const StoryListPanel: React.FC<StoryListPanelProps> = ({
   stories, selectedStoryId, isSplitting, isBreakingDown, refiningStoryText,
-  onSwitchStory, onCreateStory, onCreateAndBreakdown, onQuickSplit, onDeleteStory, onRefineStoryText,
+  onSwitchStory, onCreateStory, onCreateAndBreakdown, onQuickSplit, onDeleteStory, onRefineStoryText, onSaveStory,
 }) => {
   const { t } = useTranslation();
   const [title, setTitle] = useState('');
@@ -54,12 +55,7 @@ export const StoryListPanel: React.FC<StoryListPanelProps> = ({
 
   const handleSaveEdit = async () => {
     if (!editingStoryId || !editTitle.trim()) return;
-    const story = stories?.find(s => s.id === editingStoryId);
-    const wasSplit = story?.status === 'SPLIT';
-    if (wasSplit && (editTitle.trim() !== story!.title || editOriginalText.trim() !== story!.originalText)) {
-      setEditingStoryId(null);
-      return;
-    }
+    await onSaveStory(editingStoryId, editTitle.trim(), editOriginalText.trim());
     setEditingStoryId(null);
   };
 

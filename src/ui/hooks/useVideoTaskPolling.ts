@@ -5,7 +5,7 @@
  * 替代散落各处的 setInterval + useEffect 模式。
  */
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { VideoTask } from '../../domain/entities/models';
 import { videoGenerationService } from '../../dependencies';
 
@@ -93,7 +93,7 @@ export function useVideoTaskPolling(
       for (const t of pendingTasks) {
         if (!t.externalTaskId) continue;
         try {
-          const result = await videoGenerationService.videoGenerator.queryTaskStatus(t.externalTaskId);
+          const result = await videoGenerationService.videoGeneratorPort.queryTaskStatus(t.externalTaskId);
           if (cancelled) return;
           updated[t.id] = {
             taskId: t.id,
@@ -159,7 +159,7 @@ export function useSingleVideoTaskPolling(
     let cancelled = false;
     const tick = async () => {
       try {
-        const result = await videoGenerationService.videoGenerator.queryTaskStatus(task.externalTaskId!);
+        const result = await videoGenerationService.videoGeneratorPort.queryTaskStatus(task.externalTaskId!);
         if (cancelled) return;
         setStatus({
           taskId: task.id,

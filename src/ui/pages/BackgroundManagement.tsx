@@ -1,7 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../../adapters/outbound/repositories/DexieDatabase';
 import { backgroundRepo, storyService, storySpaceService, imageGenerationService, imageAdapter, textGenerationService } from '../../dependencies';
+import { useSpaceScopedBackgrounds, useAllSpaces } from '../hooks/useSpaceScopedQuery';
 import { v4 as uuidv4 } from 'uuid';
 import { Pencil, Plus, Trash2, Copy, Image as ImageIcon, ChevronDown, ChevronUp, Sparkles, RefreshCw, Wand2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -17,8 +16,8 @@ export const BackgroundManagement: React.FC = () => {
   const { currentSpaceId } = useSpace();
   const { showToast } = useToast();
   const { confirm } = useConfirm();
-  const backgrounds = useLiveQuery(() => currentSpaceId ? db.backgrounds.where('spaceId').equals(currentSpaceId).toArray() : [], [currentSpaceId]);
-  const allSpaces = useLiveQuery(() => db.storySpaces.toArray());
+  const backgrounds = useSpaceScopedBackgrounds();
+  const allSpaces = useAllSpaces();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingBackgroundId, setEditingBackgroundId] = useState<string | null>(null);
   const [name, setName] = useState('');

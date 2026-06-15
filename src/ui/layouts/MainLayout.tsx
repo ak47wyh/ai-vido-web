@@ -1,96 +1,180 @@
-import React from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
-import { LayoutDashboard, Users, Image as ImageIcon, BookOpen, Settings, FolderOpen, Download, Mic, MessageSquare } from 'lucide-react';
+import React, { useState } from 'react';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import {
+  LayoutDashboard, Users, Image as ImageIcon, BookOpen, Settings,
+  FolderOpen, Download, Mic, MessageSquare, Sparkles, Film,
+  ChevronLeft, ChevronRight, Plus, Zap, Palette
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../../adapters/outbound/repositories/DexieDatabase';
+import { useAllSpaces } from '../hooks/useSpaceScopedQuery';
 import { useSpace } from '../contexts/SpaceContext';
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
+import { storySpaceService } from '../../dependencies';
+import { useToast } from '../contexts/ToastContext';
 import './MainLayout.css';
+
+interface NavGroup {
+  key: string;
+  label: string;
+  items: { to: string; icon: React.ReactNode; label: string; badge?: string }[];
+}
 
 export const MainLayout: React.FC = () => {
   const { t } = useTranslation();
-  const spaces = useLiveQuery(() => db.storySpaces.toArray());
   const { currentSpaceId, setCurrentSpaceId } = useSpace();
+  const spaces = useAllSpaces();
+  const { showToast } = useToast();
+  const location = useLocation();
+  const [collapsed, setCollapsed] = useState(false);
 
   const handleSpaceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setCurrentSpaceId(e.target.value || null);
   };
 
+  const handleCreateSpace = async () => {
+    try {
+      await storySpaceService.createSpace(t('space.defaultName', '新空间'), '');
+      showToast('success', t('space.createSuccess'));
+    } catch {
+      showToast('error', t('space.createFailed', '创建空间失败'));
+    }
+  };
+
+  const navGroups: NavGroup[] = [
+    {
+      key: 'overview',
+      label: t('nav.groupOverview', '总览'),
+      items: [
+        { to: '/', icon: <LayoutDashboard size={18} />, label: t('nav.dashboard') },
+      ],
+    },
+    {
+      key: 'creation',
+      label: t('nav.groupCreation', '创作'),
+      items: [
+        { to: '/characters', icon: <Users size={18} />, label: t('nav.characters') },
+        { to: '/backgrounds', icon: <Palette size={18} />, label: t('nav.backgrounds') },
+        { to: '/workbench', icon: <BookOpen size={18} />, label: t('nav.workbench') },
+        { to: '/export', icon: <Download size={18} />, label: t('nav.export', '导出中心') },
+      ],
+    },
+    {
+      key: 'ai',
+      label: t('nav.groupAI', 'AI 实验室'),
+      items: [
+        { to: '/labs/image', icon: <ImageIcon size={18} />, label: t('nav.imageLab', '图片生成') },
+        { to: '/labs/voice', icon: <Mic size={18} />, label: t('nav.voiceLab', '音色与配音') },
+        { to: '/labs/text', icon: <MessageSquare size={18} />, label: t('nav.textLab', '文本润色') },
+      ],
+    },
+    {
+      key: 'manage',
+      label: t('nav.groupManage', '管理'),
+      items: [
+        { to: '/spaces', icon: <FolderOpen size={18} />, label: t('nav.spaces') },
+        { to: '/settings', icon: <Settings size={18} />, label: t('nav.settings') },
+      ],
+    },
+  ];
+
+  // 判断当前路径属于哪个创作步骤（用于流程指示器）
+  const creationSteps = ['/characters', '/backgrounds', '/workbench', '/export'];
+  const currentStepIndex = creationSteps.indexOf(location.pathname);
+
   return (
     <div className="layout-container">
-      <aside className="sidebar glass-panel">
+      <aside className={`sidebar ${collapsed ? 'sidebar-collapsed' : ''}`}>
+        {/* 折叠按钮 */}
+        <button
+          className="sidebar-collapse-btn"
+          onClick={() => setCollapsed(!collapsed)}
+          title={collapsed ? t('nav.expand', '展开') : t('nav.collapse', '收起')}
+        >
+          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+        </button>
+
+        {/* Logo */}
         <div className="sidebar-header">
-          <div className="logo-glow"></div>
-          <h2>AI Video Studio</h2>
+          <div className="logo-icon">
+            <Zap size={20} />
+          </div>
+          {!collapsed && <h2 className="logo-text">AI Video Studio</h2>}
         </div>
-        <div style={{ marginBottom: '1.5rem' }}>
-          <select
-            className="form-select"
-            value={currentSpaceId ?? ''}
-            onChange={handleSpaceChange}
-            style={{ width: '100%' }}
-          >
-            {spaces?.map(space => (
-              <option key={space.id} value={space.id}>{space.name}</option>
-            ))}
-          </select>
-        </div>
-        <nav className="sidebar-nav" style={{ flex: 1 }}>
-          <NavLink to="/" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} end>
-            <LayoutDashboard size={20} />
-            <span>{t('nav.dashboard')}</span>
-          </NavLink>
-          <NavLink to="/characters" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-            <Users size={20} />
-            <span>{t('nav.characters')}</span>
-          </NavLink>
-          <NavLink to="/backgrounds" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-            <ImageIcon size={20} />
-            <span>{t('nav.backgrounds')}</span>
-          </NavLink>
-          <NavLink to="/workbench" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-            <BookOpen size={20} />
-            <span>{t('nav.workbench')}</span>
-          </NavLink>
-          <NavLink to="/spaces" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-            <FolderOpen size={20} />
-            <span>{t('nav.spaces')}</span>
-          </NavLink>
-          <NavLink to="/export" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-            <Download size={20} />
-            <span>{t('nav.export', '导出中心')}</span>
-          </NavLink>
-        </nav>
-        
-        <div style={{ padding: '0 1rem', marginBottom: '0.5rem' }}>
-          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>AI 实验室</span>
-        </div>
-        <nav className="sidebar-nav" style={{ flex: 1, paddingTop: 0 }}>
-          <NavLink to="/labs/image" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-            <ImageIcon size={20} />
-            <span>{t('nav.imageLab', '图片生成')}</span>
-          </NavLink>
-          <NavLink to="/labs/voice" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-            <Mic size={20} />
-            <span>{t('nav.voiceLab', '音色与配音')}</span>
-          </NavLink>
-          <NavLink to="/labs/text" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-            <MessageSquare size={20} />
-            <span>{t('nav.textLab', '文本问答润色')}</span>
-          </NavLink>
+
+        {/* 空间切换器 */}
+        {!collapsed && (
+          <div className="space-switcher">
+            <select
+              className="form-select space-select"
+              value={currentSpaceId ?? ''}
+              onChange={handleSpaceChange}
+            >
+              {(spaces ?? []).map(space => (
+                <option key={space.id} value={space.id}>{space.name}</option>
+              ))}
+            </select>
+            <button className="space-add-btn" onClick={handleCreateSpace} title={t('space.newBtn')}>
+              <Plus size={14} />
+            </button>
+          </div>
+        )}
+
+        {/* 创作流程指示器 */}
+        {!collapsed && currentStepIndex >= 0 && (
+          <div className="creation-flow">
+            <div className="flow-label">
+              <Film size={12} />
+              <span>{t('nav.creationFlow', '创作流程')}</span>
+            </div>
+            <div className="flow-steps">
+              {[
+                { icon: <Users size={10} />, label: t('nav.flowCharacters', '角色') },
+                { icon: <Palette size={10} />, label: t('nav.flowBackgrounds', '场景') },
+                { icon: <Sparkles size={10} />, label: t('nav.flowGenerate', '生成') },
+                { icon: <Download size={10} />, label: t('nav.flowExport', '导出') },
+              ].map((step, i) => (
+                <React.Fragment key={i}>
+                  {i > 0 && <div className={`flow-connector ${i <= currentStepIndex ? 'completed' : ''}`} />}
+                  <div className={`flow-step ${i < currentStepIndex ? 'done' : ''} ${i === currentStepIndex ? 'current' : ''} ${i > currentStepIndex ? 'pending' : ''}`}>
+                    <div className="flow-dot">{step.icon}</div>
+                    <span className="flow-step-label">{step.label}</span>
+                  </div>
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 导航分组 */}
+        <nav className="sidebar-nav">
+          {navGroups.map(group => (
+            <div key={group.key} className="nav-group">
+              {!collapsed && <div className="nav-group-label">{group.label}</div>}
+              {group.items.map(item => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.to === '/'}
+                  className={({ isActive }) => `nav-item ${isActive ? 'active' : ''} ${collapsed ? 'nav-item-collapsed' : ''}`}
+                  title={collapsed ? item.label : undefined}
+                >
+                  <span className="nav-icon">{item.icon}</span>
+                  {!collapsed && <span className="nav-label">{item.label}</span>}
+                  {!collapsed && item.badge && <span className="nav-badge">{item.badge}</span>}
+                </NavLink>
+              ))}
+            </div>
+          ))}
         </nav>
 
-        <div style={{ paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
-          <NavLink to="/settings" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-            <Settings size={20} />
-            <span>{t('nav.settings')}</span>
-          </NavLink>
-          <div style={{ marginTop: '0.5rem' }}>
+        {/* 底部：语言切换 */}
+        {!collapsed && (
+          <div className="sidebar-footer">
             <LanguageSwitcher />
           </div>
-        </div>
+        )}
       </aside>
+
       <main className="main-content">
         <div className="glass-panel main-panel">
           <Outlet />

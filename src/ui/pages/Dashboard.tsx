@@ -1,56 +1,25 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../../adapters/outbound/repositories/DexieDatabase';
 import { Users, Image as ImageIcon, BookOpen, Settings, ArrowRight, CheckCircle, XCircle, Clock, Film } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { useSpace } from '../contexts/SpaceContext';
+import { useSpaceScopedCharacters, useSpaceScopedBackgrounds, useSpaceScopedStories, useSpaceVideoTaskStats, useRecentStories } from '../hooks/useSpaceScopedQuery';
 
 export const Dashboard: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { currentSpaceId } = useSpace();
-
   // Space-aware counts
-  const characterCount = useLiveQuery(
-    () => currentSpaceId ? db.characters.where('spaceId').equals(currentSpaceId).count() : 0,
-    [currentSpaceId]
-  ) ?? 0;
-  const backgroundCount = useLiveQuery(
-    () => currentSpaceId ? db.backgrounds.where('spaceId').equals(currentSpaceId).count() : 0,
-    [currentSpaceId]
-  ) ?? 0;
-  const storyCount = useLiveQuery(
-    () => currentSpaceId ? db.stories.where('spaceId').equals(currentSpaceId).count() : 0,
-    [currentSpaceId]
-  ) ?? 0;
+  const characters = useSpaceScopedCharacters();
+  const characterCount = characters.length;
+  const backgrounds = useSpaceScopedBackgrounds();
+  const backgroundCount = backgrounds.length;
+  const stories = useSpaceScopedStories();
+  const storyCount = stories.length;
 
-  // Space-aware video task stats: only count tasks for stories in current space
-  const spaceVideoTaskStats = useLiveQuery(async () => {
-    if (!currentSpaceId) return { success: 0, failed: 0, processing: 0, total: 0 };
-    const spaceStories = await db.stories.where('spaceId').equals(currentSpaceId).toArray();
-    const storyIds = new Set(spaceStories.map(s => s.id));
-    const allSegments = await db.segments.toArray();
-    const spaceSegmentIds = new Set(allSegments.filter(seg => storyIds.has(seg.storyId)).map(seg => seg.id));
-    const allTasks = await db.videoTasks.toArray();
-    const spaceTasks = allTasks.filter(t => spaceSegmentIds.has(t.segmentId));
-    return {
-      success: spaceTasks.filter(t => t.status === 'SUCCESS').length,
-      failed: spaceTasks.filter(t => t.status === 'FAILED').length,
-      processing: spaceTasks.filter(t => t.status === 'PROCESSING' || t.status === 'PENDING').length,
-      total: spaceTasks.length
-    };
-  }, [currentSpaceId]);
-
-  const taskStats = spaceVideoTaskStats ?? { success: 0, failed: 0, processing: 0, total: 0 };
+  // Space-aware video task stats
+  const taskStats = useSpaceVideoTaskStats();
 
   // Recent stories in current space
-  const recentStories = useLiveQuery(
-    () => currentSpaceId
-      ? db.stories.where('spaceId').equals(currentSpaceId).reverse().sortBy('createdAt').then(arr => arr.slice(0, 3))
-      : [],
-    [currentSpaceId]
-  );
+  const recentStories = useRecentStories(3);
 
   const steps = [
     {

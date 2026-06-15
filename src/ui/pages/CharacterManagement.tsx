@@ -1,6 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../../adapters/outbound/repositories/DexieDatabase';
+import { useSpaceScopedCharacters, useAllSpaces } from '../hooks/useSpaceScopedQuery';
 import { characterRepo, storyService, storySpaceService, imageGenerationService, imageAdapter, voiceService, textGenerationService } from '../../dependencies';
 import { v4 as uuidv4 } from 'uuid';
 import { Pencil, Plus, Trash2, Copy, Users, ChevronDown, ChevronUp, Sparkles, RefreshCw, Mic, Upload, Volume2, Wand2, Palette, Play } from 'lucide-react';
@@ -18,8 +17,8 @@ export const CharacterManagement: React.FC = () => {
   const { currentSpaceId } = useSpace();
   const { showToast } = useToast();
   const { confirm } = useConfirm();
-  const characters = useLiveQuery(() => currentSpaceId ? db.characters.where('spaceId').equals(currentSpaceId).toArray() : [], [currentSpaceId]);
-  const allSpaces = useLiveQuery(() => db.storySpaces.toArray());
+  const characters = useSpaceScopedCharacters();
+  const allSpaces = useAllSpaces();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingCharacterId, setEditingCharacterId] = useState<string | null>(null);
   const [name, setName] = useState('');

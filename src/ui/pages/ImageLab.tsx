@@ -75,7 +75,13 @@ export const ImageLab: React.FC = () => {
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem', padding: '1.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: 'var(--radius-md)' }}>
           <div style={{ flex: 1, minWidth: '200px' }}>
             <label className="form-label">{t('imageLab.model', '生成模型')}</label>
-            <select className="form-select" value={model} onChange={e => setModel(e.target.value as ImageModel)}>
+            <select className="form-select" value={model} onChange={e => {
+              const newModel = e.target.value as ImageModel;
+              setModel(newModel);
+              if (newModel === 'image-01-live' && aspectRatio === '21:9') {
+                setAspectRatio('16:9');
+              }
+            }}>
               <option value="image-01">image-01 (写实/通用)</option>
               <option value="image-01-live">image-01-live (二次元/动漫)</option>
             </select>
@@ -89,7 +95,9 @@ export const ImageLab: React.FC = () => {
               <option value="1:1">1:1 (正方形头像)</option>
               <option value="4:3">4:3 (标准)</option>
               <option value="3:4">3:4</option>
-              <option value="21:9">21:9 (宽屏电影)</option>
+              <option value="3:2">3:2</option>
+              <option value="2:3">2:3</option>
+              {model === 'image-01' && <option value="21:9">21:9 (宽屏电影)</option>}
             </select>
           </div>
 
