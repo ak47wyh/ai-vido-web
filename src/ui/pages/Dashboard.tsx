@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Image as ImageIcon, BookOpen, Settings, ArrowRight, CheckCircle, XCircle, Clock, Film } from 'lucide-react';
+import { Users, Image as ImageIcon, BookOpen, Settings, ArrowRight, CheckCircle, XCircle, Clock, Film, Mic, MessageSquare, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useSpaceScopedCharacters, useSpaceScopedBackgrounds, useSpaceScopedStories, useSpaceVideoTaskStats, useRecentStories } from '../hooks/useSpaceScopedQuery';
 
@@ -122,6 +122,43 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* AI 实验室快捷入口 */}
+      <div style={{ marginTop: '2rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+          <Sparkles size={18} style={{ color: 'var(--primary-color)' }} />
+          <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{t('dashboard.aiLab', 'AI 实验室')}</h3>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1rem' }}>
+          {[
+            { icon: <ImageIcon size={20} />, label: t('nav.imageLab', '图片生成'), path: '/labs/image', color: '#ec4899', desc: t('dashboard.aiImageDesc', 'AI 图片生成与编辑') },
+            { icon: <Film size={20} />, label: t('nav.videoLab', '视频生成'), path: '/labs/video', color: '#3b82f6', desc: t('dashboard.aiVideoDesc', '文生视频、图生视频、首尾帧、主体参考') },
+            { icon: <Mic size={20} />, label: t('nav.voiceLab', '音色与配音'), path: '/labs/voice', color: '#10b981', desc: t('dashboard.aiVoiceDesc', '音色克隆、文本配音、音色设计') },
+            { icon: <MessageSquare size={20} />, label: t('nav.textLab', '文本润色'), path: '/labs/text', color: '#f59e0b', desc: t('dashboard.aiTextDesc', 'AI 文本优化与改写') },
+          ].map(item => (
+            <div
+              key={item.path}
+              className="glass-panel interactive"
+              style={{ padding: '1.25rem', cursor: 'pointer', transition: 'all 0.2s' }}
+              onClick={() => navigate(item.path)}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                <div style={{
+                  width: '32px', height: '32px', borderRadius: 'var(--radius-md)',
+                  background: `${item.color}20`, color: item.color,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {item.icon}
+                </div>
+                <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{item.label}</span>
+              </div>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0, lineHeight: 1.4 }}>
+                {item.desc}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Stats row: Video task stats + Recent stories */}

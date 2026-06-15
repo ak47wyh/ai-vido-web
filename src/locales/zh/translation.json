@@ -14,6 +14,7 @@
     "settings": "配置中心",
     "export": "导出中心",
     "imageLab": "图片生成",
+    "videoLab": "视频生成",
     "voiceLab": "音色与配音",
     "textLab": "文本润色",
     "groupOverview": "总览",

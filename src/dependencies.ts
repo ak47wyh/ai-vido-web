@@ -25,6 +25,7 @@ import { MockStoryBreakdownAdapter } from './adapters/outbound/api/MockStoryBrea
 // ==================== 领域服务层 ====================
 import { StoryService } from './domain/services/StoryService';
 import { VideoGenerationService } from './domain/services/VideoGenerationService';
+import { VideoLabService } from './domain/services/VideoLabService';
 import { StorySpaceService } from './domain/services/StorySpaceService';
 import { PostProcessService } from './domain/services/PostProcessService';
 import { PipelineService } from './domain/services/PipelineService';
@@ -91,6 +92,8 @@ export const textGenerationService = new TextGenerationService(textAdapter);
 export const videoGenerationService = new VideoGenerationService(
   videoTaskRepo, segmentRepo, characterRepo, backgroundRepo, videoAdapter
 );
+
+export const videoLabService = new VideoLabService(videoAdapter);
 
 export const voiceService = new VoiceService(voiceAdapter, characterRepo);
 

@@ -1,0 +1,807 @@
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { Film, Image, Layers, User, FileText, RefreshCw, Upload, ChevronDown, ChevronUp, AlertCircle, Link, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { videoLabService } from '../../dependencies';
+import type { VideoModel, VideoResolution, VideoGenerationMode, VideoAgentContext } from '../../domain/ports/OutboundPorts';
+import { useToast } from '../contexts/ToastContext';
+import { getErrorMessage } from '../utils/errorUtils';
+import { CameraDirectivePanel } from '../components/CameraDirectivePanel';
+import { VideoTaskCard } from '../components/VideoTaskCard';
+import type { VideoLabTask } from '../components/VideoTaskCard';
+
+type VideoLabTab = 't2v' | 'i2v' | 'fl2v' | 's2v' | 'agent' | 'tasks';
+
+// ==================== 模型/时长/分辨率联动配置 ====================
+const MODEL_CONFIG: Record<string, {
+  durations: number[];
+  resolutions6s: VideoResolution[];
+  resolutions10s: VideoResolution[];
+  supportsFastPretreatment: boolean;
+  supportsCameraDirective: boolean;
+}> = {
+  'MiniMax-Hailuo-2.3': { durations: [6, 10], resolutions6s: ['768P', '1080P'], resolutions10s: ['768P'], supportsFastPretreatment: true, supportsCameraDirective: true },
+  'MiniMax-Hailuo-2.3-Fast': { durations: [6, 10], resolutions6s: ['768P', '1080P'], resolutions10s: ['768P'], supportsFastPretreatment: true, supportsCameraDirective: true },
+  'MiniMax-Hailuo-02': { durations: [6, 10], resolutions6s: ['512P', '768P', '1080P'], resolutions10s: ['512P', '768P'], supportsFastPretreatment: true, supportsCameraDirective: true },
+  'T2V-01-Director': { durations: [6], resolutions6s: ['720P'], resolutions10s: [], supportsFastPretreatment: false, supportsCameraDirective: true },
+  'T2V-01': { durations: [6], resolutions6s: ['720P'], resolutions10s: [], supportsFastPretreatment: false, supportsCameraDirective: false },
+  'I2V-01-Director': { durations: [6], resolutions6s: ['720P'], resolutions10s: [], supportsFastPretreatment: false, supportsCameraDirective: true },
+  'I2V-01-live': { durations: [6], resolutions6s: ['720P'], resolutions10s: [], supportsFastPretreatment: false, supportsCameraDirective: false },
+  'I2V-01': { durations: [6], resolutions6s: ['720P'], resolutions10s: [], supportsFastPretreatment: false, supportsCameraDirective: false },
+  'S2V-01': { durations: [6], resolutions6s: ['720P'], resolutions10s: [], supportsFastPretreatment: false, supportsCameraDirective: false },
+};
+
+const T2V_MODELS: VideoModel[] = ['MiniMax-Hailuo-2.3', 'MiniMax-Hailuo-02', 'T2V-01-Director', 'T2V-01'];
+const I2V_MODELS: VideoModel[] = ['MiniMax-Hailuo-2.3', 'MiniMax-Hailuo-2.3-Fast', 'MiniMax-Hailuo-02', 'I2V-01-Director', 'I2V-01-live', 'I2V-01'];
+
+const VIDEO_AGENT_TEMPLATES = [
+  { id: '393769180141805569', name: '人物动态', description: '上传人物照片，生成动态视频' },
+];
+
+const POLLING_TIMEOUT_MS = 5 * 60 * 1000; // 5 分钟轮询超时
+const MAX_IMAGE_SIZE_MB = 20;
+
+// 递增 ID 用于图片上传 input
+let imageUploadCounter = 0;
+
+// 图片转 Base64
+const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};
+
+// 校验图片文件
+const validateImageFile = (file: File): string | null => {
+  const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+  if (!validTypes.includes(file.type)) return '仅支持 JPG/PNG/WebP 格式';
+  if (file.size > MAX_IMAGE_SIZE_MB * 1024 * 1024) return `文件大小不能超过 ${MAX_IMAGE_SIZE_MB}MB`;
+  return null;
+};
+
+// ==================== 共享子组件: ImageUploadField ====================
+interface ImageUploadFieldProps {
+  label: string;
+  value: string | null;
+  onChange: (url: string | null) => void;
+  borderColor?: string;
+  bgColor?: string;
+  placeholder?: string;
+  maxHeight?: string;
+}
+
+const ImageUploadField: React.FC<ImageUploadFieldProps> = ({
+  label, value, onChange, borderColor, bgColor, placeholder, maxHeight = '200px',
+}) => {
+  const [mode, setMode] = useState<'file' | 'url'>('file');
+  const [urlInput, setUrlInput] = useState('');
+  const [fileInputId] = useState(() => `img-upload-${++imageUploadCounter}`);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const err = validateImageFile(file);
+    if (err) { alert(err); return; }
+    const base64 = await fileToBase64(file);
+    onChange(base64);
+  };
+
+  const handleUrlConfirm = () => {
+    const trimmed = urlInput.trim();
+    if (trimmed) onChange(trimmed);
+  };
+
+  const borderStyle = borderColor || 'var(--border-color)';
+  const bgStyle = bgColor || 'rgba(0,0,0,0.1)';
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <label className="form-label" style={{ marginBottom: 0 }}>{label}</label>
+        <div style={{ display: 'flex', gap: '0.25rem' }}>
+          <button
+            className={`btn ${mode === 'file' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ fontSize: '0.7rem', padding: '0.15rem 0.4rem' }}
+            onClick={() => setMode('file')}
+          >本地上传</button>
+          <button
+            className={`btn ${mode === 'url' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ fontSize: '0.7rem', padding: '0.15rem 0.4rem' }}
+            onClick={() => setMode('url')}
+          ><Link size={10} /> URL</button>
+        </div>
+      </div>
+
+      {mode === 'file' ? (
+        <div
+          style={{ border: `2px dashed ${borderStyle}`, borderRadius: 'var(--radius-md)', padding: value ? '0.5rem' : '2rem', textAlign: 'center', cursor: 'pointer', background: bgStyle, marginTop: '0.5rem', overflow: 'hidden' }}
+          onClick={() => document.getElementById(fileInputId)?.click()}
+        >
+          {value ? (
+            <div style={{ position: 'relative' }}>
+              <img src={value} alt={label} style={{ maxWidth: '100%', maxHeight, borderRadius: 'var(--radius-md)' }} />
+              <button
+                onClick={e => { e.stopPropagation(); onChange(null); }}
+                style={{ position: 'absolute', top: '0.25rem', right: '0.25rem', background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '50%', color: '#fff', cursor: 'pointer', padding: '0.2rem', lineHeight: 1 }}
+              ><X size={14} /></button>
+            </div>
+          ) : (
+            <>
+              <Upload size={32} style={{ color: 'var(--text-muted)', marginBottom: '0.5rem' }} />
+              <p style={{ margin: 0, color: 'var(--text-color)', fontSize: '0.85rem' }}>{placeholder || `点击上传图片 (JPG/PNG/WebP, <${MAX_IMAGE_SIZE_MB}MB)`}</p>
+            </>
+          )}
+          <input id={fileInputId} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFileChange} />
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+          <input
+            className="form-input"
+            placeholder="粘贴图片 URL (https://...)"
+            value={urlInput}
+            onChange={e => setUrlInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleUrlConfirm()}
+            style={{ flex: 1, fontSize: '0.85rem' }}
+          />
+          <button className="btn btn-secondary" style={{ fontSize: '0.8rem' }} onClick={handleUrlConfirm} disabled={!urlInput.trim()}>确认</button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ==================== 共享子组件: VideoModelConfig ====================
+interface VideoModelConfigProps {
+  models: VideoModel[];
+  model: VideoModel;
+  onModelChange: (m: VideoModel) => void;
+  duration: 6 | 10;
+  onDurationChange: (d: 6 | 10) => void;
+  resolution: VideoResolution;
+  onResolutionChange: (r: VideoResolution) => void;
+  promptOptimizer: boolean;
+  onPromptOptimizerChange: (v: boolean) => void;
+  fastPretreatment: boolean;
+  onFastPretreatmentChange: (v: boolean) => void;
+  watermark: boolean;
+  onWatermarkChange: (v: boolean) => void;
+  showDuration?: boolean;
+  showAdvanced?: boolean;
+}
+
+const VideoModelConfig: React.FC<VideoModelConfigProps> = ({
+  models, model, onModelChange, duration, onDurationChange, resolution, onResolutionChange,
+  promptOptimizer, onPromptOptimizerChange, fastPretreatment, onFastPretreatmentChange,
+  watermark, onWatermarkChange, showDuration = true, showAdvanced = true,
+}) => {
+  const [expanded, setExpanded] = useState(false);
+  const cfg = MODEL_CONFIG[model];
+  const availableDurations = cfg?.durations || [6];
+  const availableResolutions = duration === 10 ? (cfg?.resolutions10s || []) : (cfg?.resolutions6s || ['720P']);
+
+  const handleModelChange = (m: VideoModel) => {
+    onModelChange(m);
+    const newCfg = MODEL_CONFIG[m];
+    if (newCfg) {
+      const resList = duration === 10 ? newCfg.resolutions10s : newCfg.resolutions6s;
+      if (!resList.includes(resolution) && resList.length > 0) onResolutionChange(resList[0]);
+    }
+  };
+
+  const handleDurationChange = (d: 6 | 10) => {
+    onDurationChange(d);
+    const resList = d === 10 ? (cfg?.resolutions10s || []) : (cfg?.resolutions6s || []);
+    if (!resList.includes(resolution) && resList.length > 0) onResolutionChange(resList[0]);
+  };
+
+  const labelStyle: React.CSSProperties = { fontSize: '0.85rem' };
+  const selectStyle: React.CSSProperties = { width: '100%' };
+
+  return (
+    <>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem', padding: '1.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: 'var(--radius-md)' }}>
+        {models.length > 1 && (
+          <div style={{ flex: 1, minWidth: '180px' }}>
+            <label className="form-label" style={labelStyle}>模型</label>
+            <select className="form-select" style={selectStyle} value={model} onChange={e => handleModelChange(e.target.value as VideoModel)}>
+              {models.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+        )}
+        {showDuration && (
+          <div style={{ flex: 1, minWidth: '120px' }}>
+            <label className="form-label" style={labelStyle}>时长</label>
+            <select className="form-select" style={selectStyle} value={duration} onChange={e => handleDurationChange(Number(e.target.value) as 6 | 10)}>
+              {availableDurations.map(d => <option key={d} value={d}>{d}s</option>)}
+            </select>
+          </div>
+        )}
+        <div style={{ flex: 1, minWidth: '120px' }}>
+          <label className="form-label" style={labelStyle}>分辨率</label>
+          <select className="form-select" style={selectStyle} value={resolution} onChange={e => onResolutionChange(e.target.value as VideoResolution)}>
+            {availableResolutions.map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {showAdvanced && (
+        <div>
+          <button className="btn btn-secondary" style={{ fontSize: '0.8rem' }} onClick={() => setExpanded(!expanded)}>
+            {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />} 高级设置
+          </button>
+          {expanded && (
+            <div style={{ marginTop: '0.75rem', padding: '1rem', background: 'rgba(0,0,0,0.15)', borderRadius: 'var(--radius-md)', display: 'flex', flexWrap: 'wrap', gap: '1.5rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.85rem' }}>
+                <input type="checkbox" checked={promptOptimizer} onChange={e => onPromptOptimizerChange(e.target.checked)} /> Prompt 优化
+              </label>
+              {cfg?.supportsFastPretreatment && (
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.85rem' }}>
+                  <input type="checkbox" checked={fastPretreatment} onChange={e => onFastPretreatmentChange(e.target.checked)} /> 快速预处理
+                </label>
+              )}
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.85rem' }}>
+                <input type="checkbox" checked={watermark} onChange={e => onWatermarkChange(e.target.checked)} /> 添加水印
+              </label>
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  );
+};
+
+// ==================== 主页面 ====================
+export const VideoLab: React.FC = () => {
+  const { showToast } = useToast();
+  const navigate = useNavigate();
+
+  const [activeTab, setActiveTab] = useState<VideoLabTab>('t2v');
+
+  // ==================== Tasks ====================
+  const [tasks, setTasks] = useState<VideoLabTask[]>([]);
+  const stopPollingRef = useRef<Map<string, () => void>>(new Map());
+
+  // 组件卸载时清理所有轮询
+  useEffect(() => {
+    const ref = stopPollingRef;
+    return () => {
+      for (const [, stop] of ref.current) stop();
+      ref.current.clear();
+      videoLabService.cancelAllPolling();
+    };
+  }, []);
+
+  // ==================== T2V State ====================
+  const [t2vPrompt, setT2vPrompt] = useState('');
+  const [t2vModel, setT2vModel] = useState<VideoModel>('MiniMax-Hailuo-2.3');
+  const [t2vDuration, setT2vDuration] = useState<6 | 10>(6);
+  const [t2vResolution, setT2vResolution] = useState<VideoResolution>('768P');
+  const [t2vPromptOptimizer, setT2vPromptOptimizer] = useState(true);
+  const [t2vFastPretreatment, setT2vFastPretreatment] = useState(false);
+  const [t2vWatermark, setT2vWatermark] = useState(false);
+  const [isSubmittingT2V, setIsSubmittingT2V] = useState(false);
+
+  // ==================== I2V State ====================
+  const [i2vFirstFrame, setI2vFirstFrame] = useState<string | null>(null);
+  const [i2vPrompt, setI2vPrompt] = useState('');
+  const [i2vModel, setI2vModel] = useState<VideoModel>('I2V-01');
+  const [i2vDuration, setI2vDuration] = useState<6 | 10>(6);
+  const [i2vResolution, setI2vResolution] = useState<VideoResolution>('720P');
+  const [i2vPromptOptimizer, setI2vPromptOptimizer] = useState(true);
+  const [i2vFastPretreatment, setI2vFastPretreatment] = useState(false);
+  const [i2vWatermark, setI2vWatermark] = useState(false);
+  const [isSubmittingI2V, setIsSubmittingI2V] = useState(false);
+
+  // ==================== FL2V State ====================
+  const [fl2vFirstFrame, setFl2vFirstFrame] = useState<string | null>(null);
+  const [fl2vLastFrame, setFl2vLastFrame] = useState<string | null>(null);
+  const [fl2vPrompt, setFl2vPrompt] = useState('');
+  const [fl2vDuration, setFl2vDuration] = useState<6 | 10>(6);
+  const [fl2vResolution, setFl2vResolution] = useState<VideoResolution>('768P');
+  const [fl2vPromptOptimizer, setFl2vPromptOptimizer] = useState(true);
+  const [fl2vWatermark, setFl2vWatermark] = useState(false);
+  const [isSubmittingFL2V, setIsSubmittingFL2V] = useState(false);
+
+  // ==================== S2V State ====================
+  const [s2vSubjectImage, setS2vSubjectImage] = useState<string | null>(null);
+  const [s2vPrompt, setS2vPrompt] = useState('');
+  const [s2vPromptOptimizer, setS2vPromptOptimizer] = useState(true);
+  const [s2vWatermark, setS2vWatermark] = useState(false);
+  const [isSubmittingS2V, setIsSubmittingS2V] = useState(false);
+
+  // ==================== Agent State ====================
+  const [agentTemplateId, setAgentTemplateId] = useState(VIDEO_AGENT_TEMPLATES[0]?.id || '');
+  const [agentTextInput, setAgentTextInput] = useState('');
+  const [agentMediaFile, setAgentMediaFile] = useState<File | null>(null);
+  const [isSubmittingAgent, setIsSubmittingAgent] = useState(false);
+
+  // ==================== Helpers ====================
+  const insertDirective = (setter: React.Dispatch<React.SetStateAction<string>>, directive: string) => {
+    setter(prev => prev + `[${directive}]`);
+  };
+
+  // ==================== 业务闭环: 使用视频到分镜 ====================
+  const handleUseInStory = useCallback((task: VideoLabTask) => {
+    if (!task.videoUrl) return;
+    navigate('/workbench');
+    showToast('success', '已跳转到故事工作台，可在分镜中使用该视频');
+  }, [navigate, showToast]);
+
+  // ==================== 业务闭环: 跨Tab使用图片 ====================
+  const handleUseAsInput = useCallback((url: string, target: 'i2v-first' | 'fl2v-first' | 'fl2v-last' | 's2v-subject') => {
+    switch (target) {
+      case 'i2v-first': setI2vFirstFrame(url); setActiveTab('i2v'); break;
+      case 'fl2v-first': setFl2vFirstFrame(url); setActiveTab('fl2v'); break;
+      case 'fl2v-last': setFl2vLastFrame(url); setActiveTab('fl2v'); break;
+      case 's2v-subject': setS2vSubjectImage(url); setActiveTab('s2v'); break;
+    }
+    showToast('success', '已填入图片，可在目标 Tab 中继续操作');
+  }, [showToast]);
+
+  // ==================== Submit & Polling ====================
+  const addTaskAndPoll = useCallback((taskId: string, mode: VideoGenerationMode | 'agent', prompt: string, model?: string, duration?: number, resolution?: string, isAgent = false) => {
+    const task: VideoLabTask = {
+      taskId,
+      mode,
+      status: 'PROCESSING',
+      prompt: prompt.substring(0, 100),
+      createdAt: Date.now(),
+      model,
+      duration,
+      resolution,
+    };
+    setTasks(prev => [task, ...prev]);
+    setActiveTab('tasks');
+
+    // 轮询超时定时器
+    const timeoutId = setTimeout(() => {
+      const stop = stopPollingRef.current.get(taskId);
+      if (stop) { stop(); stopPollingRef.current.delete(taskId); }
+      setTasks(prev => prev.map(t => t.taskId === taskId ? { ...t, status: 'FAILED', errorMessage: '生成超时 (5分钟)' } : t));
+      showToast('error', '视频生成超时');
+    }, POLLING_TIMEOUT_MS);
+
+    const stopPolling = videoLabService.startPolling(taskId, isAgent, (result) => {
+      const status = result.status.toUpperCase();
+      setTasks(prev => prev.map(t => {
+        if (t.taskId !== taskId) return t;
+        return {
+          ...t,
+          status,
+          videoUrl: 'videoUrl' in result ? result.videoUrl : undefined,
+          fileId: 'fileId' in result ? result.fileId : undefined,
+          videoWidth: 'videoWidth' in result ? result.videoWidth : undefined,
+          videoHeight: 'videoHeight' in result ? result.videoHeight : undefined,
+          errorMessage: 'errorMessage' in result ? result.errorMessage : undefined,
+        };
+      }));
+      if (status === 'SUCCESS' || status === 'FAIL' || status === 'FAILED') {
+        clearTimeout(timeoutId);
+        if (status === 'SUCCESS') {
+          showToast('success', '视频生成成功！');
+        } else {
+          showToast('error', '视频生成失败');
+        }
+      }
+    });
+    stopPollingRef.current.set(taskId, () => { stopPolling(); clearTimeout(timeoutId); });
+  }, [showToast]);
+
+  const handleT2VSubmit = async () => {
+    if (!t2vPrompt.trim()) return;
+    setIsSubmittingT2V(true);
+    try {
+      const taskId = await videoLabService.submitTask({
+        mode: 't2v', model: t2vModel, prompt: t2vPrompt,
+        promptOptimizer: t2vPromptOptimizer, fastPretreatment: t2vFastPretreatment,
+        duration: t2vDuration, resolution: t2vResolution, aigcWatermark: t2vWatermark,
+      });
+      addTaskAndPoll(taskId, 't2v', t2vPrompt, t2vModel, t2vDuration, t2vResolution);
+      showToast('success', '文生视频任务已提交');
+    } catch (e) {
+      showToast('error', getErrorMessage(e, '任务提交失败'));
+    } finally {
+      setIsSubmittingT2V(false);
+    }
+  };
+
+  const handleI2VSubmit = async () => {
+    if (!i2vFirstFrame) return;
+    setIsSubmittingI2V(true);
+    try {
+      const taskId = await videoLabService.submitTask({
+        mode: 'i2v', model: i2vModel, prompt: i2vPrompt, firstFrameImage: i2vFirstFrame,
+        promptOptimizer: i2vPromptOptimizer, fastPretreatment: i2vFastPretreatment,
+        duration: i2vDuration, resolution: i2vResolution, aigcWatermark: i2vWatermark,
+      });
+      addTaskAndPoll(taskId, 'i2v', i2vPrompt || '图生视频', i2vModel, i2vDuration, i2vResolution);
+      showToast('success', '图生视频任务已提交');
+    } catch (e) {
+      showToast('error', getErrorMessage(e, '任务提交失败'));
+    } finally {
+      setIsSubmittingI2V(false);
+    }
+  };
+
+  const handleFL2VSubmit = async () => {
+    if (!fl2vFirstFrame || !fl2vLastFrame) return;
+    setIsSubmittingFL2V(true);
+    try {
+      const taskId = await videoLabService.submitTask({
+        mode: 'fl2v', model: 'MiniMax-Hailuo-02', prompt: fl2vPrompt,
+        firstFrameImage: fl2vFirstFrame, lastFrameImage: fl2vLastFrame,
+        promptOptimizer: fl2vPromptOptimizer, duration: fl2vDuration,
+        resolution: fl2vResolution, aigcWatermark: fl2vWatermark,
+      });
+      addTaskAndPoll(taskId, 'fl2v', fl2vPrompt || '首尾帧视频', 'MiniMax-Hailuo-02', fl2vDuration, fl2vResolution);
+      showToast('success', '首尾帧视频任务已提交');
+    } catch (e) {
+      showToast('error', getErrorMessage(e, '任务提交失败'));
+    } finally {
+      setIsSubmittingFL2V(false);
+    }
+  };
+
+  const handleS2VSubmit = async () => {
+    if (!s2vSubjectImage || !s2vPrompt.trim()) return;
+    setIsSubmittingS2V(true);
+    try {
+      const taskId = await videoLabService.submitTask({
+        mode: 's2v', model: 'S2V-01', prompt: s2vPrompt,
+        subjectReference: [{ type: 'character', image: [s2vSubjectImage] }],
+        promptOptimizer: s2vPromptOptimizer, aigcWatermark: s2vWatermark,
+      });
+      addTaskAndPoll(taskId, 's2v', s2vPrompt, 'S2V-01');
+      showToast('success', '主体参考视频任务已提交');
+    } catch (e) {
+      showToast('error', getErrorMessage(e, '任务提交失败'));
+    } finally {
+      setIsSubmittingS2V(false);
+    }
+  };
+
+  const handleAgentSubmit = async () => {
+    if (!agentTemplateId) return;
+    setIsSubmittingAgent(true);
+    try {
+      const context: VideoAgentContext = { templateId: agentTemplateId };
+      if (agentTextInput.trim()) context.textInputs = [{ value: agentTextInput }];
+      if (agentMediaFile) {
+        const base64 = await fileToBase64(agentMediaFile);
+        context.mediaInputs = [{ value: base64 }];
+      }
+      const taskId = await videoLabService.submitAgentTask(context);
+      addTaskAndPoll(taskId, 'agent', agentTextInput || '视频模板', undefined, undefined, undefined, true);
+      showToast('success', '视频模板任务已提交');
+    } catch (e) {
+      showToast('error', getErrorMessage(e, '任务提交失败'));
+    } finally {
+      setIsSubmittingAgent(false);
+    }
+  };
+
+  const handleDeleteTask = (taskId: string) => {
+    const stop = stopPollingRef.current.get(taskId);
+    if (stop) { stop(); stopPollingRef.current.delete(taskId); }
+    setTasks(prev => prev.filter(t => t.taskId !== taskId));
+  };
+
+  const handleRetryTask = (task: VideoLabTask) => {
+    // 根据原始任务模式重新提交
+    if (task.mode === 't2v') {
+      setActiveTab('t2v');
+      showToast('info', '已切换到文生视频，请重新提交');
+    } else if (task.mode === 'i2v') {
+      setActiveTab('i2v');
+      showToast('info', '已切换到图生视频，请重新提交');
+    } else if (task.mode === 'fl2v') {
+      setActiveTab('fl2v');
+      showToast('info', '已切换到首尾帧，请重新提交');
+    } else if (task.mode === 's2v') {
+      setActiveTab('s2v');
+      showToast('info', '已切换到主体参考，请重新提交');
+    } else {
+      setActiveTab('agent');
+      showToast('info', '已切换到视频模板，请重新提交');
+    }
+  };
+
+  // ==================== Tab Buttons ====================
+  const tabs: { key: VideoLabTab; label: string; icon: React.ReactNode; color?: string }[] = [
+    { key: 't2v', label: '文生视频', icon: <Film size={16} /> },
+    { key: 'i2v', label: '图生视频', icon: <Image size={16} />, color: '#3b82f6' },
+    { key: 'fl2v', label: '首尾帧', icon: <Layers size={16} />, color: '#8b5cf6' },
+    { key: 's2v', label: '主体参考', icon: <User size={16} />, color: '#ec4899' },
+    { key: 'agent', label: '视频模板', icon: <FileText size={16} />, color: '#f59e0b' },
+    { key: 'tasks', label: `任务管理${tasks.length > 0 ? ` (${tasks.length})` : ''}`, icon: <RefreshCw size={16} />, color: '#06b6d4' },
+  ];
+
+  return (
+    <div className="fade-in" style={{ padding: '2rem', maxWidth: '1000px', margin: '0 auto' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
+        <div style={{ padding: '1rem', background: 'rgba(59,130,246,0.1)', borderRadius: 'var(--radius-lg)', color: '#3b82f6' }}>
+          <Film size={32} />
+        </div>
+        <div>
+          <h1 style={{ fontSize: '1.8rem', fontWeight: 700, margin: 0, background: 'var(--gradient-primary)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+            视频实验室 (Video Lab)
+          </h1>
+          <p style={{ color: 'var(--text-muted)', margin: '0.5rem 0 0 0', fontSize: '0.9rem' }}>
+            文本转视频、图片驱动、首尾帧、主体参考、视频模板与任务管理
+          </p>
+        </div>
+      </div>
+
+      {/* Tab Bar */}
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem', flexWrap: 'wrap' }}>
+        {tabs.map(tab => (
+          <button
+            key={tab.key}
+            className={`btn ${activeTab === tab.key ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setActiveTab(tab.key)}
+            style={{
+              background: activeTab === tab.key ? (tab.color || 'var(--primary-color)') : 'transparent',
+              border: activeTab === tab.key ? 'none' : '1px solid var(--border-color)',
+              fontSize: '0.85rem',
+            }}
+          >
+            {tab.icon} {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ==================== T2V Tab ==================== */}
+      {activeTab === 't2v' && (
+        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          <div>
+            <label className="form-label">视频描述 (Prompt)</label>
+            <textarea
+              className="form-input"
+              rows={4}
+              value={t2vPrompt}
+              onChange={e => setT2vPrompt(e.target.value)}
+              placeholder="描述你想要生成的视频内容，支持 [运镜指令] 语法，例如：一个人拿起一本书 [推进], 然后阅读 [固定]"
+              style={{ fontSize: '1rem', padding: '1rem' }}
+              maxLength={2000}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t2vPrompt.length} / 2000</span>
+            </div>
+            {MODEL_CONFIG[t2vModel]?.supportsCameraDirective && (
+              <CameraDirectivePanel onInsert={d => insertDirective(setT2vPrompt, d)} style={{ marginTop: '0.5rem' }} />
+            )}
+          </div>
+
+          <VideoModelConfig
+            models={T2V_MODELS} model={t2vModel} onModelChange={setT2vModel}
+            duration={t2vDuration} onDurationChange={setT2vDuration}
+            resolution={t2vResolution} onResolutionChange={setT2vResolution}
+            promptOptimizer={t2vPromptOptimizer} onPromptOptimizerChange={setT2vPromptOptimizer}
+            fastPretreatment={t2vFastPretreatment} onFastPretreatmentChange={setT2vFastPretreatment}
+            watermark={t2vWatermark} onWatermarkChange={setT2vWatermark}
+          />
+
+          <button
+            className="btn btn-primary"
+            style={{ padding: '1rem', fontSize: '1.1rem', justifyContent: 'center' }}
+            disabled={!t2vPrompt.trim() || isSubmittingT2V}
+            onClick={handleT2VSubmit}
+          >
+            {isSubmittingT2V ? <RefreshCw className="spin" size={20} /> : <Film size={20} />}
+            {isSubmittingT2V ? '正在提交任务...' : '生成视频'}
+          </button>
+        </div>
+      )}
+
+      {/* ==================== I2V Tab ==================== */}
+      {activeTab === 'i2v' && (
+        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          <ImageUploadField
+            label="起始帧图片 (必填)"
+            value={i2vFirstFrame}
+            onChange={setI2vFirstFrame}
+            borderColor="rgba(59,130,246,0.3)"
+            bgColor="rgba(59,130,246,0.05)"
+          />
+
+          <div>
+            <label className="form-label">视频描述 (可选)</label>
+            <textarea className="form-input" rows={3} value={i2vPrompt} onChange={e => setI2vPrompt(e.target.value)} placeholder="描述视频内容，支持 [运镜指令]" maxLength={2000} />
+            {MODEL_CONFIG[i2vModel]?.supportsCameraDirective && (
+              <CameraDirectivePanel onInsert={d => insertDirective(setI2vPrompt, d)} style={{ marginTop: '0.5rem' }} />
+            )}
+          </div>
+
+          <VideoModelConfig
+            models={I2V_MODELS} model={i2vModel} onModelChange={setI2vModel}
+            duration={i2vDuration} onDurationChange={setI2vDuration}
+            resolution={i2vResolution} onResolutionChange={setI2vResolution}
+            promptOptimizer={i2vPromptOptimizer} onPromptOptimizerChange={setI2vPromptOptimizer}
+            fastPretreatment={i2vFastPretreatment} onFastPretreatmentChange={setI2vFastPretreatment}
+            watermark={i2vWatermark} onWatermarkChange={setI2vWatermark}
+          />
+
+          <button
+            className="btn btn-primary"
+            style={{ padding: '1rem', fontSize: '1.1rem', justifyContent: 'center', background: '#3b82f6' }}
+            disabled={!i2vFirstFrame || isSubmittingI2V}
+            onClick={handleI2VSubmit}
+          >
+            {isSubmittingI2V ? <RefreshCw className="spin" size={20} /> : <Image size={20} />}
+            {isSubmittingI2V ? '正在提交任务...' : '生成视频'}
+          </button>
+        </div>
+      )}
+
+      {/* ==================== FL2V Tab ==================== */}
+      {activeTab === 'fl2v' && (
+        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: '200px' }}>
+              <ImageUploadField
+                label="起始帧 (必填)"
+                value={fl2vFirstFrame}
+                onChange={setFl2vFirstFrame}
+                maxHeight="150px"
+                placeholder="上传起始帧"
+              />
+            </div>
+            <div style={{ flex: 1, minWidth: '200px' }}>
+              <ImageUploadField
+                label="结束帧 (必填)"
+                value={fl2vLastFrame}
+                onChange={setFl2vLastFrame}
+                borderColor="rgba(139,92,246,0.3)"
+                bgColor="rgba(139,92,246,0.05)"
+                maxHeight="150px"
+                placeholder="上传结束帧"
+              />
+            </div>
+          </div>
+
+          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
+            视频尺寸遵循首帧图片；首尾帧尺寸不一致时，模型参考首帧对尾帧裁剪。模型固定为 MiniMax-Hailuo-02。
+          </p>
+
+          <div>
+            <label className="form-label">视频描述 (可选)</label>
+            <textarea className="form-input" rows={3} value={fl2vPrompt} onChange={e => setFl2vPrompt(e.target.value)} placeholder="描述视频内容，支持 [运镜指令]" maxLength={2000} />
+            <CameraDirectivePanel onInsert={d => insertDirective(setFl2vPrompt, d)} style={{ marginTop: '0.5rem' }} />
+          </div>
+
+          <VideoModelConfig
+            models={['MiniMax-Hailuo-02'] as VideoModel[]} model="MiniMax-Hailuo-02" onModelChange={() => {}}
+            duration={fl2vDuration} onDurationChange={setFl2vDuration}
+            resolution={fl2vResolution} onResolutionChange={setFl2vResolution}
+            promptOptimizer={fl2vPromptOptimizer} onPromptOptimizerChange={setFl2vPromptOptimizer}
+            fastPretreatment={false} onFastPretreatmentChange={() => {}}
+            watermark={fl2vWatermark} onWatermarkChange={setFl2vWatermark}
+          />
+
+          <button
+            className="btn btn-primary"
+            style={{ padding: '1rem', fontSize: '1.1rem', justifyContent: 'center', background: '#8b5cf6' }}
+            disabled={!fl2vFirstFrame || !fl2vLastFrame || isSubmittingFL2V}
+            onClick={handleFL2VSubmit}
+          >
+            {isSubmittingFL2V ? <RefreshCw className="spin" size={20} /> : <Layers size={20} />}
+            {isSubmittingFL2V ? '正在提交任务...' : '生成视频'}
+          </button>
+        </div>
+      )}
+
+      {/* ==================== S2V Tab ==================== */}
+      {activeTab === 's2v' && (
+        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          <ImageUploadField
+            label="人物主体图片 (必填)"
+            value={s2vSubjectImage}
+            onChange={setS2vSubjectImage}
+            borderColor="rgba(236,72,153,0.3)"
+            bgColor="rgba(236,72,153,0.05)"
+          />
+          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '-0.75rem 0 0 0' }}>
+            目前仅支持单个主体，模型固定为 S2V-01
+          </p>
+
+          <div>
+            <label className="form-label">视频描述 (必填)</label>
+            <textarea className="form-input" rows={3} value={s2vPrompt} onChange={e => setS2vPrompt(e.target.value)} placeholder="描述视频内容" maxLength={2000} />
+          </div>
+
+          <div style={{ padding: '1rem', background: 'rgba(0,0,0,0.15)', borderRadius: 'var(--radius-md)', display: 'flex', flexWrap: 'wrap', gap: '1.5rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.85rem' }}>
+              <input type="checkbox" checked={s2vPromptOptimizer} onChange={e => setS2vPromptOptimizer(e.target.checked)} /> Prompt 优化
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.85rem' }}>
+              <input type="checkbox" checked={s2vWatermark} onChange={e => setS2vWatermark(e.target.checked)} /> 添加水印
+            </label>
+          </div>
+
+          <button
+            className="btn btn-primary"
+            style={{ padding: '1rem', fontSize: '1.1rem', justifyContent: 'center', background: '#ec4899' }}
+            disabled={!s2vSubjectImage || !s2vPrompt.trim() || isSubmittingS2V}
+            onClick={handleS2VSubmit}
+          >
+            {isSubmittingS2V ? <RefreshCw className="spin" size={20} /> : <User size={20} />}
+            {isSubmittingS2V ? '正在提交任务...' : '生成视频'}
+          </button>
+        </div>
+      )}
+
+      {/* ==================== Agent Tab ==================== */}
+      {activeTab === 'agent' && (
+        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          <div style={{ padding: '0.75rem', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <AlertCircle size={16} style={{ color: '#f59e0b' }} />
+            <span style={{ fontSize: '0.8rem', color: '#f59e0b' }}>模板功能即将下线 (API 已标记为 deprecated)</span>
+          </div>
+
+          <div>
+            <label className="form-label">选择模板</label>
+            <select className="form-select" value={agentTemplateId} onChange={e => setAgentTemplateId(e.target.value)}>
+              {VIDEO_AGENT_TEMPLATES.map(t => (
+                <option key={t.id} value={t.id}>{t.name} - {t.description}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="form-label">描述文本</label>
+            <input className="form-input" value={agentTextInput} onChange={e => setAgentTextInput(e.target.value)} placeholder="输入描述文本" />
+          </div>
+
+          <div>
+            <label className="form-label">媒体图片 (可选)</label>
+            <div
+              style={{ border: '2px dashed var(--border-color)', borderRadius: 'var(--radius-md)', padding: '1.5rem', textAlign: 'center', cursor: 'pointer', background: 'rgba(0,0,0,0.1)' }}
+              onClick={() => document.getElementById('agentMediaInput')?.click()}
+            >
+              <p style={{ margin: 0, color: 'var(--text-color)', fontSize: '0.85rem' }}>
+                {agentMediaFile ? agentMediaFile.name : '点击上传媒体图片'}
+              </p>
+              <input id="agentMediaInput" type="file" accept="image/*" style={{ display: 'none' }} onChange={e => e.target.files && setAgentMediaFile(e.target.files[0])} />
+            </div>
+          </div>
+
+          <button
+            className="btn btn-primary"
+            style={{ padding: '1rem', fontSize: '1.1rem', justifyContent: 'center', background: '#f59e0b' }}
+            disabled={!agentTemplateId || isSubmittingAgent}
+            onClick={handleAgentSubmit}
+          >
+            {isSubmittingAgent ? <RefreshCw className="spin" size={20} /> : <FileText size={20} />}
+            {isSubmittingAgent ? '正在提交任务...' : '生成视频'}
+          </button>
+        </div>
+      )}
+
+      {/* ==================== Tasks Tab ==================== */}
+      {activeTab === 'tasks' && (
+        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <h3 style={{ margin: 0, color: 'var(--text-muted)' }}>任务列表 {tasks.length > 0 && `(${tasks.length})`}</h3>
+          {tasks.length === 0 ? (
+            <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>
+              暂无任务，请从其他 Tab 提交视频生成任务
+            </p>
+          ) : (
+            tasks.map(task => (
+              <VideoTaskCard
+                key={task.taskId}
+                task={task}
+                onDelete={handleDeleteTask}
+                onRetry={handleRetryTask}
+                onUseInStory={handleUseInStory}
+                onUseAsInput={handleUseAsInput}
+              />
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+};

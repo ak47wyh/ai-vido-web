@@ -51,9 +51,13 @@ export interface IVideoTaskRepository {
 
 // --- Video Generation ---
 
-export type VideoModel = 'MiniMax-Hailuo-2.3' | 'MiniMax-Hailuo-02' | 'T2V-01-Director' | 'T2V-01' | 'S2V-01';
-export type VideoResolution = '720P' | '768P' | '1080P';
-export type VideoGenerationMode = 't2v' | 'fl2v' | 's2v';
+export type VideoModel =
+  | 'MiniMax-Hailuo-2.3' | 'MiniMax-Hailuo-2.3-Fast' | 'MiniMax-Hailuo-02'
+  | 'T2V-01-Director' | 'T2V-01'
+  | 'I2V-01-Director' | 'I2V-01-live' | 'I2V-01'
+  | 'S2V-01';
+export type VideoResolution = '512P' | '720P' | '768P' | '1080P';
+export type VideoGenerationMode = 't2v' | 'i2v' | 'fl2v' | 's2v';
 
 export interface VideoSubjectReference {
   type: string;
@@ -78,6 +82,7 @@ export interface VideoPromptContext {
   characters?: import('../entities/models').Character[];
   background?: import('../entities/models').Background;
   videoStyle?: string;
+  aigcWatermark?: boolean;
 }
 
 export interface VideoTaskResult {
@@ -100,6 +105,31 @@ export interface IVideoGeneratorPort {
   submitVideoTask(context: VideoPromptContext): Promise<string>;
   queryTaskStatus(externalTaskId: string): Promise<VideoTaskResult>;
   downloadVideo(fileId: string): Promise<VideoDownloadResult>;
+  createAgentTask(context: VideoAgentContext): Promise<string>;
+  queryAgentTask(taskId: string): Promise<VideoAgentTaskResult>;
+}
+
+// --- Video Agent ---
+
+export interface VideoAgentTextInput {
+  value: string;
+}
+
+export interface VideoAgentMediaInput {
+  value: string;
+}
+
+export interface VideoAgentContext {
+  templateId: string;
+  textInputs?: VideoAgentTextInput[];
+  mediaInputs?: VideoAgentMediaInput[];
+  callbackUrl?: string;
+}
+
+export interface VideoAgentTaskResult {
+  status: 'Preparing' | 'Processing' | 'Success' | 'Fail';
+  videoUrl?: string;
+  errorMessage?: string;
 }
 
 export interface SegmentDraft {

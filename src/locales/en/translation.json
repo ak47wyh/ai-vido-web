@@ -12,7 +12,10 @@
     "workbench": "Story Workbench",
     "spaces": "Story Spaces",
     "settings": "Settings",
-    "export": "Export Center"
+    "export": "Export Center",
+    "imageLab": "Image Generation",
+    "videoLab": "Video Generation",
+    "voiceLab": "Voice & Dubbing",
   },
   "dashboard": {
     "title": "Dashboard",

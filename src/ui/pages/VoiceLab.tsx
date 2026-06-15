@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Mic, Volume2, Upload, RefreshCw, Save, BookmarkPlus, Palette, FileText, Settings, Trash2, Play, Search, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
+import { Mic, Volume2, Upload, RefreshCw, Save, BookmarkPlus, Palette, FileText, Settings, Trash2, Play, Search, ChevronDown, ChevronUp, ArrowRight } from 'lucide-react';
 import { voiceService, assetLibraryService } from '../../dependencies';
-import type { T2ASyncModel, VoiceListResult } from '../../domain/ports/OutboundPorts';
+import type { T2ASyncModel, VoiceListResult, VoiceInfo } from '../../domain/ports/OutboundPorts';
 import { VOICES_BY_LANGUAGE, LANGUAGE_LABELS } from '../../domain/data/systemVoices';
 import { useToast } from '../contexts/ToastContext';
 import { getErrorMessage } from '../utils/errorUtils';
@@ -24,16 +24,6 @@ const VOICE_DESIGN_TEMPLATES = [
 
 // 语气词标签列表
 const EMOTION_TAGS = ['(laughs)', '(sighs)', '(breath)', '(coughs)', '(chuckle)', '(gasps)', '(pant)', '(inhale)', '(exhale)', '(sneezes)'];
-
-/** hex 编码音频转 Blob URL */
-function hexToAudioUrl(hex: string, format = 'mp3'): string {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < hex.length; i += 2) {
-    bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
-  }
-  const blob = new Blob([bytes], { type: `audio/${format}` });
-  return URL.createObjectURL(blob);
-}
 
 export const VoiceLab: React.FC = () => {
   const { t } = useTranslation();
@@ -59,6 +49,9 @@ export const VoiceLab: React.FC = () => {
   const [ttsSampleRate, setTtsSampleRate] = useState(32000);
   const [ttsOutputFormat, setTtsOutputFormat] = useState<'hex' | 'url'>('url');
   const [ttsSubtitleEnable, setTtsSubtitleEnable] = useState(false);
+
+  // 自定义音色列表（克隆/设计产生的，供 TTS 选择器使用）
+  const [customVoices, setCustomVoices] = useState<VoiceInfo[]>([]);
 
   // ==================== Clone Tab State ====================
   const [cloneFile, setCloneFile] = useState<File | null>(null);
@@ -97,10 +90,83 @@ export const VoiceLab: React.FC = () => {
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [deletingVoiceId, setDeletingVoiceId] = useState<string | null>(null);
 
+  // ==================== Blob URL 内存管理 ====================
+  const blobUrlsRef = useRef<Set<string>>(new Set());
+
+  const revokeBlobUrl = useCallback((url: string) => {
+    if (blobUrlsRef.current.has(url)) {
+      URL.revokeObjectURL(url);
+      blobUrlsRef.current.delete(url);
+    }
+  }, []);
+
+  const registerBlobUrl = useCallback((url: string): string => {
+    blobUrlsRef.current.add(url);
+    return url;
+  }, []);
+
+  // 组件卸载时释放所有 Blob URL
+  useEffect(() => {
+    const current = pollingRef.current;
+    const blobs = blobUrlsRef.current;
+    return () => {
+      current.forEach(interval => clearInterval(interval));
+      blobs.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, []);
+
+  // ==================== Manage Handlers ====================
+  const loadVoices = useCallback(async () => {
+    setIsLoadingVoices(true);
+    try {
+      const result = await voiceService.getAvailableVoices(voiceFilter === 'all' ? 'all' : voiceFilter);
+      setVoiceList(result);
+    } catch (e) {
+      showToast('error', getErrorMessage(e, '获取音色列表失败'));
+    } finally {
+      setIsLoadingVoices(false);
+    }
+  }, [voiceFilter, showToast]);
+
+  // 切换 Tab 时释放旧音频 URL（避免内存泄漏）
+  const handleTabChange = useCallback((tab: VoiceLabTab) => {
+    // 释放当前 Tab 的音频资源
+    if (ttsAudioUrl) { revokeBlobUrl(ttsAudioUrl); setTtsAudioUrl(null); }
+    if (clonePreviewAudioUrl) { revokeBlobUrl(clonePreviewAudioUrl); setClonePreviewAudioUrl(null); }
+    if (previewAudioUrl) { revokeBlobUrl(previewAudioUrl); setPreviewAudioUrl(null); }
+    if (designResult?.audioUrl) { revokeBlobUrl(designResult.audioUrl); setDesignResult(null); }
+
+    setActiveTab(tab);
+    if (tab === 'manage') {
+      loadVoices();
+    }
+  }, [ttsAudioUrl, clonePreviewAudioUrl, previewAudioUrl, designResult, revokeBlobUrl, loadVoices]);
+
+  // ==================== 加载自定义音色（供 TTS 选择器） ====================
+  const loadCustomVoices = useCallback(async () => {
+    try {
+      const result = await voiceService.getAvailableVoices('all');
+      const custom: VoiceInfo[] = [];
+      if (result.clonedVoices) custom.push(...result.clonedVoices);
+      if (result.designedVoices) custom.push(...result.designedVoices);
+      setCustomVoices(custom);
+    } catch {
+      // 静默失败，不影响主流程
+    }
+  }, []);
+
+  // 首次加载时获取自定义音色
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadCustomVoices();
+  }, [loadCustomVoices]);
+
   // ==================== TTS Handlers ====================
   const handleGenerateTTS = async () => {
     if (!ttsText.trim()) return;
     setIsGeneratingTTS(true);
+    // 释放旧音频
+    if (ttsAudioUrl) revokeBlobUrl(ttsAudioUrl);
     setTtsAudioUrl(null);
     try {
       const res = await voiceService.synthesizeSync(ttsText, ttsVoiceId, ttsModel, {
@@ -114,8 +180,7 @@ export const VoiceLab: React.FC = () => {
         languageBoost: ttsLanguageBoost,
         subtitleEnable: ttsSubtitleEnable,
       });
-      // 统一通过 resolveAudioUrl 转为可播放的 Blob URL
-      const blobUrl = await voiceService.resolveAudioUrl(res);
+      const blobUrl = registerBlobUrl(await voiceService.resolveAudioUrl(res));
       setTtsAudioUrl(blobUrl);
       showToast('success', '音频生成成功');
     } catch (e) {
@@ -133,31 +198,43 @@ export const VoiceLab: React.FC = () => {
   const handleCloneVoice = async () => {
     if (!cloneFile || !cloneName.trim()) return;
     setIsCloning(true);
-      setClonedVoiceId(null);
-      setClonePreviewAudioUrl(null);
-      try {
-        const customVoiceId = `clone_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-        const newVoiceId = await voiceService.cloneVoice(
-          cloneFile,
-          customVoiceId,
-          cloneText,
-          promptAudioFile || undefined,
-          promptText || undefined,
-          {
-            needNoiseReduction: cloneNeedNoiseReduction,
-            needVolumeNormalization: cloneNeedVolumeNorm,
-          }
-        );
-        setClonedVoiceId(newVoiceId);
-        setTtsVoiceId(newVoiceId);
-        // 克隆成功后，用新音色试听
-        try {
-          const previewUrl = await voiceService.previewVoice(newVoiceId, cloneText);
-          setClonePreviewAudioUrl(previewUrl);
-        } catch {
-          // 试听失败不影响克隆成功
+    if (clonePreviewAudioUrl) revokeBlobUrl(clonePreviewAudioUrl);
+    setClonedVoiceId(null);
+    setClonePreviewAudioUrl(null);
+    try {
+      const customVoiceId = `clone_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      const newVoiceId = await voiceService.cloneVoice(
+        cloneFile,
+        customVoiceId,
+        cloneText,
+        promptAudioFile || undefined,
+        promptText || undefined,
+        {
+          needNoiseReduction: cloneNeedNoiseReduction,
+          needVolumeNormalization: cloneNeedVolumeNorm,
         }
+      );
+      setClonedVoiceId(newVoiceId);
+      setTtsVoiceId(newVoiceId);
+
+      // 业务闭环 1：自动激活音色（避免 7 天过期）
+      try {
+        await voiceService.activateVoice(newVoiceId);
+        showToast('success', `音色克隆成功！已自动激活，ID: ${newVoiceId}`);
+      } catch {
         showToast('success', `音色克隆成功！ID: ${newVoiceId}`);
+      }
+
+      // 业务闭环 2：克隆成功后自动试听
+      try {
+        const previewUrl = registerBlobUrl(await voiceService.previewVoice(newVoiceId, cloneText));
+        setClonePreviewAudioUrl(previewUrl);
+      } catch {
+        // 试听失败不影响克隆成功
+      }
+
+      // 业务闭环 3：刷新自定义音色列表（TTS 选择器 + 管理列表）
+      loadCustomVoices();
     } catch (e) {
       showToast('error', getErrorMessage(e, '克隆失败'));
     } finally {
@@ -169,12 +246,29 @@ export const VoiceLab: React.FC = () => {
   const handleDesignVoice = async () => {
     if (!designPrompt.trim() || !designPreviewText.trim()) return;
     setIsDesigning(true);
+    if (designResult?.audioUrl) revokeBlobUrl(designResult.audioUrl);
     setDesignResult(null);
     try {
       const result = await voiceService.designVoice(designPrompt, designPreviewText);
-      const audioUrl = hexToAudioUrl(result.trialAudioHex);
+      // 设计接口返回 hex 编码的试听音频，通过 VoiceService 统一转 Blob URL
+      const audioUrl = registerBlobUrl(await voiceService.resolveAudioUrl({
+        audioHex: result.trialAudioHex,
+        audioUrl: undefined,
+      }));
       setDesignResult({ voiceId: result.voiceId, audioUrl });
-      showToast('success', `音色设计成功！ID: ${result.voiceId}`);
+      setTtsVoiceId(result.voiceId);
+
+      // 业务闭环 1：自动激活音色
+      try {
+        await voiceService.activateVoice(result.voiceId);
+      } catch {
+        // 激活失败不影响设计成功
+      }
+
+      showToast('success', `音色设计成功！已自动激活，ID: ${result.voiceId}`);
+
+      // 业务闭环 2：刷新自定义音色列表
+      loadCustomVoices();
     } catch (e) {
       showToast('error', getErrorMessage(e, '音色设计失败'));
     } finally {
@@ -210,13 +304,12 @@ export const VoiceLab: React.FC = () => {
         if (status.status === 'success') {
           clearInterval(interval);
           pollingRef.current.delete(taskId);
-          // 异步任务完成后，需要带认证下载音频转 Blob URL
+          // 通过 VoiceService 统一获取 Blob URL（不再绕过 Service 层）
           let blobUrl: string | undefined;
           if (status.audioUrl) {
             try {
-              blobUrl = await voiceService.voicePort.fetchAudioAsBlobUrl(status.audioUrl);
+              blobUrl = registerBlobUrl(await voiceService.resolveAudioUrl({ audioUrl: status.audioUrl }));
             } catch {
-              // 下载失败，使用原始 URL 作为降级
               blobUrl = status.audioUrl;
             }
           }
@@ -235,33 +328,13 @@ export const VoiceLab: React.FC = () => {
     pollingRef.current.set(taskId, interval);
   };
 
-  // ==================== Manage Handlers ====================
-  const loadVoices = async () => {
-    setIsLoadingVoices(true);
-    try {
-      const result = await voiceService.getAvailableVoices(voiceFilter === 'all' ? 'all' : voiceFilter);
-      setVoiceList(result);
-    } catch (e) {
-      showToast('error', getErrorMessage(e, '获取音色列表失败'));
-    } finally {
-      setIsLoadingVoices(false);
-    }
-  };
-
-  const handleTabChange = (tab: VoiceLabTab) => {
-    setActiveTab(tab);
-    if (tab === 'manage') {
-      loadVoices();
-    }
-  };
-
   const handlePreviewVoice = async (voiceId: string) => {
+    if (previewAudioUrl) revokeBlobUrl(previewAudioUrl);
     setPreviewingVoiceId(voiceId);
     setIsPreviewing(true);
     setPreviewAudioUrl(null);
     try {
-      // previewVoice 内部已通过 resolveAudioUrl 转为 Blob URL
-      const url = await voiceService.previewVoice(voiceId);
+      const url = registerBlobUrl(await voiceService.previewVoice(voiceId));
       setPreviewAudioUrl(url);
     } catch (e) {
       showToast('error', getErrorMessage(e, '试听失败'));
@@ -277,11 +350,19 @@ export const VoiceLab: React.FC = () => {
       await voiceService.deleteVoice(voiceType, voiceId);
       showToast('success', '音色已删除');
       loadVoices();
+      loadCustomVoices(); // 同步刷新 TTS 选择器
     } catch (e) {
       showToast('error', getErrorMessage(e, '删除失败'));
     } finally {
       setDeletingVoiceId(null);
     }
+  };
+
+  // 业务闭环：音色管理中"使用此音色"→ 跳转 TTS Tab
+  const handleUseVoice = (voiceId: string) => {
+    setTtsVoiceId(voiceId);
+    setActiveTab('tts');
+    showToast('success', `已切换到音色 ${voiceId}，可在文本配音中使用`);
   };
 
   // ==================== Save to Library ====================
@@ -317,14 +398,6 @@ export const VoiceLab: React.FC = () => {
     showToast('success', '开始下载');
   };
 
-  // 清理轮询
-  useEffect(() => {
-    const current = pollingRef.current;
-    return () => {
-      current.forEach(interval => clearInterval(interval));
-    };
-  }, []);
-
   // ==================== Tab Buttons ====================
   const tabs: { key: VoiceLabTab; label: string; icon: React.ReactNode; color?: string }[] = [
     { key: 'tts', label: '文本配音', icon: <Volume2 size={16} /> },
@@ -333,6 +406,20 @@ export const VoiceLab: React.FC = () => {
     { key: 'async', label: '长文本合成', icon: <FileText size={16} />, color: '#f59e0b' },
     { key: 'manage', label: '音色管理', icon: <Settings size={16} />, color: '#06b6d4' },
   ];
+
+  // 合并系统音色 + 自定义音色供 TTS/异步选择器使用
+  const allVoiceOptions = (() => {
+    const groups: Record<string, Array<{ voiceId: string; name: string }>> = {};
+    // 系统音色
+    for (const [lang, voices] of Object.entries(VOICES_BY_LANGUAGE)) {
+      groups[LANGUAGE_LABELS[lang] || lang] = voices;
+    }
+    // 自定义音色
+    if (customVoices.length > 0) {
+      groups['自定义音色'] = customVoices.map(v => ({ voiceId: v.voiceId, name: v.voiceName || v.voiceId }));
+    }
+    return groups;
+  })();
 
   return (
     <div className="fade-in" style={{ padding: '2rem', maxWidth: '1000px', margin: '0 auto' }}>
@@ -396,8 +483,8 @@ export const VoiceLab: React.FC = () => {
             <div style={{ flex: 1, minWidth: '200px' }}>
               <label className="form-label">发音人 (Voice ID)</label>
               <select className="form-select" value={ttsVoiceId} onChange={e => setTtsVoiceId(e.target.value)}>
-                {Object.entries(VOICES_BY_LANGUAGE).map(([lang, voices]) => (
-                  <optgroup key={lang} label={LANGUAGE_LABELS[lang] || lang}>
+                {Object.entries(allVoiceOptions).map(([group, voices]) => (
+                  <optgroup key={group} label={group}>
                     {voices.map(v => <option key={v.voiceId} value={v.voiceId}>{v.name}</option>)}
                   </optgroup>
                 ))}
@@ -584,9 +671,11 @@ export const VoiceLab: React.FC = () => {
                   onDownload={handleDownloadAudio}
                 />
               )}
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: '0.5rem 0 0 0' }}>
-                <AlertTriangle size={12} style={{ verticalAlign: 'middle' }} /> 请在 7 天内使用此音色合成一次语音，否则音色将被系统删除
-              </p>
+              <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <button className="btn btn-secondary" style={{ fontSize: '0.8rem' }} onClick={() => handleUseVoice(clonedVoiceId)}>
+                  <ArrowRight size={14} /> 去配音使用
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -650,9 +739,11 @@ export const VoiceLab: React.FC = () => {
                 downloadFilename={`design_${designResult.voiceId}.mp3`}
                 onDownload={handleDownloadAudio}
               />
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: '0.5rem 0 0 0' }}>
-                <AlertTriangle size={12} style={{ verticalAlign: 'middle' }} /> 请在 7 天内使用此音色合成一次语音
-              </p>
+              <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <button className="btn btn-secondary" style={{ fontSize: '0.8rem' }} onClick={() => handleUseVoice(designResult.voiceId)}>
+                  <ArrowRight size={14} /> 去配音使用
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -680,8 +771,8 @@ export const VoiceLab: React.FC = () => {
             <div style={{ flex: 1, minWidth: '200px' }}>
               <label className="form-label">音色</label>
               <select className="form-select" value={asyncVoiceId} onChange={e => setAsyncVoiceId(e.target.value)}>
-                {Object.entries(VOICES_BY_LANGUAGE).map(([lang, voices]) => (
-                  <optgroup key={lang} label={LANGUAGE_LABELS[lang] || lang}>
+                {Object.entries(allVoiceOptions).map(([group, voices]) => (
+                  <optgroup key={group} label={group}>
                     {voices.map(v => <option key={v.voiceId} value={v.voiceId}>{v.name}</option>)}
                   </optgroup>
                 ))}
@@ -781,11 +872,17 @@ export const VoiceLab: React.FC = () => {
                     <p style={{ margin: '0 0 0.25rem 0', fontWeight: 600, fontSize: '0.9rem' }}>{v.voiceName}</p>
                     <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>{v.voiceId}</p>
                     {v.description && <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>{v.description}</p>}
-                    <button className="btn btn-secondary" style={{ fontSize: '0.75rem', marginTop: '0.5rem', padding: '0.2rem 0.5rem' }}
-                      disabled={isPreviewing && previewingVoiceId === v.voiceId}
-                      onClick={() => handlePreviewVoice(v.voiceId)}>
-                      <Play size={12} /> 试听
-                    </button>
+                    <div style={{ display: 'flex', gap: '0.3rem', marginTop: '0.5rem' }}>
+                      <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                        disabled={isPreviewing && previewingVoiceId === v.voiceId}
+                        onClick={() => handlePreviewVoice(v.voiceId)}>
+                        <Play size={12} /> 试听
+                      </button>
+                      <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                        onClick={() => handleUseVoice(v.voiceId)}>
+                        <ArrowRight size={12} /> 使用
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -808,6 +905,10 @@ export const VoiceLab: React.FC = () => {
                     disabled={isPreviewing && previewingVoiceId === v.voiceId}
                     onClick={() => handlePreviewVoice(v.voiceId)}>
                     <Play size={12} /> 试听
+                  </button>
+                  <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                    onClick={() => handleUseVoice(v.voiceId)}>
+                    <ArrowRight size={12} /> 使用
                   </button>
                   <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', color: '#ef4444' }}
                     disabled={deletingVoiceId === v.voiceId}
@@ -835,6 +936,10 @@ export const VoiceLab: React.FC = () => {
                     disabled={isPreviewing && previewingVoiceId === v.voiceId}
                     onClick={() => handlePreviewVoice(v.voiceId)}>
                     <Play size={12} /> 试听
+                  </button>
+                  <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                    onClick={() => handleUseVoice(v.voiceId)}>
+                    <ArrowRight size={12} /> 使用
                   </button>
                   <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', color: '#ef4444' }}
                     disabled={deletingVoiceId === v.voiceId}

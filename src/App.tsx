@@ -11,6 +11,7 @@ import { ExportCenter } from './ui/pages/ExportCenter';
 import { ImageLab } from './ui/pages/ImageLab';
 import { VoiceLab } from './ui/pages/VoiceLab';
 import { TextLab } from './ui/pages/TextLab';
+import { VideoLab } from './ui/pages/VideoLab';
 import { SpaceProvider } from './ui/contexts/SpaceContext';
 import { ToastProvider } from './ui/contexts/ToastContext';
 import { ConfirmProvider } from './ui/contexts/ConfirmContext';
@@ -41,6 +42,7 @@ function App() {
                   <Route path="labs/image" element={<ImageLab />} />
                   <Route path="labs/voice" element={<VoiceLab />} />
                   <Route path="labs/text" element={<TextLab />} />
+                  <Route path="labs/video" element={<VideoLab />} />
                   <Route path="settings" element={<Settings />} />
                 </Route>
               </Routes>

@@ -12,7 +12,8 @@
     "workbench": "Story Workbench",
     "spaces": "Story Spaces",
     "settings": "Settings",
-    "export": "Export Center"
+    "export": "Export Center",
+    "videoLab": "Génération vidéo"
   },
   "dashboard": {
     "title": "Dashboard",
