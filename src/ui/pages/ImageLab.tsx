@@ -1,43 +1,141 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Image as ImageIcon, Sparkles, Download, RefreshCw, BookmarkPlus } from 'lucide-react';
+import { Image as ImageIcon, Sparkles, RefreshCw, Type, ImagePlus } from 'lucide-react';
 import { imageAdapter, assetLibraryService } from '../../dependencies';
-import type { ImageModel, ImageAspectRatio } from '../../domain/ports/OutboundPorts';
+import type { ImageModel, ImageAspectRatio, ImageGenerationContext } from '../../domain/ports/OutboundPorts';
 import { useToast } from '../contexts/ToastContext';
 import { getErrorMessage } from '../utils/errorUtils';
 import { useSpace } from '../contexts/SpaceContext';
 import { AssetSaveDialog } from '../components/AssetPicker';
+import { ImageUploadField } from '../components/ImageUploadField';
+import { ImageGallery, type GalleryImage } from '../components/ImageGallery';
+import { ImageAdvancedSettings, type ImageAdvancedSettingsValue } from '../components/ImageAdvancedSettings';
+
+type ImageLabTab = 't2i' | 'i2i';
+
+const DEFAULT_ADVANCED: ImageAdvancedSettingsValue = {
+  n: 1,
+  seed: '',
+  watermark: false,
+  customSizeEnabled: false,
+  customWidth: 1024,
+  customHeight: 1024,
+  style: '',
+};
+
+// 语义化下载文件名
+const buildDownloadFilename = (prompt: string): string => {
+  const prefix = prompt.substring(0, 20).replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_');
+  return `${prefix || 'ai-image'}_${Date.now()}.jpg`;
+};
 
 export const ImageLab: React.FC = () => {
   const { t } = useTranslation();
   const { showToast } = useToast();
-
-  const [prompt, setPrompt] = useState('');
-  const [model, setModel] = useState<ImageModel>('image-01');
-  const [aspectRatio, setAspectRatio] = useState<ImageAspectRatio>('16:9');
-  const [promptOptimizer, setPromptOptimizer] = useState(true);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [resultImage, setResultImage] = useState<string | null>(null);
-  const [showSaveDialog, setShowSaveDialog] = useState(false);
   const { currentSpaceId } = useSpace();
 
-  const handleGenerate = async () => {
+  const [activeTab, setActiveTab] = useState<ImageLabTab>('t2i');
+
+  // ==================== 共享 State ====================
+  const [model, setModel] = useState<ImageModel>('image-01');
+  const [aspectRatio, setAspectRatio] = useState<ImageAspectRatio>('16:9');
+  const [promptOptimizer, setPromptOptimizer] = useState(false);
+  const [advanced, setAdvanced] = useState<ImageAdvancedSettingsValue>(DEFAULT_ADVANCED);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [gallery, setGallery] = useState<GalleryImage[]>([]);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [saveTargetImage, setSaveTargetImage] = useState<GalleryImage | null>(null);
+
+  // ==================== I2I 专用 State ====================
+  const [referenceImage, setReferenceImage] = useState<string | null>(null);
+
+  // ==================== T2I 专用 State ====================
+  const [t2iPrompt, setT2iPrompt] = useState('');
+
+  // ==================== I2I 专用 State ====================
+  const [i2iPrompt, setI2iPrompt] = useState('');
+
+  // ==================== 模型联动 ====================
+  const handleModelChange = (newModel: ImageModel) => {
+    setModel(newModel);
+    // image-01-live 不支持 21:9
+    if (newModel === 'image-01-live' && aspectRatio === '21:9') {
+      setAspectRatio('16:9');
+    }
+    // 切换模型时重置自定义尺寸（仅 image-01 支持）
+    if (newModel === 'image-01-live') {
+      setAdvanced(prev => ({ ...prev, customSizeEnabled: false }));
+    }
+  };
+
+  // ==================== 构建生成上下文 ====================
+  const buildContext = useCallback((prompt: string, isI2I: boolean): ImageGenerationContext => {
+    const context: ImageGenerationContext = {
+      prompt,
+      model,
+      aspectRatio,
+      promptOptimizer,
+      responseFormat: 'url',
+      n: advanced.n,
+      aigcWatermark: advanced.watermark,
+    };
+
+    // 种子
+    if (advanced.seed.trim()) {
+      context.seed = Number(advanced.seed);
+    }
+
+    // 自定义尺寸（仅 image-01）
+    if (model === 'image-01' && advanced.customSizeEnabled && advanced.customWidth && advanced.customHeight) {
+      context.width = advanced.customWidth;
+      context.height = advanced.customHeight;
+    }
+
+    // 画风（仅 image-01-live）
+    if (model === 'image-01-live' && advanced.style) {
+      context.style = { style: advanced.style };
+    }
+
+    // I2I 主体参考
+    if (isI2I && referenceImage) {
+      context.subjectReference = [{ type: 'character', image_file: referenceImage }];
+    }
+
+    return context;
+  }, [model, aspectRatio, promptOptimizer, advanced, referenceImage]);
+
+  // ==================== 生成 ====================
+  const handleGenerate = async (prompt: string, isI2I: boolean) => {
     if (!prompt.trim()) return;
+    if (isI2I && !referenceImage) {
+      showToast('error', '请先上传参考图片');
+      return;
+    }
     setIsGenerating(true);
-    setResultImage(null);
     try {
-      const res = await imageAdapter.generateImage({
+      const context = buildContext(prompt, isI2I);
+      const res = await imageAdapter.generateImage(context);
+
+      const urls = res.imageUrls || (res.imageDataUri ? [res.imageDataUri] : []);
+      if (urls.length === 0) {
+        throw new Error('No image returned');
+      }
+
+      const newImages: GalleryImage[] = urls.map(url => ({
+        url,
         prompt,
         model,
         aspectRatio,
-        promptOptimizer,
-        responseFormat: 'url',
-      });
-      if (res.imageUrls && res.imageUrls.length > 0) {
-        setResultImage(res.imageUrls[0]);
-        showToast('success', t('imageLab.generateSuccess', '图片生成成功'));
-      } else {
-        throw new Error('No image returned');
+        seed: advanced.seed.trim() ? Number(advanced.seed) : undefined,
+        createdAt: Date.now(),
+      }));
+
+      setGallery(prev => [...newImages, ...prev]);
+      showToast('success', t('imageLab.generateSuccess', '图片生成成功'));
+
+      // 内容安全部分失败提示
+      if (res.metadata?.failedCount && Number(res.metadata.failedCount) > 0) {
+        showToast('info', `${res.metadata.failedCount} 张图片因内容安全未返回`);
       }
     } catch (e) {
       console.error(e);
@@ -47,28 +145,65 @@ export const ImageLab: React.FC = () => {
     }
   };
 
-  const handleSaveToLibrary = async (name: string, tags: string) => {
-    if (!resultImage || !currentSpaceId) return;
+  // ==================== 下载 ====================
+  const handleDownload = useCallback((image: GalleryImage) => {
+    const filename = buildDownloadFilename(image.prompt);
+    const a = document.createElement('a');
+    a.href = image.url;
+    a.download = filename;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }, []);
+
+  // ==================== 保存到素材库 ====================
+  const handleSaveClick = useCallback((image: GalleryImage) => {
+    setSaveTargetImage(image);
+    setShowSaveDialog(true);
+  }, []);
+
+  const handleSaveConfirm = async (name: string, tags: string) => {
+    if (!saveTargetImage || !currentSpaceId) return;
     try {
       await assetLibraryService.saveImageFromUrl({
         spaceId: currentSpaceId,
         name,
-        imageUrl: resultImage,
-        prompt,
-        model,
-        aspectRatio,
+        imageUrl: saveTargetImage.url,
+        prompt: saveTargetImage.prompt,
+        model: saveTargetImage.model,
+        aspectRatio: saveTargetImage.aspectRatio,
         tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [],
         sourceType: 'lab',
       });
       showToast('success', t('assetLibrary.saveSuccess', '素材保存成功'));
       setShowSaveDialog(false);
+      setSaveTargetImage(null);
     } catch (e) {
       showToast('error', getErrorMessage(e, t('assetLibrary.saveFailed', '素材保存失败')));
     }
   };
 
+  // ==================== 业务闭环: 用作 I2I 参考图 ====================
+  const handleUseAsReference = useCallback((image: GalleryImage) => {
+    setReferenceImage(image.url);
+    setActiveTab('i2i');
+    showToast('success', '已切换到图生图，参考图已填入');
+  }, [showToast]);
+
+  // ==================== Tab 配置 ====================
+  const tabs: { key: ImageLabTab; label: string; icon: React.ReactNode; color: string }[] = [
+    { key: 't2i', label: t('imageLab.tabT2I', '文生图'), icon: <Type size={16} />, color: '#818cf8' },
+    { key: 'i2i', label: t('imageLab.tabI2I', '图生图'), icon: <ImagePlus size={16} />, color: '#3b82f6' },
+  ];
+
+  const currentPrompt = activeTab === 't2i' ? t2iPrompt : i2iPrompt;
+  const isI2I = activeTab === 'i2i';
+
   return (
     <div className="fade-in" style={{ padding: '2rem', maxWidth: '1000px', margin: '0 auto' }}>
+      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
         <div style={{ padding: '1rem', background: 'rgba(99,102,241,0.1)', borderRadius: 'var(--radius-lg)', color: '#818cf8' }}>
           <ImageIcon size={32} />
@@ -78,45 +213,76 @@ export const ImageLab: React.FC = () => {
             {t('imageLab.title', '图片实验室 (Image Lab)')}
           </h1>
           <p style={{ color: 'var(--text-muted)', margin: '0.5rem 0 0 0', fontSize: '0.9rem' }}>
-            {t('imageLab.desc', '独立使用 MiniMax 图像大模型生成您的专属插画、背景和素材。')}
+            {t('imageLab.desc', '文生图、图生图，支持多模型、多比例、批量生成')}
           </p>
         </div>
       </div>
 
-      <div className="glass-panel" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      {/* Tab Bar */}
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
+        {tabs.map(tab => (
+          <button
+            key={tab.key}
+            className={`btn ${activeTab === tab.key ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setActiveTab(tab.key)}
+            style={{
+              background: activeTab === tab.key ? tab.color : 'transparent',
+              border: activeTab === tab.key ? 'none' : '1px solid var(--border-color)',
+              fontSize: '0.85rem',
+            }}
+          >
+            {tab.icon} {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ==================== 配置面板 ==================== */}
+      <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        {/* I2I: 参考图上传 */}
+        {isI2I && (
+          <ImageUploadField
+            label={t('imageLab.referenceImage', '参考图片 (必填)')}
+            value={referenceImage}
+            onChange={setReferenceImage}
+            borderColor="rgba(59,130,246,0.3)"
+            bgColor="rgba(59,130,246,0.05)"
+            placeholder="上传参考图片，用于图生图"
+          />
+        )}
+
+        {/* Prompt 输入 */}
         <div>
           <label className="form-label">{t('imageLab.prompt', '画面描述 (Prompt)')}</label>
           <textarea
             className="form-input"
             rows={4}
             placeholder={t('imageLab.promptPlaceholder', '描述您想要生成的画面细节，支持中英文...')}
-            value={prompt}
-            onChange={e => setPrompt(e.target.value)}
+            value={currentPrompt}
+            onChange={e => isI2I ? setI2iPrompt(e.target.value) : setT2iPrompt(e.target.value)}
             style={{ fontSize: '1rem', padding: '1rem' }}
+            maxLength={1500}
           />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.25rem' }}>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{currentPrompt.length} / 1500</span>
+          </div>
         </div>
 
+        {/* 模型 + 比例 + Prompt优化 */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem', padding: '1.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: 'var(--radius-md)' }}>
           <div style={{ flex: 1, minWidth: '200px' }}>
             <label className="form-label">{t('imageLab.model', '生成模型')}</label>
-            <select className="form-select" value={model} onChange={e => {
-              const newModel = e.target.value as ImageModel;
-              setModel(newModel);
-              if (newModel === 'image-01-live' && aspectRatio === '21:9') {
-                setAspectRatio('16:9');
-              }
-            }}>
+            <select className="form-select" value={model} onChange={e => handleModelChange(e.target.value as ImageModel)}>
               <option value="image-01">image-01 (写实/通用)</option>
               <option value="image-01-live">image-01-live (二次元/动漫)</option>
             </select>
           </div>
-          
+
           <div style={{ flex: 1, minWidth: '200px' }}>
             <label className="form-label">{t('imageLab.aspectRatio', '图片比例')}</label>
             <select className="form-select" value={aspectRatio} onChange={e => setAspectRatio(e.target.value as ImageAspectRatio)}>
               <option value="16:9">16:9 (横屏视频)</option>
               <option value="9:16">9:16 (竖屏视频)</option>
-              <option value="1:1">1:1 (正方形头像)</option>
+              <option value="1:1">1:1 (正方形)</option>
               <option value="4:3">4:3 (标准)</option>
               <option value="3:4">3:4</option>
               <option value="3:2">3:2</option>
@@ -127,10 +293,10 @@ export const ImageLab: React.FC = () => {
 
           <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '0.5rem' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-              <input 
-                type="checkbox" 
-                checked={promptOptimizer} 
-                onChange={e => setPromptOptimizer(e.target.checked)} 
+              <input
+                type="checkbox"
+                checked={promptOptimizer}
+                onChange={e => setPromptOptimizer(e.target.checked)}
                 style={{ width: '16px', height: '16px', accentColor: 'var(--primary-color)' }}
               />
               <span style={{ fontSize: '0.9rem' }}>{t('imageLab.promptOptimizer', '开启提示词智能优化')}</span>
@@ -138,53 +304,52 @@ export const ImageLab: React.FC = () => {
           </div>
         </div>
 
-        <button 
-          className="btn btn-primary" 
+        {/* 高级设置 */}
+        <ImageAdvancedSettings
+          value={advanced}
+          onChange={setAdvanced}
+          model={model}
+        />
+
+        {/* 生成按钮 */}
+        <button
+          className="btn btn-primary"
           style={{ padding: '1rem', fontSize: '1.1rem', justifyContent: 'center' }}
-          disabled={!prompt.trim() || isGenerating}
-          onClick={handleGenerate}
+          disabled={!currentPrompt.trim() || (isI2I && !referenceImage) || isGenerating}
+          onClick={() => handleGenerate(currentPrompt, isI2I)}
         >
           {isGenerating ? <RefreshCw className="spin" size={20} /> : <Sparkles size={20} />}
           {isGenerating ? t('imageLab.generating', '正在生成...') : t('imageLab.generateBtn', '立即生成图片')}
         </button>
       </div>
 
-      {resultImage && (
-        <div className="glass-panel slide-up" style={{ marginTop: '2rem', padding: '1.5rem', textAlign: 'center' }}>
-          <h3 style={{ margin: '0 0 1rem 0', color: 'var(--text-muted)' }}>{t('imageLab.result', '生成结果')}</h3>
-          <div style={{ position: 'relative', display: 'inline-block', maxWidth: '100%' }}>
-            <img 
-              src={resultImage} 
-              alt="Generated" 
-              style={{ maxWidth: '100%', maxHeight: '600px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', boxShadow: '0 10px 30px rgba(0,0,0,0.3)' }} 
-            />
-            <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'center', gap: '0.75rem' }}>
-              <a
-                href={resultImage}
-                download="ai-generated-image.jpg"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn btn-secondary"
-              >
-                <Download size={16} /> {t('imageLab.download', '下载图片')}
-              </a>
-              <button
-                className="btn btn-primary"
-                onClick={() => setShowSaveDialog(true)}
-              >
-                <BookmarkPlus size={16} /> {t('assetLibrary.saveBtn', '保存到素材库')}
-              </button>
-            </div>
+      {/* ==================== 生成结果画廊 ==================== */}
+      {gallery.length > 0 && (
+        <div className="glass-panel slide-up" style={{ marginTop: '2rem', padding: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+            <h3 style={{ margin: 0, color: 'var(--text-muted)' }}>{t('imageLab.gallery', '生成结果')} ({gallery.length})</h3>
+            <button
+              className="btn btn-secondary"
+              style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
+              onClick={() => setGallery([])}
+            >清空</button>
           </div>
+          <ImageGallery
+            images={gallery}
+            onDownload={handleDownload}
+            onSave={handleSaveClick}
+            onUseAsReference={handleUseAsReference}
+          />
         </div>
       )}
 
-      {showSaveDialog && (
+      {/* ==================== 保存对话框 ==================== */}
+      {showSaveDialog && saveTargetImage && (
         <AssetSaveDialog
           title={t('assetLibrary.saveBtn', '保存到素材库')}
-          defaultName={prompt.slice(0, 20) + (prompt.length > 20 ? '...' : '')}
-          onSave={handleSaveToLibrary}
-          onCancel={() => setShowSaveDialog(false)}
+          defaultName={saveTargetImage.prompt.slice(0, 20) + (saveTargetImage.prompt.length > 20 ? '...' : '')}
+          onSave={handleSaveConfirm}
+          onCancel={() => { setShowSaveDialog(false); setSaveTargetImage(null); }}
         />
       )}
     </div>
