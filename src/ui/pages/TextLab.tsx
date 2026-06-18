@@ -108,7 +108,7 @@ export const TextLab: React.FC = () => {
         </div>
         
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          <select className="form-select" value={model} onChange={e => setModel(e.target.value as any)}>
+          <select className="form-select" value={model} onChange={e => setModel(e.target.value as 'MiniMax-M3' | 'MiniMax-M2.5')}>
             <option value="MiniMax-M3">MiniMax-M3 (智能更强)</option>
             <option value="MiniMax-M2.5">MiniMax-M2.5 (速度更快)</option>
           </select>

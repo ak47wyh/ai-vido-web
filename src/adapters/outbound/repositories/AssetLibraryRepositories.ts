@@ -6,7 +6,7 @@ function applyQuery<T extends { spaceId: string; name: string; tags: string[]; s
   collection: Dexie.Table<T, string>,
   params: AssetQueryParams
 ): Dexie.Collection<T, string> {
-  let query = collection.where('spaceId').equals(params.spaceId);
+  const query = collection.where('spaceId').equals(params.spaceId);
   // Dexie filter for additional criteria
   return query.filter(item => {
     if (params.keyword && !item.name.toLowerCase().includes(params.keyword.toLowerCase()) && !item.tags.some(t => t.toLowerCase().includes(params.keyword.toLowerCase()))) {
@@ -26,7 +26,7 @@ function applyPromptQuery(
   collection: Dexie.Table<SavedPrompt, string>,
   params: AssetQueryParams
 ): Dexie.Collection<SavedPrompt, string> {
-  let query = collection.where('spaceId').equals(params.spaceId);
+  const query = collection.where('spaceId').equals(params.spaceId);
   return query.filter(item => {
     if (params.keyword && !item.name.toLowerCase().includes(params.keyword.toLowerCase()) && !item.tags.some(t => t.toLowerCase().includes(params.keyword.toLowerCase()))) {
       return false;

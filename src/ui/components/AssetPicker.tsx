@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Search, Trash2, Image as ImageIcon, Mic, FileText, Check } from 'lucide-react';
+import { X, Trash2, Image as ImageIcon, Mic, Check } from 'lucide-react';
 import { assetLibraryService } from '../../dependencies';
 import { useSavedImages, useSavedVoices, useSavedPrompts } from '../hooks/useSavedAssets';
 import type { SavedImage, SavedVoice, SavedPrompt, PromptCategory } from '../../domain/entities/models';
@@ -46,17 +46,17 @@ export const AssetPicker: React.FC<AssetPickerProps> = ({
     }
   }, [multiple]);
 
+  const getSelectedItems = useCallback(() => {
+    if (type === 'image') return (imagesQuery.images as (SavedImage | SavedVoice | SavedPrompt)[]).filter(i => selectedIds.has(i.id));
+    if (type === 'voice') return (voicesQuery.voices as (SavedImage | SavedVoice | SavedPrompt)[]).filter(i => selectedIds.has(i.id));
+    return (promptsQuery.prompts as (SavedImage | SavedVoice | SavedPrompt)[]).filter(i => selectedIds.has(i.id));
+  }, [type, imagesQuery.images, voicesQuery.voices, promptsQuery.prompts, selectedIds]);
+
   const handleConfirm = useCallback(() => {
     const items = getSelectedItems();
     items.forEach(item => onSelect(item));
     onClose();
-  }, [selectedIds, onSelect, onClose]);
-
-  const getSelectedItems = () => {
-    if (type === 'image') return (imagesQuery.images as (SavedImage | SavedVoice | SavedPrompt)[]).filter(i => selectedIds.has(i.id));
-    if (type === 'voice') return (voicesQuery.voices as (SavedImage | SavedVoice | SavedPrompt)[]).filter(i => selectedIds.has(i.id));
-    return (promptsQuery.prompts as (SavedImage | SavedVoice | SavedPrompt)[]).filter(i => selectedIds.has(i.id));
-  };
+  }, [getSelectedItems, onSelect, onClose]);
 
   const handleDelete = useCallback(async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -236,7 +236,7 @@ function VoiceList({ voices, selectedIds, onSelect, onDelete, loading, t }: {
 }
 
 // --- Prompt List ---
-function PromptList({ prompts, selectedIds, onSelect, onDelete, loading, t }: {
+function PromptList({ prompts, selectedIds, onSelect, loading, t }: {
   prompts: SavedPrompt[];
   selectedIds: Set<string>;
   onSelect: (id: string) => void;

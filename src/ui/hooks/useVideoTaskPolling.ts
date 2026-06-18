@@ -53,6 +53,7 @@ export function useVideoTaskPolling(
   // 重置时清空
   useEffect(() => {
     if (tasks.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStatuses({});
       attemptsRef.current = 0;
       allDoneRef.current = false;
@@ -153,6 +154,7 @@ export function useSingleVideoTaskPolling(
   useEffect(() => {
     if (!enabled || !task || !task.externalTaskId) return;
     if (task.status === 'SUCCESS' || task.status === 'FAILED') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStatus({ taskId: task.id, status: task.status, videoUrl: task.videoUrl, error: task.errorMessage });
       return;
     }

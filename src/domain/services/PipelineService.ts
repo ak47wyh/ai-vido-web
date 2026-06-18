@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import type { PipelineTask, PipelineStatus, PipelineStep, StorySegment, VideoTask, Character, Background, Story, FinalCut } from '../entities/models';
+import type { PipelineTask, PipelineStatus, PipelineStep, StorySegment, VideoTask, Character, FinalCut } from '../entities/models';
 import { db } from '../../adapters/outbound/repositories/DexieDatabase';
 import type {
   IVideoTaskRepository,
@@ -90,7 +90,7 @@ export class PipelineService {
       step.startedAt = Date.now();
     }
     this.notify(task);
-    this.deps.videoTaskRepo && console.log(`[Pipeline ${task.id}] ${stage}: ${currentStep} (${progress}%)`);
+    if (this.deps.videoTaskRepo) console.log(`[Pipeline ${task.id}] ${stage}: ${currentStep} (${progress}%)`);
   }
 
   private completeStage(task: PipelineTask, stage: PipelineStatus, error?: string): void {
@@ -209,7 +209,7 @@ export class PipelineService {
       onProgress?.(stage, percent, msg);
     };
 
-    const { concurrency = 2, includeNarration = true, includeBGM = true, includeSubtitles = true } = options;
+    const { includeNarration = true, includeBGM = true, includeSubtitles = true } = options;
 
     try {
       // 加载故事
@@ -221,18 +221,6 @@ export class PipelineService {
       let segments = await this.deps.segmentRepo.findByStoryId(storyId);
       if (segments.length === 0) {
         emitProgress('splitting', 4, 'AI 拆分故事为分镜...');
-        const draftSegments = await this.deps.textPort.chatCompletion({
-          model: 'MiniMax-M2.5',
-          messages: [{
-            role: 'system',
-            content: '你是分镜师。把故事拆分为 3-6 个段落，每段包含独立的视觉场景。输出 JSON 数组，每个元素 {content, mentionedCharacters: [], suggestedBackgroundName: string}',
-          }, {
-            role: 'user',
-            content: story.originalText
-          }],
-          maxTokens: 2048,
-          temperature: 0.6,
-        });
         // 简化：直接按段落拆分
         const parts = story.originalText.split(/[。！？\n]/).filter(s => s.trim().length > 5).slice(0, 6);
         segments = [];
@@ -372,8 +360,9 @@ export class PipelineService {
       this.markComplete(task.id, `pipeline-${task.id}-complete`);
 
       return this.tasks.get(task.id)!;
-    } catch (e: any) {
-      this.markFailed(task.id, e?.message ?? String(e));
+    } catch (e: unknown) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      this.markFailed(task.id, errMsg);
       throw e;
     }
   }

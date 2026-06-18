@@ -69,6 +69,7 @@ export function usePolling<T>(
 
   useEffect(() => {
     if (!enabled) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       stop();
       return;
     }

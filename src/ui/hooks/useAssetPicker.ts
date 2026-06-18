@@ -1,11 +1,13 @@
 import { useState, useCallback } from 'react';
-import type { PromptCategory } from '../../domain/entities/models';
+import type { PromptCategory, SavedImage, SavedVoice, SavedPrompt } from '../../domain/entities/models';
+
+type AssetItem = SavedImage | SavedVoice | SavedPrompt;
 
 export interface AssetPickerState {
   isOpen: boolean;
   type: 'image' | 'voice' | 'prompt';
   category?: PromptCategory;
-  onSelect?: (asset: any) => void;
+  onSelect?: (asset: AssetItem) => void;
 }
 
 const initialState: AssetPickerState = {
@@ -18,7 +20,7 @@ export function useAssetPicker() {
 
   const openPicker = useCallback((
     type: 'image' | 'voice' | 'prompt',
-    onSelect: (asset: any) => void,
+    onSelect: (asset: AssetItem) => void,
     category?: PromptCategory,
   ) => {
     setState({ isOpen: true, type, category, onSelect });

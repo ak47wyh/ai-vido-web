@@ -8,6 +8,7 @@ export function useSavedImages(spaceId: string, params?: Omit<AssetQueryParams, 
   const [images, setImages] = useState<SavedImage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const paramsKey = JSON.stringify(params);
 
   const refetch = useCallback(async () => {
     if (!spaceId) return;
@@ -21,9 +22,12 @@ export function useSavedImages(spaceId: string, params?: Omit<AssetQueryParams, 
     } finally {
       setLoading(false);
     }
-  }, [spaceId, JSON.stringify(params)]);
+  }, [spaceId, paramsKey]);
 
-  useEffect(() => { refetch(); }, [refetch]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    refetch();
+  }, [refetch]);
 
   return { images, loading, error, refetch };
 }
@@ -33,6 +37,7 @@ export function useSavedVoices(spaceId: string, params?: Omit<AssetQueryParams, 
   const [voices, setVoices] = useState<SavedVoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const paramsKey = JSON.stringify(params);
 
   const refetch = useCallback(async () => {
     if (!spaceId) return;
@@ -46,9 +51,12 @@ export function useSavedVoices(spaceId: string, params?: Omit<AssetQueryParams, 
     } finally {
       setLoading(false);
     }
-  }, [spaceId, JSON.stringify(params)]);
+  }, [spaceId, paramsKey]);
 
-  useEffect(() => { refetch(); }, [refetch]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    refetch();
+  }, [refetch]);
 
   return { voices, loading, error, refetch };
 }
@@ -58,6 +66,7 @@ export function useSavedPrompts(spaceId: string, params?: Omit<AssetQueryParams,
   const [prompts, setPrompts] = useState<SavedPrompt[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const paramsKey = JSON.stringify(params);
 
   const refetch = useCallback(async () => {
     if (!spaceId) return;
@@ -71,9 +80,12 @@ export function useSavedPrompts(spaceId: string, params?: Omit<AssetQueryParams,
     } finally {
       setLoading(false);
     }
-  }, [spaceId, JSON.stringify(params)]);
+  }, [spaceId, paramsKey]);
 
-  useEffect(() => { refetch(); }, [refetch]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    refetch();
+  }, [refetch]);
 
   return { prompts, loading, error, refetch };
 }
