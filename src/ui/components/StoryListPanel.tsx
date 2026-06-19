@@ -60,115 +60,114 @@ export const StoryListPanel: React.FC<StoryListPanelProps> = ({
   };
 
   return (
-    <div style={{ flex: '1 1 280px', maxWidth: '500px', minWidth: '240px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      <div className="glass-panel" style={{ padding: '1.5rem' }}>
-        <h3>{t('workbench.newStory')}</h3>
-        <div className="form-group" style={{ marginTop: '1rem' }}>
+    <div className="workbench-left-panel">
+      <div style={{ padding: '1rem' }}>
+        <h3 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0 }}>{t('workbench.newStory')}</h3>
+        <div className="form-group" style={{ marginTop: '0.75rem' }}>
           <input className="form-input" placeholder={t('workbench.storyTitlePlaceholder')} value={title} onChange={e => setTitle(e.target.value)} />
         </div>
         <div className="form-group">
           <textarea className="form-textarea" placeholder={t('workbench.storyContentPlaceholder')} value={originalText} onChange={e => setOriginalText(e.target.value)} />
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+        <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.4rem' }}>
           <button
-            className="btn btn-secondary"
-            style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#a78bfa' }}
+            className="btn btn-secondary btn-xs"
+            style={{ color: '#a78bfa' }}
             disabled={refiningStoryText || !originalText.trim()}
             onClick={handleRefineText}
           >
-            {refiningStoryText ? <RefreshCw size={14} className="spin" /> : <Wand2 size={14} />}
+            {refiningStoryText ? <RefreshCw size={12} className="spin" /> : <Wand2 size={12} />}
             {refiningStoryText ? t('textAI.refiningText') : t('textAI.refineText')}
           </button>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', gap: '0.4rem' }}>
           <button
-            className="btn btn-primary"
+            className="btn btn-primary btn-sm"
             style={{ flex: 1 }}
             onClick={handleCreateAndBreakdown}
             disabled={isBreakingDown || !title || !originalText}
           >
-            {isBreakingDown ? t('workbench.breakingDown') : <><Sparkles size={16} /> {t('workbench.breakdownBtn')}</>}
+            {isBreakingDown ? t('workbench.breakingDown') : <><Sparkles size={14} /> {t('workbench.breakdownBtn')}</>}
           </button>
           <button
-            className="btn btn-secondary"
+            className="btn btn-secondary btn-sm"
             style={{ flex: 1 }}
             onClick={handleCreate}
             disabled={isSplitting || !title || !originalText}
           >
-            {isSplitting ? t('workbench.splitting') : <><Spline size={16} /> {t('workbench.splitBtn')}</>}
+            {isSplitting ? t('workbench.splitting') : <><Spline size={14} /> {t('workbench.splitBtn')}</>}
           </button>
         </div>
-        <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.5rem', lineHeight: 1.4 }}>
+        <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.4rem', lineHeight: 1.4 }}>
           {t('workbench.breakdownTip')}
         </p>
       </div>
 
-      <div className="glass-panel" style={{ padding: '1.5rem', flex: 1, overflowY: 'auto' }}>
-        <h3>{t('workbench.yourStories')}</h3>
-        <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+      <div style={{ padding: '1rem', flex: 1, overflowY: 'auto', borderTop: '1px solid var(--border-color)' }}>
+        <h3 style={{ fontSize: '0.9rem', fontWeight: 700, margin: '0 0 0.5rem 0' }}>{t('workbench.yourStories')}</h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
           {stories?.map(s => (
             <div key={s.id}>
               {editingStoryId === s.id ? (
-                <div className="glass-panel" style={{ padding: '1rem' }}>
-                  <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+                <div className="glass-panel" style={{ padding: '0.75rem' }}>
+                  <div className="form-group" style={{ marginBottom: '0.5rem' }}>
                     <input className="form-input" value={editTitle} onChange={e => setEditTitle(e.target.value)} placeholder={t('workbench.storyTitlePlaceholder')} />
                   </div>
-                  <div className="form-group" style={{ marginBottom: '0.75rem' }}>
-                    <textarea className="form-textarea" value={editOriginalText} onChange={e => setEditOriginalText(e.target.value)} placeholder={t('workbench.storyContentPlaceholder')} style={{ minHeight: '80px' }} />
+                  <div className="form-group" style={{ marginBottom: '0.5rem' }}>
+                    <textarea className="form-textarea" value={editOriginalText} onChange={e => setEditOriginalText(e.target.value)} placeholder={t('workbench.storyContentPlaceholder')} style={{ minHeight: '60px' }} />
                   </div>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button className="btn btn-primary" style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem' }} onClick={handleSaveEdit}>{t('workbench.saveEditBtn')}</button>
-                    <button className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem' }} onClick={() => setEditingStoryId(null)}>{t('workbench.cancelBtn')}</button>
+                  <div style={{ display: 'flex', gap: '0.4rem' }}>
+                    <button className="btn btn-primary btn-xs" onClick={handleSaveEdit}>{t('workbench.saveEditBtn')}</button>
+                    <button className="btn btn-secondary btn-xs" onClick={() => setEditingStoryId(null)}>{t('workbench.cancelBtn')}</button>
                   </div>
                 </div>
               ) : (
                 <div
-                  className="glass-panel interactive story-card"
+                  className="glass-panel interactive"
                   style={{
-                    padding: '1rem', cursor: 'pointer',
+                    padding: '0.5rem 0.75rem', cursor: 'pointer',
                     borderColor: selectedStoryId === s.id ? 'var(--primary-color)' : 'var(--border-color)',
                     background: selectedStoryId === s.id ? 'var(--bg-panel-hover)' : 'var(--bg-panel)',
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    borderRadius: 'var(--radius-md)',
                   }}
                   onClick={() => onSwitchStory(s.id)}
                 >
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</div>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                      <span style={{
-                        display: 'inline-block', padding: '0.1rem 0.5rem', borderRadius: '999px',
-                        fontSize: '0.7rem', fontWeight: 600,
-                        background: s.status === 'SPLIT' ? 'rgba(52,211,153,0.15)' : 'rgba(251,191,36,0.15)',
-                        color: s.status === 'SPLIT' ? '#34d399' : '#fbbf24',
-                      }}>
-                        {s.status === 'SPLIT' ? t('workbench.statusSplit') : t('workbench.statusDraft')}
-                      </span>
-                    </div>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</div>
+                    <span style={{
+                      display: 'inline-block', padding: '0.05rem 0.4rem', borderRadius: '999px',
+                      fontSize: '0.65rem', fontWeight: 600,
+                      background: s.status === 'SPLIT' ? 'rgba(52,211,153,0.15)' : 'rgba(251,191,36,0.15)',
+                      color: s.status === 'SPLIT' ? '#34d399' : '#fbbf24',
+                    }}>
+                      {s.status === 'SPLIT' ? t('workbench.statusSplit') : t('workbench.statusDraft')}
+                    </span>
                   </div>
-                  <div style={{ display: 'flex', gap: '0.25rem', flexShrink: 0 }}>
+                  <div style={{ display: 'flex', gap: '0.15rem', flexShrink: 0 }}>
                     {s.status === 'DRAFT' && (
                       <button
-                        className="btn btn-secondary"
-                        style={{ padding: '0.3rem', border: 'none' }}
+                        className="btn btn-secondary btn-xs"
+                        style={{ padding: '0.2rem', border: 'none' }}
                         onClick={(e) => { e.stopPropagation(); onQuickSplit(s.id); }}
                         title={t('workbench.splitBtn')}
                       >
-                        <Spline size={14} />
+                        <Spline size={12} />
                       </button>
                     )}
                     <button
-                      className="btn btn-secondary"
-                      style={{ padding: '0.3rem', border: 'none' }}
+                      className="btn btn-secondary btn-xs"
+                      style={{ padding: '0.2rem', border: 'none' }}
                       onClick={(e) => { e.stopPropagation(); openEditStory(s); }}
                     >
-                      <Pencil size={14} />
+                      <Pencil size={12} />
                     </button>
                     <button
-                      className="btn btn-secondary"
-                      style={{ padding: '0.3rem', border: 'none' }}
+                      className="btn btn-secondary btn-xs"
+                      style={{ padding: '0.2rem', border: 'none' }}
                       onClick={(e) => { e.stopPropagation(); onDeleteStory(s.id); }}
                     >
-                      <Trash2 size={14} />
+                      <Trash2 size={12} />
                     </button>
                   </div>
                 </div>
@@ -176,9 +175,9 @@ export const StoryListPanel: React.FC<StoryListPanelProps> = ({
             </div>
           ))}
           {stories?.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-muted)' }}>
-              <BookOpen size={36} style={{ marginBottom: '0.75rem', opacity: 0.4 }} />
-              <p style={{ fontSize: '0.85rem' }}>{t('workbench.noStoriesHint')}</p>
+            <div style={{ textAlign: 'center', padding: '1.5rem 0.5rem', color: 'var(--text-muted)' }}>
+              <BookOpen size={28} style={{ marginBottom: '0.5rem', opacity: 0.4 }} />
+              <p style={{ fontSize: '0.8rem' }}>{t('workbench.noStoriesHint')}</p>
             </div>
           )}
         </div>

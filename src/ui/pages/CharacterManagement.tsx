@@ -148,131 +148,112 @@ export const CharacterManagement: React.FC = () => {
   };
 
   return (
-    <div>
+    <div className="character-page fade-in">
       <div className="page-header">
         <div>
           <h1>{t('character.title')}</h1>
           <p>{t('character.subtitle')}</p>
         </div>
-        <button className="btn btn-primary" onClick={openCreateForm}>
-          <Plus size={18} /> {t('character.newBtn')}
+        <button className="btn btn-primary btn-sm" onClick={openCreateForm}>
+          <Plus size={16} /> {t('character.newBtn')}
         </button>
       </div>
 
       {isFormOpen && (
-        <form className="glass-panel" style={{ padding: '2rem', marginBottom: '1rem' }} onSubmit={handleSave}>
-          <h3 style={{ marginBottom: '1.5rem' }}>
-            {editingCharacterId ? t('character.editTitle') : t('character.createTitle')}
-          </h3>
-          <div className="form-group">
-            <label className="form-label">{t('character.nameLabel')}</label>
-            <input className="form-input" value={name} onChange={e => setName(e.target.value)} required placeholder={t('character.namePlaceholder')} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">{t('character.appearanceLabel')}</label>
-            <textarea className="form-textarea" value={appearance} onChange={e => setAppearance(e.target.value)} placeholder={t('character.appearancePlaceholder')} />
-            <button
-              type="button"
-              className="btn btn-secondary"
-              style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', marginTop: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#a78bfa' }}
-              disabled={!appearance.trim() || refiningField === 'appearance'}
-              onClick={async () => {
-                setRefiningField('appearance');
-                try {
-                  const result = await textGenerationService.refinePrompt(appearance, 'character_appearance');
-                  setAppearance(result.content);
-                  showToast('success', t('textAI.promptRefined'));
-                } catch (e) {
-                  showToast('error', getErrorMessage(e, t('textAI.promptRefineFailed')));
-                } finally {
-                  setRefiningField(null);
-                }
-              }}
-            >
-              {refiningField === 'appearance' ? <RefreshCw size={12} className="spin" /> : <Wand2 size={12} />}
-              {refiningField === 'appearance' ? t('textAI.refiningPrompt') : t('textAI.refineCharAppearance')}
-            </button>
-          </div>
-          <div className="form-group">
-            <label className="form-label">{t('character.personalityLabel')}</label>
-            <textarea className="form-textarea" value={personality} onChange={e => setPersonality(e.target.value)} placeholder={t('character.personalityPlaceholder')} />
-            <button
-              type="button"
-              className="btn btn-secondary"
-              style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', marginTop: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#a78bfa' }}
-              disabled={!personality.trim() || refiningField === 'personality'}
-              onClick={async () => {
-                setRefiningField('personality');
-                try {
-                  const result = await textGenerationService.refinePrompt(personality, 'character_personality');
-                  setPersonality(result.content);
-                  showToast('success', t('textAI.promptRefined'));
-                } catch (e) {
-                  showToast('error', getErrorMessage(e, t('textAI.promptRefineFailed')));
-                } finally {
-                  setRefiningField(null);
-                }
-              }}
-            >
-              {refiningField === 'personality' ? <RefreshCw size={12} className="spin" /> : <Wand2 size={12} />}
-              {refiningField === 'personality' ? t('textAI.refiningPrompt') : t('textAI.refineCharPersonality')}
-            </button>
-          </div>
-          <div className="form-group">
-            <label className="form-label">{t('character.backgroundLabel')}</label>
-            <textarea className="form-textarea" value={characterBackground} onChange={e => setCharacterBackground(e.target.value)} placeholder={t('character.backgroundPlaceholder')} />
+        <form className="glass-panel character-form" onSubmit={handleSave}>
+          <h3>{editingCharacterId ? t('character.editTitle') : t('character.createTitle')}</h3>
+
+          {/* Basic info — horizontal form section */}
+          <div className="form-section">
+            <div className="form-section-item">
+              <div className="form-group">
+                <label className="form-label">{t('character.nameLabel')}</label>
+                <input className="form-input" value={name} onChange={e => setName(e.target.value)} required placeholder={t('character.namePlaceholder')} />
+              </div>
+            </div>
+            <div className="form-section-item">
+              <div className="form-group">
+                <label className="form-label">{t('character.appearanceLabel')}</label>
+                <textarea className="form-textarea" value={appearance} onChange={e => setAppearance(e.target.value)} placeholder={t('character.appearancePlaceholder')} style={{ minHeight: '60px' }} />
+                <button type="button" className="btn btn-secondary character-form-refine-btn"
+                  disabled={!appearance.trim() || refiningField === 'appearance'}
+                  onClick={async () => {
+                    setRefiningField('appearance');
+                    try { const result = await textGenerationService.refinePrompt(appearance, 'character_appearance'); setAppearance(result.content); showToast('success', t('textAI.promptRefined')); }
+                    catch (e) { showToast('error', getErrorMessage(e, t('textAI.promptRefineFailed'))); }
+                    finally { setRefiningField(null); }
+                  }}>
+                  {refiningField === 'appearance' ? <RefreshCw size={10} className="spin" /> : <Wand2 size={10} />}
+                  {refiningField === 'appearance' ? t('textAI.refiningPrompt') : t('textAI.refineCharAppearance')}
+                </button>
+              </div>
+            </div>
+            <div className="form-section-item">
+              <div className="form-group">
+                <label className="form-label">{t('character.personalityLabel')}</label>
+                <textarea className="form-textarea" value={personality} onChange={e => setPersonality(e.target.value)} placeholder={t('character.personalityPlaceholder')} style={{ minHeight: '60px' }} />
+                <button type="button" className="btn btn-secondary character-form-refine-btn"
+                  disabled={!personality.trim() || refiningField === 'personality'}
+                  onClick={async () => {
+                    setRefiningField('personality');
+                    try { const result = await textGenerationService.refinePrompt(personality, 'character_personality'); setPersonality(result.content); showToast('success', t('textAI.promptRefined')); }
+                    catch (e) { showToast('error', getErrorMessage(e, t('textAI.promptRefineFailed'))); }
+                    finally { setRefiningField(null); }
+                  }}>
+                  {refiningField === 'personality' ? <RefreshCw size={10} className="spin" /> : <Wand2 size={10} />}
+                  {refiningField === 'personality' ? t('textAI.refiningPrompt') : t('textAI.refineCharPersonality')}
+                </button>
+              </div>
+            </div>
+            <div className="form-section-item">
+              <div className="form-group">
+                <label className="form-label">{t('character.backgroundLabel')}</label>
+                <textarea className="form-textarea" value={characterBackground} onChange={e => setCharacterBackground(e.target.value)} placeholder={t('character.backgroundPlaceholder')} style={{ minHeight: '60px' }} />
+              </div>
+            </div>
           </div>
 
           {/* Voice Selection */}
-          <div className="form-group">
-            <label className="form-label">
-              <Mic size={14} style={{ verticalAlign: 'middle', marginRight: '0.3rem' }} />
-              {t('character.voiceLabel')}
-            </label>
-            <select className="form-select" value={selectedVoiceId} onChange={e => setSelectedVoiceId(e.target.value)}>
-              <option value="">{t('character.noVoice')}</option>
-              {Object.entries(VOICES_BY_LANGUAGE).map(([lang, voices]) => (
-                <optgroup key={lang} label={LANGUAGE_LABELS[lang] || lang}>
-                  {voices.map(v => (
-                    <option key={v.voiceId} value={v.voiceId}>{v.name}</option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', marginTop: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-              onClick={() => openPicker('voice', (asset: SavedVoice) => { setSelectedVoiceId(asset.voiceId || ''); })}
-            >
+          <div className="character-form-section">
+            <div className="character-form-section-label" style={{ color: '#818cf8' }}>
+              <Mic size={14} /> {t('character.voiceLabel')}
+            </div>
+            <div className="form-group">
+              <select className="form-select" value={selectedVoiceId} onChange={e => setSelectedVoiceId(e.target.value)}>
+                <option value="">{t('character.noVoice')}</option>
+                {Object.entries(VOICES_BY_LANGUAGE).map(([lang, voices]) => (
+                  <optgroup key={lang} label={LANGUAGE_LABELS[lang] || lang}>
+                    {voices.map(v => (<option key={v.voiceId} value={v.voiceId}>{v.name}</option>))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+            <button type="button" className="btn btn-secondary btn-xs"
+              onClick={() => openPicker('voice', (asset: SavedVoice) => { setSelectedVoiceId(asset.voiceId || ''); })}>
               {t('assetLibrary.pickerTitle', '从素材库选择').replace('{{type}}', t('assetLibrary.typeVoice', '音色'))}
             </button>
           </div>
 
           {/* Voice Clone */}
-          <div className="form-group" style={{ border: '1px solid rgba(99,102,241,0.2)', borderRadius: 'var(--radius-md)', padding: '0.75rem' }}>
-            <label className="form-label" style={{ fontSize: '0.8rem', color: '#818cf8' }}>
-              <Upload size={14} style={{ verticalAlign: 'middle', marginRight: '0.3rem' }} />
-              {t('character.cloneVoice')}
-            </label>
-            <div className="form-group" style={{ marginBottom: '0.5rem' }}>
+          <div className="character-form-section" style={{ borderColor: 'rgba(99,102,241,0.2)' }}>
+            <div className="character-form-section-label" style={{ color: '#818cf8' }}>
+              <Upload size={14} /> {t('character.cloneVoice')}
+            </div>
+            <div className="form-group">
               <label className="form-label" style={{ fontSize: '0.75rem' }}>{t('character.cloneAudioLabel')}</label>
               <input className="form-input" type="file" accept="audio/mp3,audio/m4a,audio/wav,audio/mpeg" onChange={e => setCloneAudioFile(e.target.files?.[0] || null)} />
-              <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{t('character.cloneAudioHint')}</p>
+              <p className="character-form-section-hint">{t('character.cloneAudioHint')}</p>
             </div>
-            <div className="form-group" style={{ marginBottom: '0.5rem' }}>
+            <div className="form-group">
               <label className="form-label" style={{ fontSize: '0.75rem' }}>{t('character.promptAudioLabel')}</label>
               <input className="form-input" type="file" accept="audio/mp3,audio/m4a,audio/wav,audio/mpeg" onChange={e => setPromptAudioFile(e.target.files?.[0] || null)} />
-              <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{t('character.promptAudioHint')}</p>
+              <p className="character-form-section-hint">{t('character.promptAudioHint')}</p>
             </div>
-            <div className="form-group" style={{ marginBottom: '0.5rem' }}>
+            <div className="form-group">
               <label className="form-label" style={{ fontSize: '0.75rem' }}>{t('character.promptTextLabel')}</label>
               <input className="form-input" value={promptText} onChange={e => setPromptText(e.target.value)} />
             </div>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+            <button type="button" className="btn btn-secondary btn-xs"
               disabled={isCloning || !cloneAudioFile}
               onClick={async () => {
                 if (!cloneAudioFile) return;
@@ -280,292 +261,195 @@ export const CharacterManagement: React.FC = () => {
                 try {
                   const customVoiceId = `clone_${Date.now()}`;
                   const text = personality.trim() || appearance.trim() || '你好，我是' + (name.trim() || '角色');
-                  const clonedVoiceId = await voiceService.cloneVoice(
-                    cloneAudioFile,
-                    customVoiceId,
-                    text,
-                    promptAudioFile || undefined,
-                    promptText || undefined
-                  );
+                  const clonedVoiceId = await voiceService.cloneVoice(cloneAudioFile, customVoiceId, text, promptAudioFile || undefined, promptText || undefined);
                   setSelectedVoiceId(clonedVoiceId);
                   showToast('success', t('character.cloneVoiceSuccess'));
-                } catch (e: unknown) {
-                  showToast('error', getErrorMessage(e, t('character.cloneVoiceFailed')));
-                } finally {
-                  setIsCloning(false);
-                }
-              }}
-            >
-              {isCloning ? <RefreshCw size={14} className="spin" /> : <Upload size={14} />}
+                } catch (e: unknown) { showToast('error', getErrorMessage(e, t('character.cloneVoiceFailed'))); }
+                finally { setIsCloning(false); }
+              }}>
+              {isCloning ? <RefreshCw size={12} className="spin" /> : <Upload size={12} />}
               {isCloning ? t('character.cloneVoiceCloning') : t('character.cloneVoiceBtn')}
             </button>
           </div>
 
           {/* Voice Design */}
-          <div className="form-group" style={{ border: '1px solid rgba(168,85,247,0.2)', borderRadius: 'var(--radius-md)', padding: '0.75rem' }}>
-            <label className="form-label" style={{ fontSize: '0.8rem', color: '#a855f7' }}>
-              <Palette size={14} style={{ verticalAlign: 'middle', marginRight: '0.3rem' }} />
-              {t('character.designVoice')}
-            </label>
-            <div className="form-group" style={{ marginBottom: '0.5rem' }}>
+          <div className="character-form-section" style={{ borderColor: 'rgba(168,85,247,0.2)' }}>
+            <div className="character-form-section-label" style={{ color: '#a855f7' }}>
+              <Palette size={14} /> {t('character.designVoice')}
+            </div>
+            <div className="form-group">
               <label className="form-label" style={{ fontSize: '0.75rem' }}>{t('character.voiceDesignPromptLabel')}</label>
               <input className="form-input" value={voiceDesignPrompt} onChange={e => setVoiceDesignPrompt(e.target.value)} placeholder={t('character.voiceDesignPromptPlaceholder')} />
-              <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{t('character.voiceDesignPromptHint')}</p>
+              <p className="character-form-section-hint">{t('character.voiceDesignPromptHint')}</p>
             </div>
-            <div className="form-group" style={{ marginBottom: '0.5rem' }}>
+            <div className="form-group">
               <label className="form-label" style={{ fontSize: '0.75rem' }}>{t('character.voiceDesignPreviewLabel')}</label>
               <input className="form-input" value={voiceDesignPreviewText} onChange={e => setVoiceDesignPreviewText(e.target.value)} />
             </div>
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+            <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+              <button type="button" className="btn btn-secondary btn-xs"
                 disabled={isDesigningVoice || !voiceDesignPrompt.trim()}
                 onClick={async () => {
                   if (!voiceDesignPrompt.trim()) return;
-                  setIsDesigningVoice(true);
-                  setDesignPreviewAudioUrl(null);
+                  setIsDesigningVoice(true); setDesignPreviewAudioUrl(null);
                   try {
                     const result = await voiceService.designVoice(voiceDesignPrompt, voiceDesignPreviewText);
                     setSelectedVoiceId(result.voiceId);
-                    if (result.trialAudioHex) {
-                      const audioData = `data:audio/mp3;base64,${result.trialAudioHex}`;
-                      setDesignPreviewAudioUrl(audioData);
-                    }
+                    if (result.trialAudioHex) { setDesignPreviewAudioUrl(`data:audio/mp3;base64,${result.trialAudioHex}`); }
                     showToast('success', t('character.designVoiceSuccess'));
-                  } catch (e: unknown) {
-                    showToast('error', getErrorMessage(e, t('character.designVoiceFailed')));
-                  } finally {
-                    setIsDesigningVoice(false);
-                  }
-                }}
-              >
-                {isDesigningVoice ? <RefreshCw size={14} className="spin" /> : <Palette size={14} />}
+                  } catch (e: unknown) { showToast('error', getErrorMessage(e, t('character.designVoiceFailed'))); }
+                  finally { setIsDesigningVoice(false); }
+                }}>
+                {isDesigningVoice ? <RefreshCw size={12} className="spin" /> : <Palette size={12} />}
                 {isDesigningVoice ? t('character.designingVoice') : t('character.designVoiceBtn')}
               </button>
               {designPreviewAudioUrl && (
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                  onClick={() => {
-                    const audio = new Audio(designPreviewAudioUrl);
-                    audio.play().catch(() => {});
-                  }}
-                >
-                  <Play size={12} /> {t('character.previewVoice')}
+                <button type="button" className="btn btn-secondary btn-xs"
+                  onClick={() => { const audio = new Audio(designPreviewAudioUrl); audio.play().catch(() => {}); }}>
+                  <Play size={10} /> {t('character.previewVoice')}
                 </button>
               )}
             </div>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">{t('character.imageSourceLabel')}</label>
-            <select
-              className="form-select"
-              value={imageInputMode}
-              onChange={e => switchImageMode(e.target.value as 'url' | 'upload' | 'generate')}
-            >
-              <option value="url">{t('character.imageSourceUrl')}</option>
-              <option value="upload">{t('character.imageSourceUpload')}</option>
-              <option value="generate">{t('character.imageSourceGenerate')}</option>
-            </select>
-          </div>
-          {imageInputMode === 'url' ? (
-            <div className="form-group">
-              <label className="form-label">{t('character.imageLabel')}</label>
-              <input className="form-input" value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder={t('character.imagePlaceholder')} />
+          {/* Image Source */}
+          <div className="character-form-section">
+            <div className="character-form-section-label">
+              <Sparkles size={14} /> {t('character.imageSourceLabel')}
             </div>
-          ) : imageInputMode === 'upload' ? (
             <div className="form-group">
-              <label className="form-label">{t('character.uploadLabel')}</label>
-              <input className="form-input" type="file" accept="image/*" onChange={handleImageUpload} />
-              {imageUploadError && (
-                <p style={{ marginTop: '0.5rem', color: 'lightcoral', fontSize: '0.875rem' }}>{imageUploadError}</p>
-              )}
-            </div>
-          ) : (
-            <div className="form-group">
-              <label className="form-label">{t('character.aspectRatioLabel')}</label>
-              <select className="form-select" value={generateAspectRatio} onChange={e => setGenerateAspectRatio(e.target.value)}>
-                <option value="1:1">{t('character.aspectRatio1_1')}</option>
-                <option value="16:9">{t('character.aspectRatio16_9')}</option>
-                <option value="4:3">{t('character.aspectRatio4_3')}</option>
-                <option value="3:4">{t('character.aspectRatio3_4')}</option>
-                <option value="9:16">{t('character.aspectRatio9_16')}</option>
+              <select className="form-select" value={imageInputMode} onChange={e => switchImageMode(e.target.value as 'url' | 'upload' | 'generate')}>
+                <option value="url">{t('character.imageSourceUrl')}</option>
+                <option value="upload">{t('character.imageSourceUpload')}</option>
+                <option value="generate">{t('character.imageSourceGenerate')}</option>
               </select>
-              <button
-                type="button"
-                className="btn btn-primary"
-                style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-                disabled={isGenerating || (!appearance.trim() && !personality.trim())}
-                onClick={async () => {
-                  if (!appearance.trim() && !personality.trim()) {
-                    showToast('warning', t('character.noPromptForImage'));
-                    return;
-                  }
-                  const prompt = [appearance.trim(), personality.trim()].filter(Boolean).join(', ');
-                  try {
-                    const result = await imageAdapter.generateImage({ prompt, aspectRatio: generateAspectRatio, promptOptimizer: true });
-                    setImageUrl(result.imageDataUri || result.imageUrls?.[0]);
-                  } catch (err: unknown) {
-                    const msg = getErrorMessage(err, 'Image generation failed');
-                    showToast('error', msg);
-                  }
-                }}
-              >
-                <Sparkles size={14} />
-                {isGenerating ? t('character.generatingImage') : t('character.generateBtn')}
-              </button>
             </div>
-          )}
-          {imageUrl && (
-            <div style={{ marginBottom: '1rem' }}>
-              <img
-                src={imageUrl}
-                alt={t('character.previewAlt')}
-                style={{ width: '180px', height: '180px', objectFit: 'cover', borderRadius: 'var(--radius-md)' }}
-                onError={(e) => (e.currentTarget.style.display = 'none')}
-              />
-            </div>
-          )}
-          <div className="flex gap-4">
-            <button type="submit" className="btn btn-primary">
-              {editingCharacterId ? t('character.updateBtn') : t('character.saveBtn')}
-            </button>
-            <button type="button" className="btn btn-secondary" onClick={resetForm}>{t('character.cancelBtn')}</button>
+            {imageInputMode === 'url' ? (
+              <div className="form-group">
+                <input className="form-input" value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder={t('character.imagePlaceholder')} />
+              </div>
+            ) : imageInputMode === 'upload' ? (
+              <div className="form-group">
+                <input className="form-input" type="file" accept="image/*" onChange={handleImageUpload} />
+                {imageUploadError && <p style={{ marginTop: '0.3rem', color: 'lightcoral', fontSize: '0.75rem' }}>{imageUploadError}</p>}
+              </div>
+            ) : (
+              <div className="form-group">
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <select className="form-select" style={{ width: '100px' }} value={generateAspectRatio} onChange={e => setGenerateAspectRatio(e.target.value)}>
+                    <option value="1:1">1:1</option><option value="16:9">16:9</option><option value="4:3">4:3</option><option value="3:4">3:4</option><option value="9:16">9:16</option>
+                  </select>
+                  <button type="button" className="btn btn-primary btn-xs"
+                    disabled={isGenerating || (!appearance.trim() && !personality.trim())}
+                    onClick={async () => {
+                      if (!appearance.trim() && !personality.trim()) { showToast('warning', t('character.noPromptForImage')); return; }
+                      const prompt = [appearance.trim(), personality.trim()].filter(Boolean).join(', ');
+                      try { const result = await imageAdapter.generateImage({ prompt, aspectRatio: generateAspectRatio, promptOptimizer: true }); setImageUrl(result.imageDataUri || result.imageUrls?.[0]); }
+                      catch (err: unknown) { showToast('error', getErrorMessage(err, 'Image generation failed')); }
+                    }}>
+                    <Sparkles size={12} /> {isGenerating ? t('character.generatingImage') : t('character.generateBtn')}
+                  </button>
+                </div>
+              </div>
+            )}
+            {imageUrl && (
+              <img src={imageUrl} alt={t('character.previewAlt')} className="character-form-image-preview"
+                onError={(e) => (e.currentTarget.style.display = 'none')} />
+            )}
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button type="submit" className="btn btn-primary btn-sm">{editingCharacterId ? t('character.updateBtn') : t('character.saveBtn')}</button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={resetForm}>{t('character.cancelBtn')}</button>
           </div>
         </form>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
+      <div className="character-grid">
         {characters?.map(char => (
-          <div key={char.id} className="glass-panel" style={{ padding: '1.5rem', position: 'relative' }}>
-            {char.referenceImageUrl && (
-              <img
-                src={char.referenceImageUrl}
-                alt={char.name}
-                style={{ width: '100%', height: '150px', objectFit: 'cover', borderRadius: 'var(--radius-md)', marginBottom: '1rem' }}
-                onError={(e) => (e.currentTarget.style.display = 'none')}
-              />
-            )}
-            <h3 style={{ marginBottom: '0.5rem' }}>{char.name}</h3>
-            {char.appearancePrompt && (
-              <div style={{ fontSize: '0.875rem', marginBottom: '0.5rem', opacity: 0.8 }}>
-                <strong>{t('character.appearance')}</strong>
-                <span style={expandedFields.has(`${char.id}-appearance`) ? undefined : { display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{char.appearancePrompt}</span>
-                {char.appearancePrompt.length > 80 && (
-                  <button onClick={() => toggleExpand(`${char.id}-appearance`)} style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.75rem', padding: '0 0.25rem', verticalAlign: 'middle' }}>
-                    {expandedFields.has(`${char.id}-appearance`) ? <><ChevronUp size={12} /> {t('common.collapse')}</> : <><ChevronDown size={12} /> {t('common.expand')}</>}
-                  </button>
-                )}
+          <div key={char.id} className="glass-panel character-card">
+            {char.referenceImageUrl ? (
+              <img src={char.referenceImageUrl} alt={char.name} className="character-card-image"
+                onError={(e) => (e.currentTarget.style.display = 'none')} />
+            ) : (
+              <div className="character-card-image" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Users size={24} style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
               </div>
             )}
-            {char.personalityPrompt && (
-              <div style={{ fontSize: '0.875rem', marginBottom: '0.5rem', opacity: 0.8 }}>
-                <strong>{t('character.personality')}</strong>
-                <span style={expandedFields.has(`${char.id}-personality`) ? undefined : { display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{char.personalityPrompt}</span>
-                {char.personalityPrompt.length > 80 && (
-                  <button onClick={() => toggleExpand(`${char.id}-personality`)} style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.75rem', padding: '0 0.25rem', verticalAlign: 'middle' }}>
-                    {expandedFields.has(`${char.id}-personality`) ? <><ChevronUp size={12} /> {t('common.collapse')}</> : <><ChevronDown size={12} /> {t('common.expand')}</>}
-                  </button>
-                )}
-              </div>
-            )}
-            {char.characterBackground && (
-              <div style={{ fontSize: '0.875rem', marginBottom: '0.5rem', opacity: 0.8 }}>
-                <strong>{t('character.background')}</strong>
-                <span style={expandedFields.has(`${char.id}-bg`) ? undefined : { display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{char.characterBackground}</span>
-                {char.characterBackground.length > 80 && (
-                  <button onClick={() => toggleExpand(`${char.id}-bg`)} style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.75rem', padding: '0 0.25rem', verticalAlign: 'middle' }}>
-                    {expandedFields.has(`${char.id}-bg`) ? <><ChevronUp size={12} /> {t('common.collapse')}</> : <><ChevronDown size={12} /> {t('common.expand')}</>}
-                  </button>
-                )}
-              </div>
-            )}
-            {char.voiceId && (
-              <div style={{ fontSize: '0.8rem', marginBottom: '0.5rem', opacity: 0.8, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                <Volume2 size={12} style={{ color: '#818cf8' }} />
-                <span>{SYSTEM_VOICES.find(v => v.voiceId === char.voiceId)?.name || char.voiceId}</span>
-              </div>
-            )}
-            <div style={{ position: 'absolute', top: '1rem', right: '1rem', display: 'flex', gap: '0.5rem' }}>
-              <button
-                className="btn btn-secondary"
-                style={{ padding: '0.4rem', border: 'none', color: '#a78bfa' }}
-                onClick={() => handleGenerateCharacterImage(char.id)}
-                disabled={generatingCharId === char.id}
-                title={t('character.generateImage')}
-              >
-                {generatingCharId === char.id ? <RefreshCw size={16} className="spin" /> : <Sparkles size={16} />}
-              </button>
-              <button
-                className="btn btn-secondary"
-                style={{ padding: '0.4rem', border: 'none' }}
-                onClick={() => handleEdit(char.id)}
-              >
-                <Pencil size={16} />
-              </button>
-              <button
-                className="btn btn-secondary"
-                style={{ padding: '0.4rem', border: 'none' }}
-                onClick={() => handleDelete(char.id)}
-              >
-                <Trash2 size={16} />
-              </button>
-              <button
-                className="btn btn-secondary"
-                style={{ padding: '0.4rem', border: 'none' }}
-                title={t('character.copyToSpace')}
-                onClick={() => startCopy(char.id)}
-              >
-                <Copy size={16} />
-              </button>
-            </div>
-            {copyingId === char.id && otherSpaces.length > 0 && (
-              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem', alignItems: 'center' }}>
-                <select
-                  className="form-select"
-                  style={{ flex: 1, fontSize: '0.8rem', padding: '0.3rem 0.5rem' }}
-                  value={copyTargetSpaceId}
-                  onChange={e => setCopyTargetSpaceId(e.target.value)}
-                >
-                  <option value="">{t('space.selectTarget')}</option>
-                  {otherSpaces.map(s => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
-                <button
-                  className="btn btn-primary"
-                  style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}
-                  disabled={!copyTargetSpaceId}
-                  onClick={() => handleCopyToSpace(char.id, copyTargetSpaceId)}
-                >
-                  ✓
+            <div className="character-card-info">
+              <h4 className="character-card-name">{char.name}</h4>
+              {char.appearancePrompt && (
+                <div className="character-card-field">
+                  <strong>{t('character.appearance')}</strong>
+                  <span className={`character-card-field-text${expandedFields.has(`${char.id}-appearance`) ? ' expanded' : ''}`}>{char.appearancePrompt}</span>
+                  {char.appearancePrompt.length > 80 && (
+                    <button className="character-card-expand-btn" onClick={() => toggleExpand(`${char.id}-appearance`)}>
+                      {expandedFields.has(`${char.id}-appearance`) ? <><ChevronUp size={10} /> {t('common.collapse')}</> : <><ChevronDown size={10} /> {t('common.expand')}</>}
+                    </button>
+                  )}
+                </div>
+              )}
+              {char.personalityPrompt && (
+                <div className="character-card-field">
+                  <strong>{t('character.personality')}</strong>
+                  <span className={`character-card-field-text${expandedFields.has(`${char.id}-personality`) ? ' expanded' : ''}`}>{char.personalityPrompt}</span>
+                  {char.personalityPrompt.length > 80 && (
+                    <button className="character-card-expand-btn" onClick={() => toggleExpand(`${char.id}-personality`)}>
+                      {expandedFields.has(`${char.id}-personality`) ? <><ChevronUp size={10} /> {t('common.collapse')}</> : <><ChevronDown size={10} /> {t('common.expand')}</>}
+                    </button>
+                  )}
+                </div>
+              )}
+              {char.characterBackground && (
+                <div className="character-card-field">
+                  <strong>{t('character.background')}</strong>
+                  <span className={`character-card-field-text${expandedFields.has(`${char.id}-bg`) ? ' expanded' : ''}`}>{char.characterBackground}</span>
+                  {char.characterBackground.length > 80 && (
+                    <button className="character-card-expand-btn" onClick={() => toggleExpand(`${char.id}-bg`)}>
+                      {expandedFields.has(`${char.id}-bg`) ? <><ChevronUp size={10} /> {t('common.collapse')}</> : <><ChevronDown size={10} /> {t('common.expand')}</>}
+                    </button>
+                  )}
+                </div>
+              )}
+              {char.voiceId && (
+                <div className="character-card-voice">
+                  <Volume2 size={10} style={{ color: '#818cf8' }} />
+                  {SYSTEM_VOICES.find(v => v.voiceId === char.voiceId)?.name || char.voiceId}
+                </div>
+              )}
+              <div className="character-card-actions">
+                <button className="character-card-action-btn sparkle" onClick={() => handleGenerateCharacterImage(char.id)} disabled={generatingCharId === char.id} title={t('character.generateImage')}>
+                  {generatingCharId === char.id ? <RefreshCw size={14} className="spin" /> : <Sparkles size={14} />}
                 </button>
+                <button className="character-card-action-btn" onClick={() => handleEdit(char.id)} title={t('character.editTitle')}><Pencil size={14} /></button>
+                <button className="character-card-action-btn" onClick={() => handleDelete(char.id)} title={t('character.deleteConfirmBtn')}><Trash2 size={14} /></button>
+                <button className="character-card-action-btn" title={t('character.copyToSpace')} onClick={() => startCopy(char.id)}><Copy size={14} /></button>
               </div>
-            )}
+              {copyingId === char.id && otherSpaces.length > 0 && (
+                <div className="character-card-copy-row">
+                  <select className="form-select" style={{ flex: 1, fontSize: '0.75rem', padding: '0.25rem 0.4rem' }}
+                    value={copyTargetSpaceId} onChange={e => setCopyTargetSpaceId(e.target.value)}>
+                    <option value="">{t('space.selectTarget')}</option>
+                    {otherSpaces.map(s => (<option key={s.id} value={s.id}>{s.name}</option>))}
+                  </select>
+                  <button className="btn btn-primary btn-xs" disabled={!copyTargetSpaceId}
+                    onClick={() => handleCopyToSpace(char.id, copyTargetSpaceId)}>✓</button>
+                </div>
+              )}
+            </div>
           </div>
         ))}
         {characters?.length === 0 && !isFormOpen && (
-          <div className="glass-panel" style={{ padding: '3rem', textAlign: 'center', gridColumn: '1 / -1' }}>
-            <Users size={48} style={{ color: 'var(--text-muted)', marginBottom: '1rem' }} />
-            <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem' }}>{t('character.empty')}</p>
-            <button className="btn btn-primary" onClick={openCreateForm}>
-              <Plus size={18} /> {t('character.newBtn')}
-            </button>
+          <div className="glass-panel character-empty">
+            <Users size={36} style={{ color: 'var(--text-muted)', marginBottom: '0.75rem' }} />
+            <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>{t('character.empty')}</p>
+            <button className="btn btn-primary btn-sm" onClick={openCreateForm}><Plus size={14} /> {t('character.newBtn')}</button>
           </div>
         )}
       </div>
       {assetPickerState.isOpen && currentSpaceId && (
-        <AssetPicker
-          type={assetPickerState.type}
-          spaceId={currentSpaceId}
-          category={assetPickerState.category}
-          onSelect={assetPickerState.onSelect!}
-          onClose={closePicker}
-        />
+        <AssetPicker type={assetPickerState.type} spaceId={currentSpaceId} category={assetPickerState.category}
+          onSelect={assetPickerState.onSelect!} onClose={closePicker} />
       )}
     </div>
   );

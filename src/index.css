@@ -841,17 +841,26 @@ p {
    ======================================== */
 
 .workbench {
-  padding: 1.25rem;
+  padding: 0;
   width: 100%;
+  display: flex;
+  gap: 0;
+  height: 100%;
 }
 
 .workbench-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 0.75rem;
-  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  gap: 0.5rem;
   flex-wrap: wrap;
+}
+
+.workbench-header h2 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0;
 }
 
 .workbench-header-info h1 {
@@ -868,9 +877,79 @@ p {
 
 .workbench-actions {
   display: flex;
-  gap: 0.75rem;
+  gap: 0.5rem;
   flex-wrap: wrap;
   align-items: center;
+}
+
+/* Left panel: story list */
+.workbench-left-panel {
+  flex: 0 0 320px;
+  max-width: 360px;
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-right: 1px solid var(--border-color);
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+/* Right panel: segments */
+.workbench-right-panel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+/* Compact toolbar row */
+.workbench-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 0.5rem;
+}
+
+.workbench-toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border-color);
+  flex-shrink: 0;
+}
+
+/* Progress bar compact */
+.workbench-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.workbench-progress-bar {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-color);
+  overflow: hidden;
+  display: flex;
+}
+
+.workbench-progress-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.workbench-progress-stats {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.7rem;
 }
 
 .workbench-story-list {
@@ -912,6 +991,322 @@ p {
 }
 
 /* ========================================
+   Text Lab
+   ======================================== */
+
+.textlab-refine-layout {
+  display: flex;
+  gap: 1rem;
+  min-height: 0;
+}
+
+.textlab-refine-input-panel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.textlab-refine-result-panel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.textlab-scene-chips {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.textlab-scene-chip {
+  padding: 0.35rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid var(--border-color);
+  background: rgba(0, 0, 0, 0.15);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.textlab-scene-chip:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.textlab-scene-chip.active {
+  color: #fff;
+  border-color: transparent;
+}
+
+.textlab-style-chips {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.textlab-style-chip {
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  font-weight: 500;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.textlab-style-chip.active {
+  background: var(--primary-color);
+  color: #fff;
+  border-color: var(--primary-color);
+}
+
+.textlab-refine-actions {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.textlab-model-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.textlab-model-table th {
+  padding: 0.5rem;
+  text-align: left;
+  color: var(--text-muted);
+  font-weight: 500;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.textlab-model-table td {
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.textlab-model-tag {
+  padding: 0.3rem 0.6rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius-md);
+  font-size: 0.75rem;
+}
+
+@media (max-width: 768px) {
+  .textlab-refine-layout {
+    flex-direction: column;
+  }
+}
+
+/* ========================================
+   Character Management
+   ======================================== */
+
+.character-page {
+  padding: 1.25rem;
+  width: 100%;
+}
+
+.character-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 0.75rem;
+}
+
+.character-card {
+  padding: 0.75rem;
+  display: flex;
+  gap: 0.75rem;
+  position: relative;
+}
+
+.character-card-image {
+  flex: 0 0 80px;
+  width: 80px;
+  height: 80px;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.character-card-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.character-card-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text-main);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.character-card-field {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.character-card-field strong {
+  color: var(--text-main);
+  font-weight: 600;
+  margin-right: 0.25rem;
+}
+
+.character-card-field-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.character-card-field-text.expanded {
+  -webkit-line-clamp: unset;
+}
+
+.character-card-expand-btn {
+  background: none;
+  border: none;
+  color: var(--primary-color);
+  cursor: pointer;
+  font-size: 0.7rem;
+  padding: 0 0.15rem;
+  vertical-align: middle;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.character-card-voice {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.character-card-actions {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--border-color);
+  margin-top: auto;
+}
+
+.character-card-action-btn {
+  padding: 0.25rem;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.character-card-action-btn:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.character-card-action-btn.sparkle {
+  color: #a78bfa;
+}
+
+.character-card-copy-row {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+  align-items: center;
+}
+
+/* Character Form */
+.character-form {
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.character-form h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0 0 0.75rem 0;
+}
+
+.character-form-section {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+
+.character-form-section-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-bottom: 0.4rem;
+}
+
+.character-form-section-hint {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 0.2rem;
+}
+
+.character-form-section .form-group {
+  margin-bottom: 0.4rem;
+}
+
+.character-form-section .form-group:last-child {
+  margin-bottom: 0;
+}
+
+.character-form-section .form-label {
+  font-size: 0.75rem;
+}
+
+.character-form-refine-btn {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.4rem;
+  margin-top: 0.2rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  color: #a78bfa;
+}
+
+.character-form-image-preview {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+}
+
+.character-empty {
+  padding: 2rem;
+  text-align: center;
+  grid-column: 1 / -1;
+}
+
+/* ========================================
    Segment Card
    ======================================== */
 
@@ -919,6 +1314,62 @@ p {
   padding: 0.75rem;
   display: flex;
   gap: 0.5rem;
+}
+
+/* Wide-screen: segment card uses horizontal layout for content + media */
+@media (min-width: 1024px) {
+  .segment-card {
+    flex-direction: row;
+    gap: 0.75rem;
+  }
+
+  .segment-body {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    align-items: flex-start;
+  }
+
+  .segment-content {
+    flex: 1 1 100%;
+    margin-bottom: 0.25rem;
+  }
+
+  .segment-characters {
+    flex: 0 0 auto;
+    margin-bottom: 0;
+  }
+
+  .segment-actions {
+    flex: 0 0 auto;
+  }
+
+  .segment-narration {
+    flex: 0 0 auto;
+    margin-top: 0;
+  }
+
+  .segment-bgm {
+    flex: 0 0 auto;
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+    border-left: 1px solid var(--border-color);
+    padding-left: 0.5rem;
+  }
+
+  .segment-advanced {
+    flex: 1 1 100%;
+  }
+
+  .segment-video-result {
+    flex: 0 0 auto;
+    margin-top: 0;
+  }
+
+  .segment-error {
+    flex: 1 1 100%;
+  }
 }
 
 .segment-index {
@@ -1192,8 +1643,22 @@ p {
     min-width: 100%;
   }
 
-  /* Workbench */
+  /* Workbench — stack vertically on mobile */
   .workbench {
+    flex-direction: column;
+    height: auto;
+  }
+
+  .workbench-left-panel {
+    flex: 0 0 auto;
+    max-width: 100%;
+    min-width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+    max-height: 40vh;
+  }
+
+  .workbench-right-panel {
     padding: 0.75rem;
   }
 

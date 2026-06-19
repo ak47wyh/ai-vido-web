@@ -298,18 +298,18 @@ export const TextLab: React.FC = () => {
       {/* ==================== Chat Tab ==================== */}
       {activeTab === 'chat' && (
         <div className="chat-layout">
-          {/* Top bar */}
+          {/* Top bar — compact inline */}
           <div className="chat-top-bar">
-            <select className="form-select" style={{ width: 'auto' }} value={chatModel} onChange={e => setChatModel(e.target.value as TextModel)}>
+            <select className="form-select btn-sm" style={{ width: 'auto', fontSize: '0.8rem' }} value={chatModel} onChange={e => setChatModel(e.target.value as TextModel)}>
               {MODEL_OPTIONS.map(m => (
                 <option key={m.value} value={m.value}>{m.label} — {m.desc}</option>
               ))}
             </select>
-            <button className="btn btn-secondary" style={{ fontSize: '0.8rem' }} onClick={() => setShowAdvanced(!showAdvanced)}>
-              {showAdvanced ? <ChevronUp size={14} /> : <ChevronDown size={14} />} {t('textLab.advanced', '高级参数')}
+            <button className="btn btn-secondary btn-xs" onClick={() => setShowAdvanced(!showAdvanced)}>
+              {showAdvanced ? <ChevronUp size={12} /> : <ChevronDown size={12} />} {t('textLab.advanced', '高级参数')}
             </button>
-            <button className="btn btn-secondary" style={{ fontSize: '0.85rem' }} onClick={clearChat}>
-              <RefreshCw size={14} /> {t('textLab.clearChat', '清空对话')}
+            <button className="btn btn-secondary btn-xs" onClick={clearChat}>
+              <RefreshCw size={12} /> {t('textLab.clearChat', '清空')}
             </button>
           </div>
 
@@ -317,28 +317,26 @@ export const TextLab: React.FC = () => {
           {showAdvanced && (
             <div className="chat-advanced">
               <div className="chat-advanced-item">
-                <label className="form-label">{t('textLab.temperature', '温度')} ({temperature})</label>
+                <label className="form-label" style={{ fontSize: '0.75rem' }}>{t('textLab.temperature', '温度')} ({temperature})</label>
                 <input type="range" min="0" max="2" step="0.1" value={temperature} onChange={e => setTemperature(parseFloat(e.target.value))} style={{ width: '100%', accentColor: '#34d399' }} />
               </div>
               <div className="chat-advanced-item">
-                <label className="form-label">{t('textLab.topP', 'Top P')} ({topP})</label>
+                <label className="form-label" style={{ fontSize: '0.75rem' }}>{t('textLab.topP', 'Top P')} ({topP})</label>
                 <input type="range" min="0" max="1" step="0.05" value={topP} onChange={e => setTopP(parseFloat(e.target.value))} style={{ width: '100%', accentColor: '#34d399' }} />
               </div>
-              <div style={{ flex: 1, minWidth: '120px' }}>
-                <label className="form-label">{t('textLab.maxTokens', 'Max Tokens')}</label>
-                <select className="form-select" value={maxTokens} onChange={e => setMaxTokens(Number(e.target.value))}>
+              <div style={{ flex: 1, minWidth: '100px' }}>
+                <label className="form-label" style={{ fontSize: '0.75rem' }}>{t('textLab.maxTokens', 'Max Tokens')}</label>
+                <select className="form-select btn-xs" value={maxTokens} onChange={e => setMaxTokens(Number(e.target.value))}>
                   <option value={2048}>2048</option>
                   <option value={4096}>4096</option>
                   <option value={8192}>8192</option>
                   <option value={16384}>16384</option>
                 </select>
               </div>
-              <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '0.5rem' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.85rem' }}>
-                  <input type="checkbox" checked={enableThinking} onChange={e => setEnableThinking(e.target.checked)} style={{ width: '14px', height: '14px', accentColor: '#8b5cf6' }} />
-                  {t('textLab.enableThinking', '开启 Thinking (M3)')}
-                </label>
-              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', cursor: 'pointer', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                <input type="checkbox" checked={enableThinking} onChange={e => setEnableThinking(e.target.checked)} style={{ width: '12px', height: '12px', accentColor: '#8b5cf6' }} />
+                {t('textLab.enableThinking', 'Thinking')}
+              </label>
             </div>
           )}
 
@@ -348,12 +346,12 @@ export const TextLab: React.FC = () => {
               {messages.map((msg, idx) => (
                 <div key={idx} className={`chat-message ${msg.role === 'user' ? 'chat-message-user' : ''}`}>
                   <div className={`chat-avatar ${msg.role === 'user' ? 'chat-avatar-user' : 'chat-avatar-assistant'}`}>
-                    {msg.role === 'user' ? <User size={20} /> : <Bot size={20} />}
+                    {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
                   </div>
                   <div className={`chat-bubble ${msg.role === 'user' ? 'chat-bubble-user' : 'chat-bubble-assistant'}`}>
                     {msg.isStreaming && !msg.content ? (
-                      <span style={{ color: 'var(--text-muted)' }}>
-                        <Sparkles size={14} className="spin" /> {t('textLab.thinking', '正在思考中...')}
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                        <Sparkles size={12} className="spin" /> {t('textLab.thinking', '思考中...')}
                       </span>
                     ) : (
                       <>
@@ -361,22 +359,16 @@ export const TextLab: React.FC = () => {
                         {msg.isStreaming && <span className="blink-cursor" style={{ borderRight: '2px solid var(--primary-color)', marginLeft: '2px' }}>&nbsp;</span>}
                       </>
                     )}
-                    {/* Thinking block */}
                     {msg.role === 'assistant' && msg.thinking && !msg.isStreaming && (
                       <ThinkingBlock thinking={msg.thinking} />
                     )}
-                    {/* Token usage */}
                     {msg.role === 'assistant' && msg.usage && !msg.isStreaming && (
-                      <TokenUsageBar usage={msg.usage} style={{ marginTop: '0.5rem' }} />
+                      <TokenUsageBar usage={msg.usage} style={{ marginTop: '0.4rem' }} />
                     )}
-                    {/* Actions */}
                     {msg.role === 'assistant' && idx > 0 && !msg.isStreaming && (
                       <div className="chat-action-btn">
-                        <button
-                          onClick={() => handleCollectPrompt(msg.content)}
-                          title={t('assetLibrary.collectBtn', '收藏')}
-                        >
-                          <BookmarkPlus size={14} />
+                        <button onClick={() => handleCollectPrompt(msg.content)} title={t('assetLibrary.collectBtn', '收藏')}>
+                          <BookmarkPlus size={12} />
                         </button>
                       </div>
                     )}
@@ -386,25 +378,25 @@ export const TextLab: React.FC = () => {
               <div ref={chatEndRef} />
             </div>
 
-            {/* Input */}
+            {/* Input — compact */}
             <div className="chat-input-area">
               <div className="chat-input-row">
                 <textarea
                   className="form-input"
-                  style={{ flex: 1, resize: 'none', padding: '0.8rem', fontSize: '1rem' }}
-                  rows={2}
-                  placeholder={t('textLab.inputPlaceholder', '输入您的提示词、文案或任何问题... (Shift+Enter 换行)')}
+                  style={{ flex: 1, resize: 'none', padding: '0.5rem', fontSize: '0.9rem' }}
+                  rows={1}
+                  placeholder={t('textLab.inputPlaceholder', '输入提示词或问题... (Shift+Enter 换行)')}
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
                 />
                 <button
-                  className="btn btn-primary"
-                  style={{ padding: '0 1.5rem', height: 'auto', background: isGenerating ? '#ef4444' : '#34d399', border: 'none', color: '#000' }}
+                  className="btn btn-primary btn-sm"
+                  style={{ background: isGenerating ? '#ef4444' : '#34d399', border: 'none', color: '#000', padding: '0 1rem' }}
                   disabled={!input.trim() && !isGenerating}
                   onClick={isGenerating ? handleStopGenerating : handleSend}
                 >
-                  {isGenerating ? <RefreshCw size={20} /> : <Send size={20} />}
+                  {isGenerating ? <RefreshCw size={16} /> : <Send size={16} />}
                 </button>
               </div>
             </div>
@@ -414,117 +406,96 @@ export const TextLab: React.FC = () => {
 
       {/* ==================== Refine Tab ==================== */}
       {activeTab === 'refine' && (
-        <div className="glass-panel slide-up" style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          {/* 场景选择 */}
-          <div>
-            <label className="form-label">{t('textLab.selectScene', '选择润色场景')}</label>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '0.5rem' }}>
+        <div className="textlab-refine-layout">
+          {/* Left: Input panel */}
+          <div className="glass-panel textlab-refine-input-panel" style={{ padding: '0.75rem' }}>
+            <label className="form-label" style={{ fontSize: '0.8rem', marginBottom: '0.25rem' }}>{t('textLab.selectScene', '润色场景')}</label>
+            <div className="textlab-scene-chips">
               {SCENE_TEMPLATES.map(s => (
                 <button
                   key={s.key}
-                  className={`btn ${refineScene === s.key ? 'btn-primary' : 'btn-secondary'}`}
-                  style={{ fontSize: '0.8rem', background: refineScene === s.key ? s.color : undefined, justifyContent: 'center' }}
+                  className={`textlab-scene-chip${refineScene === s.key ? ' active' : ''}`}
+                  style={refineScene === s.key ? { background: s.color, borderColor: s.color } : undefined}
                   onClick={() => { setRefineScene(s.key); setRefineResult(null); }}
                 >
                   {s.icon} {s.label}
                 </button>
               ))}
             </div>
-          </div>
 
-          {/* 输入 */}
-          <div>
-            <label className="form-label">{t('textLab.refineInput', '输入原始文本')}</label>
             <textarea
               className="form-input"
-              rows={6}
+              rows={8}
               placeholder={t('textLab.refineInputPlaceholder', '粘贴或输入需要润色的文本...')}
               value={refineInput}
               onChange={e => setRefineInput(e.target.value)}
-              style={{ fontSize: '0.95rem', padding: '1rem' }}
+              style={{ fontSize: '0.85rem', padding: '0.6rem' }}
             />
-          </div>
 
-          {/* 风格 + 模型 */}
-          <div className="form-section">
-            <div>
-              <label className="form-label">{t('textLab.refineStyle', '润色风格')}</label>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div className="textlab-style-chips">
                 {(['concise', 'standard', 'detailed'] as RefineStyle[]).map(s => (
-                  <button
-                    key={s}
-                    className={`btn ${refineStyle === s ? 'btn-primary' : 'btn-secondary'}`}
-                    style={{ fontSize: '0.8rem' }}
-                    onClick={() => setRefineStyle(s)}
-                  >
+                  <button key={s} className={`textlab-style-chip${refineStyle === s ? ' active' : ''}`}
+                    onClick={() => setRefineStyle(s)}>
                     {s === 'concise' ? '简洁' : s === 'standard' ? '标准' : '详细'}
                   </button>
                 ))}
               </div>
-            </div>
-            <div className="form-section-item">
-              <label className="form-label">{t('textLab.refineModel', '润色模型')}</label>
-              <select className="form-select" value={refineModel} onChange={e => setRefineModel(e.target.value as TextModel)}>
+              <select className="form-select btn-xs" style={{ width: '130px' }} value={refineModel} onChange={e => setRefineModel(e.target.value as TextModel)}>
                 {MODEL_OPTIONS.map(m => (
-                  <option key={m.value} value={m.value}>{m.label} — {m.desc}</option>
+                  <option key={m.value} value={m.value}>{m.label}</option>
                 ))}
               </select>
             </div>
+
+            <button
+              className="btn btn-primary btn-sm"
+              style={{ background: '#8b5cf6', width: '100%' }}
+              disabled={!refineInput.trim() || isRefining}
+              onClick={handleRefine}
+            >
+              {isRefining ? <RefreshCw className="spin" size={14} /> : <Sparkles size={14} />}
+              {isRefining ? t('textLab.refining', '润色中...') : t('textLab.refineBtn', '一键润色')}
+            </button>
           </div>
 
-          {/* 润色按钮 */}
-          <button
-            className="btn btn-primary btn-generate"
-            style={{ background: '#8b5cf6' }}
-            disabled={!refineInput.trim() || isRefining}
-            onClick={handleRefine}
-          >
-            {isRefining ? <RefreshCw className="spin" size={20} /> : <Sparkles size={20} />}
-            {isRefining ? t('textLab.refining', '正在润色...') : t('textLab.refineBtn', '一键润色')}
-          </button>
-
-          {/* 润色结果 */}
-          {(displayRefineContent || isRefining) && (
-            <div className="result-panel" style={{ background: 'rgba(139,92,246,0.1)', borderColor: 'rgba(139,92,246,0.3)' }}>
-              <div className="result-panel-header">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <CheckCircle2 size={16} style={{ color: '#a78bfa' }} />
-                  <span style={{ color: '#a78bfa', fontWeight: 600 }}>{t('textLab.refineResult', '润色结果')}</span>
-                  {isRefining && <RefreshCw size={14} className="spin" style={{ color: '#a78bfa' }} />}
-                </div>
+          {/* Right: Result panel */}
+          {(displayRefineContent || isRefining) ? (
+            <div className="glass-panel textlab-refine-result-panel" style={{ padding: '0.75rem', background: 'rgba(139,92,246,0.06)', borderColor: 'rgba(139,92,246,0.2)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}>
+                <CheckCircle2 size={14} style={{ color: '#a78bfa' }} />
+                <span style={{ color: '#a78bfa', fontWeight: 600, fontSize: '0.85rem' }}>{t('textLab.refineResult', '润色结果')}</span>
+                {isRefining && <RefreshCw size={12} className="spin" style={{ color: '#a78bfa' }} />}
               </div>
-              <div style={{
-                fontSize: '0.95rem', lineHeight: 1.8, color: 'var(--text-color)',
-                whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-              }}>
+              <div style={{ fontSize: '0.85rem', lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word', flex: 1, overflowY: 'auto' }}>
                 {displayRefineContent}
                 {isRefining && <span style={{ borderRight: '2px solid #8b5cf6', marginLeft: '2px' }}>&nbsp;</span>}
               </div>
-              {/* Thinking */}
-              {displayRefineThinking && !isRefining && (
-                <ThinkingBlock thinking={displayRefineThinking} />
-              )}
-              {/* Token usage */}
-              {displayRefineUsage && !isRefining && (
-                <TokenUsageBar usage={displayRefineUsage} style={{ marginTop: '0.75rem' }} />
-              )}
-              {/* Actions */}
+              {displayRefineThinking && !isRefining && <ThinkingBlock thinking={displayRefineThinking} />}
+              {displayRefineUsage && !isRefining && <TokenUsageBar usage={displayRefineUsage} style={{ marginTop: '0.4rem' }} />}
               {!isRefining && displayRefineContent && (
-                <div className="result-panel-actions">
-                  <button className="btn btn-secondary" style={{ fontSize: '0.8rem' }} onClick={handleCopyResult}>
-                    {copied ? <CheckCircle2 size={14} /> : <Copy size={14} />}
-                    {copied ? t('textLab.copied', '已复制') : t('textLab.copy', '复制结果')}
+                <div className="textlab-refine-actions" style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid var(--border-color)' }}>
+                  <button className="btn btn-secondary btn-xs" onClick={handleCopyResult}>
+                    {copied ? <CheckCircle2 size={12} /> : <Copy size={12} />}
+                    {copied ? t('textLab.copied', '已复制') : t('textLab.copy', '复制')}
                   </button>
-                  <button className="btn btn-secondary" style={{ fontSize: '0.8rem' }} onClick={() => handleCollectPrompt(displayRefineContent)}>
-                    <BookmarkPlus size={14} /> {t('assetLibrary.collectBtn', '收藏')}
+                  <button className="btn btn-secondary btn-xs" onClick={() => handleCollectPrompt(displayRefineContent)}>
+                    <BookmarkPlus size={12} /> {t('assetLibrary.collectBtn', '收藏')}
                   </button>
                   {refineScene === 'bgm_style' && (
-                    <button className="btn btn-secondary" style={{ fontSize: '0.8rem', background: '#8b5cf6', color: '#fff' }} onClick={() => { showToast('success', t('textLab.applied', '已复制到剪贴板，可粘贴到音乐实验室')); navigator.clipboard.writeText(displayRefineContent); }}>
-                      <ArrowRight size={14} /> {t('textLab.useForMusic', '用于音乐生成')}
+                    <button className="btn btn-xs" style={{ background: '#8b5cf6', color: '#fff' }} onClick={() => { showToast('success', t('textLab.applied', '已复制到剪贴板')); navigator.clipboard.writeText(displayRefineContent); }}>
+                      <ArrowRight size={12} /> {t('textLab.useForMusic', '用于音乐')}
                     </button>
                   )}
                 </div>
               )}
+            </div>
+          ) : (
+            <div className="glass-panel textlab-refine-result-panel" style={{ padding: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.4 }}>
+              <div style={{ textAlign: 'center' }}>
+                <Sparkles size={32} style={{ marginBottom: '0.5rem' }} />
+                <p style={{ fontSize: '0.85rem' }}>{t('textLab.refineResultHint', '润色结果将在此显示')}</p>
+              </div>
             </div>
           )}
         </div>
@@ -532,25 +503,24 @@ export const TextLab: React.FC = () => {
 
       {/* ==================== Models Tab ==================== */}
       {activeTab === 'models' && (
-        <div className="glass-panel slide-up" style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          <div className="flex items-center justify-between">
-            <h3 style={{ margin: 0 }}>{t('textLab.availableModels', '可用模型')}</h3>
-            <button className="btn btn-secondary" style={{ fontSize: '0.85rem' }} onClick={loadModels} disabled={isLoadingModels}>
-              {isLoadingModels ? <RefreshCw className="spin" size={14} /> : <Database size={14} />} {t('textLab.refreshModels', '刷新模型列表')}
+        <div className="glass-panel slide-up" style={{ padding: '0.75rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <h3 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0 }}>{t('textLab.availableModels', '可用模型')}</h3>
+            <button className="btn btn-secondary btn-xs" onClick={loadModels} disabled={isLoadingModels}>
+              {isLoadingModels ? <RefreshCw className="spin" size={12} /> : <Database size={12} />} {t('textLab.refreshModels', '刷新')}
             </button>
           </div>
 
-          {/* 模型能力矩阵 */}
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+            <table className="textlab-model-table">
               <thead>
-                <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                  <th style={{ padding: '0.75rem', textAlign: 'left', color: 'var(--text-muted)' }}>模型</th>
-                  <th style={{ padding: '0.75rem', textAlign: 'center', color: 'var(--text-muted)' }}>文本</th>
-                  <th style={{ padding: '0.75rem', textAlign: 'center', color: 'var(--text-muted)' }}>图片理解</th>
-                  <th style={{ padding: '0.75rem', textAlign: 'center', color: 'var(--text-muted)' }}>Thinking</th>
-                  <th style={{ padding: '0.75rem', textAlign: 'center', color: 'var(--text-muted)' }}>工具调用</th>
-                  <th style={{ padding: '0.75rem', textAlign: 'left', color: 'var(--text-muted)' }}>推荐场景</th>
+                <tr>
+                  <th>模型</th>
+                  <th style={{ textAlign: 'center' }}>文本</th>
+                  <th style={{ textAlign: 'center' }}>图片理解</th>
+                  <th style={{ textAlign: 'center' }}>Thinking</th>
+                  <th style={{ textAlign: 'center' }}>工具调用</th>
+                  <th>推荐场景</th>
                 </tr>
               </thead>
               <tbody>
@@ -564,33 +534,27 @@ export const TextLab: React.FC = () => {
                   { id: 'MiniMax-M2.1-highspeed', text: true, image: false, thinking: 'always', tools: true, rec: '快速基础' },
                   { id: 'MiniMax-M2', text: true, image: false, thinking: 'always', tools: true, rec: '入门级' },
                 ].map(m => (
-                  <tr key={m.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                    <td style={{ padding: '0.75rem', fontWeight: 600 }}>{m.id}</td>
-                    <td style={{ padding: '0.75rem', textAlign: 'center' }}>{m.text ? '✅' : '—'}</td>
-                    <td style={{ padding: '0.75rem', textAlign: 'center' }}>{m.image ? '✅' : '—'}</td>
-                    <td style={{ padding: '0.75rem', textAlign: 'center', color: m.thinking === 'adaptive' ? '#8b5cf6' : 'var(--text-muted)' }}>
+                  <tr key={m.id}>
+                    <td><strong>{m.id}</strong></td>
+                    <td style={{ textAlign: 'center' }}>{m.text ? '✅' : '—'}</td>
+                    <td style={{ textAlign: 'center' }}>{m.image ? '✅' : '—'}</td>
+                    <td style={{ textAlign: 'center', color: m.thinking === 'adaptive' ? '#8b5cf6' : 'var(--text-muted)' }}>
                       {m.thinking === 'adaptive' ? '可控' : '始终'}
                     </td>
-                    <td style={{ padding: '0.75rem', textAlign: 'center' }}>{m.tools ? '✅' : '—'}</td>
-                    <td style={{ padding: '0.75rem', color: 'var(--text-muted)' }}>{m.rec}</td>
+                    <td style={{ textAlign: 'center' }}>{m.tools ? '✅' : '—'}</td>
+                    <td style={{ color: 'var(--text-muted)' }}>{m.rec}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
 
-          {/* API 返回的模型列表 */}
           {modelList.length > 0 && (
-            <div>
-              <h4 style={{ margin: '1rem 0 0.5rem', color: 'var(--text-muted)' }}>{t('textLab.apiModels', 'API 返回的模型列表')}</h4>
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <div style={{ marginTop: '0.75rem' }}>
+              <h4 style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0 0 0.4rem 0' }}>{t('textLab.apiModels', 'API 返回的模型列表')}</h4>
+              <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
                 {modelList.map(m => (
-                  <span key={m.id} style={{
-                    padding: '0.4rem 0.8rem', background: 'rgba(0,0,0,0.2)',
-                    borderRadius: 'var(--radius-md)', fontSize: '0.8rem',
-                  }}>
-                    {m.displayName || m.id}
-                  </span>
+                  <span key={m.id} className="textlab-model-tag">{m.displayName || m.id}</span>
                 ))}
               </div>
             </div>
