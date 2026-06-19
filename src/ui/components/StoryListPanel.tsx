@@ -60,7 +60,7 @@ export const StoryListPanel: React.FC<StoryListPanelProps> = ({
   };
 
   return (
-    <div style={{ flex: '1 1 320px', maxWidth: '400px', minWidth: '280px', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+    <div style={{ flex: '1 1 280px', maxWidth: '500px', minWidth: '240px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       <div className="glass-panel" style={{ padding: '1.5rem' }}>
         <h3>{t('workbench.newStory')}</h3>
         <div className="form-group" style={{ marginTop: '1rem' }}>

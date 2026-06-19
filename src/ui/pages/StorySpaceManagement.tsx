@@ -121,7 +121,7 @@ export const StorySpaceManagement: React.FC = () => {
 
       {/* Create form */}
       {isCreateOpen && (
-        <form className="glass-panel" style={{ padding: '2rem', marginBottom: '2rem' }} onSubmit={handleCreate}>
+        <form className="glass-panel" style={{ padding: '2rem', marginBottom: '1rem' }} onSubmit={handleCreate}>
           <h3 style={{ marginBottom: '1.5rem' }}>{t('space.createTitle')}</h3>
           <div className="form-group">
             <label className="form-label">{t('space.nameLabel')}</label>
@@ -140,7 +140,7 @@ export const StorySpaceManagement: React.FC = () => {
 
       {/* Edit form */}
       {editingSpace && (
-        <form className="glass-panel" style={{ padding: '2rem', marginBottom: '2rem' }} onSubmit={handleEditSave}>
+        <form className="glass-panel" style={{ padding: '2rem', marginBottom: '1rem' }} onSubmit={handleEditSave}>
           <h3 style={{ marginBottom: '1.5rem' }}>{t('space.editTitle')}</h3>
           <div className="form-group">
             <label className="form-label">{t('space.nameLabel')}</label>
@@ -159,7 +159,7 @@ export const StorySpaceManagement: React.FC = () => {
 
       {/* Copy dialog */}
       {copySourceId && (
-        <div className="glass-panel" style={{ padding: '2rem', marginBottom: '2rem' }}>
+        <div className="glass-panel" style={{ padding: '2rem', marginBottom: '1rem' }}>
           <h3 style={{ marginBottom: '1rem' }}>{t('space.copyToSpace')}</h3>
           <div className="form-group">
             <label className="form-label">{t('space.selectTargetSpace')}</label>
@@ -182,7 +182,7 @@ export const StorySpaceManagement: React.FC = () => {
       )}
 
       {/* Space list */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1rem' }}>
         {spaces?.map(space => (
           <div
             key={space.id}

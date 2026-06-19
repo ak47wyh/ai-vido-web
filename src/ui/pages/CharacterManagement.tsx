@@ -160,7 +160,7 @@ export const CharacterManagement: React.FC = () => {
       </div>
 
       {isFormOpen && (
-        <form className="glass-panel" style={{ padding: '2rem', marginBottom: '2rem' }} onSubmit={handleSave}>
+        <form className="glass-panel" style={{ padding: '2rem', marginBottom: '1rem' }} onSubmit={handleSave}>
           <h3 style={{ marginBottom: '1.5rem' }}>
             {editingCharacterId ? t('character.editTitle') : t('character.createTitle')}
           </h3>
@@ -439,7 +439,7 @@ export const CharacterManagement: React.FC = () => {
         </form>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
         {characters?.map(char => (
           <div key={char.id} className="glass-panel" style={{ padding: '1.5rem', position: 'relative' }}>
             {char.referenceImageUrl && (

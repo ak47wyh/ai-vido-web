@@ -453,7 +453,7 @@ export const StoryWorkbench: React.FC = () => {
   const hasBackgrounds = backgrounds.length > 0;
 
   return (
-    <div style={{ display: 'flex', gap: '2rem', height: '100%', flexWrap: 'wrap' }}>
+    <div className="workbench fade-in">
       <StoryListPanel
         stories={stories}
         selectedStoryId={ws.selectedStoryId}
@@ -469,17 +469,16 @@ export const StoryWorkbench: React.FC = () => {
         onSaveStory={handleSaveStory}
       />
 
-      <div className="glass-panel" style={{ flex: 1, padding: '2rem', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
-        <div className="page-header" style={{ marginBottom: '1.5rem' }}>
+      <div className="glass-panel" style={{ flex: 1, padding: '1rem', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+        <div className="workbench-header">
           <h2>{t('workbench.segmentsTitle')}</h2>
-          <div style={{ display: 'flex', gap: '0.75rem' }}>
+          <div className="workbench-actions">
             {selectedStory && (
               <>
                 <button className="btn btn-secondary" onClick={handleReSplit} disabled={ws.isSplitting}>
                   <Spline size={16} /> {ws.isSplitting ? t('workbench.splitting') : t('workbench.reSplitBtn')}
                 </button>
-                <button className="btn btn-primary" onClick={handleReBreakdown} disabled={ws.isBreakingDown}
-                  style={{ background: 'linear-gradient(135deg, #6366f1, #ec4899)' }}>
+                <button className="btn btn-primary" onClick={handleReBreakdown} disabled={ws.isBreakingDown}>
                   <Sparkles size={16} />
                   {ws.isBreakingDown ? t('workbench.breakingDown') : t('workbench.reBreakdownBtn')}
                 </button>
@@ -528,7 +527,7 @@ export const StoryWorkbench: React.FC = () => {
               {!hasCharacters && <span style={{ fontSize: '0.85rem', color: '#fbbf24', marginRight: '1rem' }}>{t('workbench.noCharactersWarning')}</span>}
               {!hasBackgrounds && <span style={{ fontSize: '0.85rem', color: '#fbbf24' }}>{t('workbench.noBackgroundsWarning')}</span>}
             </div>
-            <button className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.8rem' }}
+            <button className="btn btn-secondary btn-sm"
               onClick={() => navigate(hasCharacters ? '/backgrounds' : '/characters')}>
               {hasCharacters ? t('workbench.goBackgrounds') : t('workbench.goCharacters')}
             </button>
@@ -556,26 +555,24 @@ export const StoryWorkbench: React.FC = () => {
         )}
 
         {selectedStory && segments.length > 0 && (
-          <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', alignItems: 'center' }}>
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-              <select className="form-select" style={{ width: '160px', padding: '0.5rem 0.75rem', fontSize: '0.8rem' }}
+          <div className="workbench-actions" style={{ marginBottom: '1.5rem' }}>
+            <div className="workbench-actions">
+              <select className="form-select btn-sm" style={{ width: '160px' }}
                 value={ws.batchBgId} onChange={e => wsDispatch({ type: 'SET_BATCH_BG_ID', value: e.target.value })}>
                 <option value="">{t('workbench.batchBgPlaceholder')}</option>
                 {backgrounds.map(bg => <option key={bg.id} value={bg.id}>{bg.name}</option>)}
               </select>
-              <button className="btn btn-secondary" disabled={!ws.batchBgId} onClick={handleBatchSetBackground}
-                style={{ fontSize: '0.8rem', padding: '0.5rem 0.75rem' }}>
+              <button className="btn btn-secondary btn-sm" disabled={!ws.batchBgId} onClick={handleBatchSetBackground}>
                 <ImagePlus size={14} /> {t('workbench.batchBgBtn')}
               </button>
             </div>
-            <button className="btn btn-primary" onClick={handleBatchGenerate}
+            <button className="btn btn-primary btn-sm" onClick={handleBatchGenerate}
               disabled={ws.isBatchGenerating || !hasBackgrounds}>
               <PlayCircle size={16} />
               {ws.isBatchGenerating ? t('workbench.batchGenerating') : t('workbench.batchGenerateBtn')}
             </button>
-            <button className="btn btn-primary" onClick={handleAssembleFinalVideo}
-              disabled={ws.isAssembling || progressStats?.success !== progressStats?.total}
-              style={{ background: 'linear-gradient(135deg, #8b5cf6, #ec4899)' }}>
+            <button className="btn btn-primary btn-sm" onClick={handleAssembleFinalVideo}
+              disabled={ws.isAssembling || progressStats?.success !== progressStats?.total}>
               <Film size={16} />
               {ws.isAssembling ? (ws.assembleProgress?.message || t('workbench.assembling', '合成中...')) : t('workbench.assembleBtn', '一键合成导出')}
             </button>
@@ -583,16 +580,16 @@ export const StoryWorkbench: React.FC = () => {
         )}
 
         {selectedStory && segments.length > 0 && (
-          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('workbench.videoConfig')}</span>
-            <select className="form-select" style={{ width: '100px', fontSize: '0.75rem' }}
+          <div className="workbench-actions" style={{ marginBottom: '1rem' }}>
+            <span className="text-muted" style={{ fontSize: '0.75rem' }}>{t('workbench.videoConfig')}</span>
+            <select className="form-select btn-xs" style={{ width: '100px' }}
               value={ws.videoMode} onChange={e => wsDispatch({ type: 'SET_VIDEO_MODE', value: e.target.value as typeof ws.videoMode })}>
               <option value="t2v">{t('video.modeT2V')}</option>
               <option value="fl2v">{t('video.modeFL2V')}</option>
               <option value="s2v">{t('video.modeS2V')}</option>
             </select>
             {ws.videoMode === 't2v' && (
-              <select className="form-select" style={{ width: '140px', fontSize: '0.75rem' }}
+              <select className="form-select btn-xs" style={{ width: '140px' }}
                 value={ws.videoModel} onChange={e => wsDispatch({ type: 'SET_VIDEO_MODEL', value: e.target.value as typeof ws.videoModel })}>
                 <option value="MiniMax-Hailuo-2.3">Hailuo 2.3</option>
                 <option value="MiniMax-Hailuo-02">Hailuo 02</option>
@@ -600,17 +597,17 @@ export const StoryWorkbench: React.FC = () => {
                 <option value="T2V-01">T2V-01</option>
               </select>
             )}
-            <select className="form-select" style={{ width: '70px', fontSize: '0.75rem' }}
+            <select className="form-select btn-xs" style={{ width: '70px' }}
               value={ws.videoResolution} onChange={e => wsDispatch({ type: 'SET_VIDEO_RESOLUTION', value: e.target.value as typeof ws.videoResolution })}>
               <option value="768P">768P</option>
               <option value="1080P">1080P</option>
             </select>
-            <select className="form-select" style={{ width: '60px', fontSize: '0.75rem' }}
+            <select className="form-select btn-xs" style={{ width: '60px' }}
               value={ws.videoDuration} onChange={e => wsDispatch({ type: 'SET_VIDEO_DURATION', value: Number(e.target.value) as 6 | 10 })}>
               <option value={6}>6s</option>
               <option value={10}>10s</option>
             </select>
-            <label style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '0.2rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
+            <label className="btn-xs" style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
               <input type="checkbox" checked={ws.videoPromptOptimizer} onChange={e => wsDispatch({ type: 'SET_VIDEO_PROMPT_OPTIMIZER', value: e.target.checked })}
                 style={{ width: '12px', height: '12px' }} />
               {t('video.promptOptimizer')}
@@ -623,7 +620,7 @@ export const StoryWorkbench: React.FC = () => {
         ) : segments.length === 0 ? (
           <p style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: '2rem' }}>{t('workbench.noSegments')}</p>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          <div className="workbench-segments">
             {segments.map((seg, idx) => (
               <SegmentCard
                 key={seg.id}

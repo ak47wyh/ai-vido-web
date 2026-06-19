@@ -14,6 +14,7 @@ import { useSpace } from '../contexts/SpaceContext';
 import { AssetSaveDialog } from '../components/AssetPicker';
 import { ThinkingBlock } from '../components/ThinkingBlock';
 import { TokenUsageBar } from '../components/TokenUsageBar';
+import { LabPageLayout } from '../components/LabPageLayout';
 
 type TextLabTab = 'chat' | 'refine' | 'models';
 
@@ -284,45 +285,21 @@ export const TextLab: React.FC = () => {
   const displayRefineUsage = refineResult?.usage;
 
   return (
-    <div className="fade-in" style={{ padding: '2rem', maxWidth: '1000px', margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
-        <div style={{ padding: '1rem', background: 'rgba(52,211,153,0.1)', borderRadius: 'var(--radius-lg)', color: '#34d399' }}>
-          <MessageSquare size={32} />
-        </div>
-        <div>
-          <h1 style={{ fontSize: '1.8rem', fontWeight: 700, margin: 0, background: 'var(--gradient-primary)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            {t('textLab.title', '文本实验室 (Text Lab)')}
-          </h1>
-          <p style={{ color: 'var(--text-muted)', margin: '0.5rem 0 0 0', fontSize: '0.9rem' }}>
-            {t('textLab.desc', 'AI 文本润色、剧本创作、提示词优化，支持多模型与思维链')}
-          </p>
-        </div>
-      </div>
-
-      {/* Tab Bar */}
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem', flexWrap: 'wrap' }}>
-        {tabs.map(tab => (
-          <button
-            key={tab.key}
-            className={`btn ${activeTab === tab.key ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setActiveTab(tab.key)}
-            style={{
-              background: activeTab === tab.key ? tab.color : 'transparent',
-              border: activeTab === tab.key ? 'none' : '1px solid var(--border-color)',
-              fontSize: '0.85rem',
-            }}
-          >
-            {tab.icon} {tab.label}
-          </button>
-        ))}
-      </div>
-
+    <LabPageLayout
+      icon={<MessageSquare size={32} />}
+      iconBg="rgba(52,211,153,0.1)"
+      iconColor="#34d399"
+      title={t('textLab.title', '文本实验室 (Text Lab)')}
+      subtitle={t('textLab.desc', 'AI 文本润色、剧本创作、提示词优化，支持多模型与思维链')}
+      tabs={tabs}
+      activeTab={activeTab}
+      onTabChange={(key) => setActiveTab(key as TextLabTab)}
+    >
       {/* ==================== Chat Tab ==================== */}
       {activeTab === 'chat' && (
-        <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 16rem)' }}>
+        <div className="chat-layout">
           {/* Top bar */}
-          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap' }}>
+          <div className="chat-top-bar">
             <select className="form-select" style={{ width: 'auto' }} value={chatModel} onChange={e => setChatModel(e.target.value as TextModel)}>
               {MODEL_OPTIONS.map(m => (
                 <option key={m.value} value={m.value}>{m.label} — {m.desc}</option>
@@ -338,12 +315,12 @@ export const TextLab: React.FC = () => {
 
           {/* Advanced settings */}
           {showAdvanced && (
-            <div style={{ padding: '1rem', background: 'rgba(0,0,0,0.15)', borderRadius: 'var(--radius-md)', marginBottom: '1rem', display: 'flex', flexWrap: 'wrap', gap: '1.5rem' }}>
-              <div style={{ flex: 1, minWidth: '150px' }}>
+            <div className="chat-advanced">
+              <div className="chat-advanced-item">
                 <label className="form-label">{t('textLab.temperature', '温度')} ({temperature})</label>
                 <input type="range" min="0" max="2" step="0.1" value={temperature} onChange={e => setTemperature(parseFloat(e.target.value))} style={{ width: '100%', accentColor: '#34d399' }} />
               </div>
-              <div style={{ flex: 1, minWidth: '150px' }}>
+              <div className="chat-advanced-item">
                 <label className="form-label">{t('textLab.topP', 'Top P')} ({topP})</label>
                 <input type="range" min="0" max="1" step="0.05" value={topP} onChange={e => setTopP(parseFloat(e.target.value))} style={{ width: '100%', accentColor: '#34d399' }} />
               </div>
@@ -366,27 +343,14 @@ export const TextLab: React.FC = () => {
           )}
 
           {/* Chat area */}
-          <div className="glass-panel" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          <div className="glass-panel chat-panel">
+            <div className="chat-messages">
               {messages.map((msg, idx) => (
-                <div key={idx} style={{ display: 'flex', gap: '1rem', flexDirection: msg.role === 'user' ? 'row-reverse' : 'row' }}>
-                  <div style={{
-                    width: '36px', height: '36px', borderRadius: '50%', flexShrink: 0,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: msg.role === 'user' ? 'var(--primary-color)' : 'rgba(52,211,153,0.2)',
-                    color: msg.role === 'user' ? '#fff' : '#34d399',
-                  }}>
+                <div key={idx} className={`chat-message ${msg.role === 'user' ? 'chat-message-user' : ''}`}>
+                  <div className={`chat-avatar ${msg.role === 'user' ? 'chat-avatar-user' : 'chat-avatar-assistant'}`}>
                     {msg.role === 'user' ? <User size={20} /> : <Bot size={20} />}
                   </div>
-                  <div style={{
-                    maxWidth: '75%', padding: '1rem', borderRadius: 'var(--radius-lg)',
-                    background: msg.role === 'user' ? 'var(--primary-color)' : 'rgba(0,0,0,0.2)',
-                    border: msg.role === 'user' ? 'none' : '1px solid var(--border-color)',
-                    lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                    borderTopRightRadius: msg.role === 'user' ? 0 : 'var(--radius-lg)',
-                    borderTopLeftRadius: msg.role === 'assistant' ? 0 : 'var(--radius-lg)',
-                    position: 'relative',
-                  }}>
+                  <div className={`chat-bubble ${msg.role === 'user' ? 'chat-bubble-user' : 'chat-bubble-assistant'}`}>
                     {msg.isStreaming && !msg.content ? (
                       <span style={{ color: 'var(--text-muted)' }}>
                         <Sparkles size={14} className="spin" /> {t('textLab.thinking', '正在思考中...')}
@@ -407,10 +371,9 @@ export const TextLab: React.FC = () => {
                     )}
                     {/* Actions */}
                     {msg.role === 'assistant' && idx > 0 && !msg.isStreaming && (
-                      <div style={{ position: 'absolute', top: '0.5rem', right: '0.5rem' }}>
+                      <div className="chat-action-btn">
                         <button
                           onClick={() => handleCollectPrompt(msg.content)}
-                          style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '0.2rem', opacity: 0.5 }}
                           title={t('assetLibrary.collectBtn', '收藏')}
                         >
                           <BookmarkPlus size={14} />
@@ -424,8 +387,8 @@ export const TextLab: React.FC = () => {
             </div>
 
             {/* Input */}
-            <div style={{ padding: '1rem', borderTop: '1px solid var(--border-color)', background: 'rgba(20,20,30,0.5)' }}>
-              <div style={{ display: 'flex', gap: '1rem' }}>
+            <div className="chat-input-area">
+              <div className="chat-input-row">
                 <textarea
                   className="form-input"
                   style={{ flex: 1, resize: 'none', padding: '0.8rem', fontSize: '1rem' }}
@@ -451,7 +414,7 @@ export const TextLab: React.FC = () => {
 
       {/* ==================== Refine Tab ==================== */}
       {activeTab === 'refine' && (
-        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <div className="glass-panel slide-up" style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           {/* 场景选择 */}
           <div>
             <label className="form-label">{t('textLab.selectScene', '选择润色场景')}</label>
@@ -483,7 +446,7 @@ export const TextLab: React.FC = () => {
           </div>
 
           {/* 风格 + 模型 */}
-          <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: 'var(--radius-md)' }}>
+          <div className="form-section">
             <div>
               <label className="form-label">{t('textLab.refineStyle', '润色风格')}</label>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -499,7 +462,7 @@ export const TextLab: React.FC = () => {
                 ))}
               </div>
             </div>
-            <div style={{ flex: 1, minWidth: '200px' }}>
+            <div className="form-section-item">
               <label className="form-label">{t('textLab.refineModel', '润色模型')}</label>
               <select className="form-select" value={refineModel} onChange={e => setRefineModel(e.target.value as TextModel)}>
                 {MODEL_OPTIONS.map(m => (
@@ -511,8 +474,8 @@ export const TextLab: React.FC = () => {
 
           {/* 润色按钮 */}
           <button
-            className="btn btn-primary"
-            style={{ padding: '1rem', fontSize: '1.1rem', justifyContent: 'center', background: '#8b5cf6' }}
+            className="btn btn-primary btn-generate"
+            style={{ background: '#8b5cf6' }}
             disabled={!refineInput.trim() || isRefining}
             onClick={handleRefine}
           >
@@ -522,11 +485,13 @@ export const TextLab: React.FC = () => {
 
           {/* 润色结果 */}
           {(displayRefineContent || isRefining) && (
-            <div style={{ padding: '1.5rem', background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 'var(--radius-md)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                <CheckCircle2 size={16} style={{ color: '#a78bfa' }} />
-                <span style={{ color: '#a78bfa', fontWeight: 600 }}>{t('textLab.refineResult', '润色结果')}</span>
-                {isRefining && <RefreshCw size={14} className="spin" style={{ color: '#a78bfa' }} />}
+            <div className="result-panel" style={{ background: 'rgba(139,92,246,0.1)', borderColor: 'rgba(139,92,246,0.3)' }}>
+              <div className="result-panel-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <CheckCircle2 size={16} style={{ color: '#a78bfa' }} />
+                  <span style={{ color: '#a78bfa', fontWeight: 600 }}>{t('textLab.refineResult', '润色结果')}</span>
+                  {isRefining && <RefreshCw size={14} className="spin" style={{ color: '#a78bfa' }} />}
+                </div>
               </div>
               <div style={{
                 fontSize: '0.95rem', lineHeight: 1.8, color: 'var(--text-color)',
@@ -545,7 +510,7 @@ export const TextLab: React.FC = () => {
               )}
               {/* Actions */}
               {!isRefining && displayRefineContent && (
-                <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <div className="result-panel-actions">
                   <button className="btn btn-secondary" style={{ fontSize: '0.8rem' }} onClick={handleCopyResult}>
                     {copied ? <CheckCircle2 size={14} /> : <Copy size={14} />}
                     {copied ? t('textLab.copied', '已复制') : t('textLab.copy', '复制结果')}
@@ -567,8 +532,8 @@ export const TextLab: React.FC = () => {
 
       {/* ==================== Models Tab ==================== */}
       {activeTab === 'models' && (
-        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="glass-panel slide-up" style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          <div className="flex items-center justify-between">
             <h3 style={{ margin: 0 }}>{t('textLab.availableModels', '可用模型')}</h3>
             <button className="btn btn-secondary" style={{ fontSize: '0.85rem' }} onClick={loadModels} disabled={isLoadingModels}>
               {isLoadingModels ? <RefreshCw className="spin" size={14} /> : <Database size={14} />} {t('textLab.refreshModels', '刷新模型列表')}
@@ -642,6 +607,6 @@ export const TextLab: React.FC = () => {
           onCancel={() => setShowSaveDialog(false)}
         />
       )}
-    </div>
+    </LabPageLayout>
   );
 };

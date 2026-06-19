@@ -290,7 +290,7 @@ export const MusicLab: React.FC = () => {
   ];
 
   return (
-    <div className="fade-in" style={{ padding: '2rem', maxWidth: '1000px', margin: '0 auto' }}>
+    <div className="fade-in" style={{ padding: '1.25rem', width: '100%' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
         <div style={{ padding: '1rem', background: 'rgba(139,92,246,0.1)', borderRadius: 'var(--radius-lg)', color: '#8b5cf6' }}>
@@ -326,7 +326,7 @@ export const MusicLab: React.FC = () => {
 
       {/* ==================== Compose Tab ==================== */}
       {activeTab === 'compose' && (
-        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {/* 歌曲描述 */}
           <div>
             <label className="form-label">{t('musicLab.prompt', '歌曲描述 (Prompt)')}</label>
@@ -400,7 +400,7 @@ export const MusicLab: React.FC = () => {
               {showAdvancedCompose ? <ChevronUp size={14} /> : <ChevronDown size={14} />} {t('musicLab.advanced', '高级设置')}
             </button>
             {showAdvancedCompose && (
-              <div style={{ marginTop: '0.75rem', padding: '1rem', background: 'rgba(0,0,0,0.15)', borderRadius: 'var(--radius-md)', display: 'flex', flexWrap: 'wrap', gap: '1.5rem' }}>
+              <div style={{ marginTop: '0.75rem', padding: '1rem', background: 'rgba(0,0,0,0.15)', borderRadius: 'var(--radius-md)', display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
                 <div style={{ flex: 1, minWidth: '150px' }}>
                   <label className="form-label">{t('musicLab.sampleRate', '采样率')}</label>
                   <select className="form-select" value={sampleRate} onChange={e => setSampleRate(Number(e.target.value))}>
@@ -467,7 +467,7 @@ export const MusicLab: React.FC = () => {
 
       {/* ==================== Lyrics Tab ==================== */}
       {activeTab === 'lyrics' && (
-        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {/* 模式选择 */}
           <div>
             <label className="form-label">{t('musicLab.lyricsMode', '创作模式')}</label>
@@ -575,7 +575,7 @@ export const MusicLab: React.FC = () => {
 
       {/* ==================== Cover Tab ==================== */}
       {activeTab === 'cover' && (
-        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {/* Step 1: 上传参考音频 */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>

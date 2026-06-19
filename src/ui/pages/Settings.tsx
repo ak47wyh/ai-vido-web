@@ -93,10 +93,10 @@ export const Settings: React.FC = () => {
         </div>
       </div>
 
-      <form onSubmit={handleSave} style={{ maxWidth: '720px' }}>
+      <form onSubmit={handleSave} style={{ width: '100%' }}>
 
         {/* ── MiniMax Section ──────────────────────────────────── */}
-        <div className="glass-panel" style={{ padding: '2rem', marginBottom: '2rem' }}>
+        <div className="glass-panel" style={{ padding: '2rem', marginBottom: '1rem' }}>
 
           {/* Section header */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
@@ -220,7 +220,7 @@ export const Settings: React.FC = () => {
         </div>
 
         {/* ── Available Models Section ──────────────────────────── */}
-        <div className="glass-panel" style={{ padding: '2rem', marginBottom: '2rem' }}>
+        <div className="glass-panel" style={{ padding: '2rem', marginBottom: '1rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
             <Cpu size={20} style={{ color: 'var(--primary-color)' }} />
             <h2 style={{ margin: 0, fontSize: '1.2rem' }}>{t('models.title')}</h2>
@@ -309,7 +309,7 @@ export const Settings: React.FC = () => {
         </div>
 
         {/* ── File Management Section ───────────────────────────── */}
-        <div className="glass-panel" style={{ padding: '2rem', marginBottom: '2rem' }}>
+        <div className="glass-panel" style={{ padding: '2rem', marginBottom: '1rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
             <FolderOpen size={20} style={{ color: 'var(--primary-color)' }} />
             <h2 style={{ margin: 0, fontSize: '1.2rem' }}>{t('settings.fileManagement')}</h2>

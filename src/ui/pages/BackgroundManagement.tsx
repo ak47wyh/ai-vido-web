@@ -134,7 +134,7 @@ export const BackgroundManagement: React.FC = () => {
       </div>
 
       {isFormOpen && (
-        <form className="glass-panel" style={{ padding: '2rem', marginBottom: '2rem' }} onSubmit={handleSave}>
+        <form className="glass-panel" style={{ padding: '1rem', marginBottom: '2rem' }} onSubmit={handleSave}>
           <h3 style={{ marginBottom: '1.5rem' }}>
             {editingBackgroundId ? t('background.editTitle') : t('background.createTitle')}
           </h3>
@@ -245,7 +245,7 @@ export const BackgroundManagement: React.FC = () => {
         </form>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
         {backgrounds?.map(bg => (
           <div key={bg.id} className="glass-panel" style={{ padding: '1.5rem', position: 'relative' }}>
             {bg.referenceImageUrl && (

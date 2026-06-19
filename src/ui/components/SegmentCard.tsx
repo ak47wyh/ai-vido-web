@@ -87,32 +87,25 @@ export const SegmentCard: React.FC<SegmentCardProps> = ({
     .filter((name): name is string => !!name);
 
   return (
-    <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', gap: '1.5rem' }}>
-      <div style={{ flex: '0 0 60px', fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--text-muted)' }}>
-        #{index + 1}
+    <div className="glass-panel segment-card">
+      <div className="segment-index">
+        <span className="segment-index-num">#{index + 1}</span>
       </div>
-      <div style={{ flex: 1 }}>
-        <p style={{ marginBottom: '1rem', lineHeight: 1.6 }}>{segment.content}</p>
+      <div className="segment-body">
+        <p className="segment-content">{segment.content}</p>
 
         {mentionedCharNames.length > 0 && (
-          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+          <div className="segment-characters">
             {mentionedCharNames.map(name => (
-              <span key={name} style={{
-                display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
-                padding: '0.2rem 0.6rem', borderRadius: '999px',
-                fontSize: '0.75rem', fontWeight: 500,
-                background: 'rgba(99,102,241,0.15)', color: '#818cf8',
-                border: '1px solid rgba(99,102,241,0.25)',
-                cursor: 'pointer', transition: 'all 0.15s'
-              }} onClick={() => navigate('/characters')} title={t('workbench.goCharacters')}>
+              <span key={name} className="segment-character-chip" onClick={() => navigate('/characters')} title={t('workbench.goCharacters')}>
                 <Users size={12} /> {name}
               </span>
             ))}
           </div>
         )}
 
-        <div className="flex gap-4 items-center flex-wrap">
-          <select className="form-select" style={{ width: '200px' }}
+        <div className="segment-actions">
+          <select className="form-select" style={{ width: '160px', fontSize: '0.8rem', padding: '0.35rem 0.5rem' }}
             value={segment.selectedBackgroundId || ''}
             onChange={(e) => onSelectBackground(segment.id, e.target.value)}>
             <option value="">{t('workbench.selectBg')}</option>
@@ -122,62 +115,58 @@ export const SegmentCard: React.FC<SegmentCardProps> = ({
           </select>
 
           <button
-            className="btn btn-primary"
+            className="btn btn-primary btn-sm"
             disabled={!segment.selectedBackgroundId || task?.status === 'PROCESSING' || task?.status === 'PENDING'}
             onClick={() => onGenerateVideo(segment.id)}
           >
-            <Play size={16} />
+            <Play size={14} />
             {task?.status === 'PROCESSING' || task?.status === 'PENDING'
               ? t('workbench.generating')
               : t('workbench.generateBtn')}
           </button>
 
           {task?.status === 'FAILED' && (
-            <button className="btn btn-secondary" disabled={!segment.selectedBackgroundId}
+            <button className="btn btn-secondary btn-sm" disabled={!segment.selectedBackgroundId}
               onClick={() => onGenerateVideo(segment.id)}>
-              <RefreshCw size={16} /> {t('workbench.retryBtn')}
+              <RefreshCw size={12} /> {t('workbench.retryBtn')}
             </button>
           )}
 
           {task && (
-            <div style={{ fontSize: '0.875rem', color: getStatusColor(task.status), display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <span style={{
-                width: '8px', height: '8px', borderRadius: '50%', background: getStatusColor(task.status),
-                animation: task.status === 'PROCESSING' || task.status === 'PENDING' ? 'pulse 1.5s ease-in-out infinite' : 'none'
-              }} />
+            <div className="segment-status" style={{ color: getStatusColor(task.status) }}>
+              <span className={`segment-status-dot${task.status === 'PROCESSING' || task.status === 'PENDING' ? ' segment-status-dot-pulse' : ''}`} style={{ background: getStatusColor(task.status) }} />
               {getStatusLabel(task.status, t)}
             </div>
           )}
         </div>
 
         {/* Advanced Options Toggle */}
-        <div style={{ marginTop: '1rem' }}>
-          <button 
-            className="btn btn-secondary" 
-            style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', display: 'flex', alignItems: 'center', gap: '0.25rem', background: 'transparent', border: '1px solid var(--border-color)', opacity: 0.8 }}
+        <div className="segment-advanced">
+          <button
+            className="advanced-toggle"
             onClick={() => setShowAdvanced(!showAdvanced)}
           >
             {showAdvanced ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
             {t('workbench.advancedOptions', '高级选项 (运镜与参考图)')}
           </button>
-          
+
           {showAdvanced && (
-            <div style={{ marginTop: '0.75rem', padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
-              <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
+            <div className="segment-advanced-content">
+              <div className="segment-advanced-field">
+                <label>
                   {t('workbench.actionContent', '运镜与动作提示词 (Action / Camera)')}
                 </label>
-                <input 
-                  type="text" 
-                  className="form-input" 
+                <input
+                  type="text"
+                  className="form-input"
                   placeholder={t('workbench.actionContentPlaceholder', '例如：向左平移，特写镜头')}
                   value={segment.actionContent || ''}
                   onChange={(e) => onUpdateActionContent?.(segment.id, e.target.value)}
                   style={{ width: '100%', fontSize: '0.85rem', padding: '0.5rem' }}
                 />
               </div>
-              <div>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
+              <div className="segment-advanced-field">
+                <label>
                   <ImageIcon size={14} /> {t('workbench.firstFrameImage', '视频参考图 (首帧/尾帧 URL)')}
                 </label>
                 <input
@@ -190,8 +179,8 @@ export const SegmentCard: React.FC<SegmentCardProps> = ({
                 />
                 <button
                   type="button"
-                  className="btn btn-secondary"
-                  style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', marginTop: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                  className="btn btn-secondary btn-xs"
+                  style={{ marginTop: '0.3rem' }}
                   onClick={() => onPickImage?.()}
                 >
                   <ImageIcon size={12} /> {t('assetLibrary.pickerTitle', '从素材库选择').replace('{{type}}', t('assetLibrary.typeImage', '图片'))}
@@ -202,52 +191,54 @@ export const SegmentCard: React.FC<SegmentCardProps> = ({
         </div>
 
         {task?.status === 'FAILED' && task.errorMessage && (
-          <p style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: '#f87171' }}>
+          <p className="segment-error">
             {task.errorMessage}
           </p>
         )}
 
         {task?.status === 'SUCCESS' && task.videoUrl && (
-          <div style={{ marginTop: '1.5rem' }}>
-            <video src={task.videoUrl} controls style={{ width: '100%', maxHeight: '300px', borderRadius: 'var(--radius-md)' }} />
+          <div className="segment-video-result">
+            <video src={task.videoUrl} controls />
             <a href={task.videoUrl} download target="_blank" rel="noopener noreferrer"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.75rem', fontSize: '0.8rem', color: 'var(--primary-color)', textDecoration: 'none' }}>
+              className="segment-video-download">
               <Download size={14} /> {t('workbench.downloadVideo')}
             </a>
           </div>
         )}
 
-        <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-          disabled={narrationStatus === 'running'}
-          onClick={() => onGenerateNarration(segment.id, segment.content, segment.mentionedCharacters)}>
-          {narrationStatus === 'running' ? <RefreshCw size={14} className="spin" /> : <Volume2 size={14} />}
-          {narrationStatus === 'running' ? t('character.generatingNarration') : t('character.generateNarration')}
-        </button>
-        {onPickNarrationPrompt && (
-          <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', display: 'flex', alignItems: 'center', gap: '0.3rem', marginLeft: '0.5rem' }}
-            onClick={() => onPickNarrationPrompt()}>
-            <FileText size={14} /> {t('assetLibrary.pickerTitle', '从素材库选择提示词').replace('{{type}}', t('assetLibrary.typePrompt', '提示词'))}
+        <div className="segment-narration">
+          <button className="btn btn-secondary btn-xs"
+            disabled={narrationStatus === 'running'}
+            onClick={() => onGenerateNarration(segment.id, segment.content, segment.mentionedCharacters)}>
+            {narrationStatus === 'running' ? <RefreshCw size={12} className="spin" /> : <Volume2 size={12} />}
+            {narrationStatus === 'running' ? t('character.generatingNarration') : t('character.generateNarration')}
           </button>
-        )}
+          {onPickNarrationPrompt && (
+            <button className="btn btn-secondary btn-xs"
+              onClick={() => onPickNarrationPrompt()}>
+              <FileText size={12} /> {t('assetLibrary.pickerTitle', '从素材库选择提示词').replace('{{type}}', t('assetLibrary.typePrompt', '提示词'))}
+            </button>
+          )}
+        </div>
         {narrationUrl && (
-          <audio controls style={{ width: '100%', marginTop: '0.5rem', height: '32px' }} src={narrationUrl} />
+          <audio controls src={narrationUrl} style={{ width: '100%', height: '28px', marginTop: '0.25rem' }} />
         )}
 
-        <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-color)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-            <Music size={14} style={{ color: '#f472b6' }} />
-            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f472b6' }}>{t('music.title')}</span>
+        <div className="segment-bgm">
+          <div className="segment-bgm-header">
+            <Music size={14} className="segment-bgm-header-icon" />
+            <span className="segment-bgm-header-text">{t('music.title')}</span>
           </div>
 
           {segment.bgmAudioUrl ? (
             <div>
-              <audio controls style={{ width: '100%', height: '32px' }} src={segment.bgmAudioUrl} />
+              <audio controls src={segment.bgmAudioUrl} style={{ width: '100%', height: '28px' }} />
               {segment.bgmPrompt && (
-                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
+                <span className="segment-bgm-info">
                   {segment.bgmIsInstrumental ? '\uD83C\uDFB5' : '\uD83C\uDFA4'} {segment.bgmPrompt}
                 </span>
               )}
-              <button className="btn btn-secondary" style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', marginTop: '0.3rem', color: '#f87171' }}
+              <button className="btn btn-secondary btn-xs" style={{ marginTop: '0.3rem', color: '#f87171' }}
                 onClick={() => onRemoveBGM(segment.id)}>
                 <Trash2 size={12} /> {t('music.removeBGMBtn')}
               </button>
@@ -273,7 +264,7 @@ export const SegmentCard: React.FC<SegmentCardProps> = ({
               onCancel={onBGMEditCancel}
             />
           ) : (
-            <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+            <button className="btn btn-secondary btn-sm"
               onClick={onBGMEditStart}>
               <Music size={14} /> {t('music.generateBGM')}
             </button>

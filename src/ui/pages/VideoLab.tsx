@@ -121,7 +121,7 @@ const VideoModelConfig: React.FC<VideoModelConfigProps> = ({
             {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />} 高级设置
           </button>
           {expanded && (
-            <div style={{ marginTop: '0.75rem', padding: '1rem', background: 'rgba(0,0,0,0.15)', borderRadius: 'var(--radius-md)', display: 'flex', flexWrap: 'wrap', gap: '1.5rem' }}>
+            <div style={{ marginTop: '0.75rem', padding: '1rem', background: 'rgba(0,0,0,0.15)', borderRadius: 'var(--radius-md)', display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.85rem' }}>
                 <input type="checkbox" checked={promptOptimizer} onChange={e => onPromptOptimizerChange(e.target.checked)} /> Prompt 优化
               </label>
@@ -408,7 +408,7 @@ export const VideoLab: React.FC = () => {
   ];
 
   return (
-    <div className="fade-in" style={{ padding: '2rem', maxWidth: '1000px', margin: '0 auto' }}>
+    <div className="fade-in" style={{ padding: '1.25rem', width: '100%' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
         <div style={{ padding: '1rem', background: 'rgba(59,130,246,0.1)', borderRadius: 'var(--radius-lg)', color: '#3b82f6' }}>
@@ -444,7 +444,7 @@ export const VideoLab: React.FC = () => {
 
       {/* ==================== T2V Tab ==================== */}
       {activeTab === 't2v' && (
-        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div>
             <label className="form-label">视频描述 (Prompt)</label>
             <textarea
@@ -487,7 +487,7 @@ export const VideoLab: React.FC = () => {
 
       {/* ==================== I2V Tab ==================== */}
       {activeTab === 'i2v' && (
-        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <ImageUploadField
             label="起始帧图片 (必填)"
             value={i2vFirstFrame}
@@ -527,8 +527,8 @@ export const VideoLab: React.FC = () => {
 
       {/* ==================== FL2V Tab ==================== */}
       {activeTab === 'fl2v' && (
-        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
+        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: '200px' }}>
               <ImageUploadField
                 label="起始帧 (必填)"
@@ -584,7 +584,7 @@ export const VideoLab: React.FC = () => {
 
       {/* ==================== S2V Tab ==================== */}
       {activeTab === 's2v' && (
-        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <ImageUploadField
             label="人物主体图片 (必填)"
             value={s2vSubjectImage}
@@ -601,7 +601,7 @@ export const VideoLab: React.FC = () => {
             <textarea className="form-input" rows={3} value={s2vPrompt} onChange={e => setS2vPrompt(e.target.value)} placeholder="描述视频内容" maxLength={2000} />
           </div>
 
-          <div style={{ padding: '1rem', background: 'rgba(0,0,0,0.15)', borderRadius: 'var(--radius-md)', display: 'flex', flexWrap: 'wrap', gap: '1.5rem' }}>
+          <div style={{ padding: '1rem', background: 'rgba(0,0,0,0.15)', borderRadius: 'var(--radius-md)', display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.85rem' }}>
               <input type="checkbox" checked={s2vPromptOptimizer} onChange={e => setS2vPromptOptimizer(e.target.checked)} /> Prompt 优化
             </label>
@@ -624,7 +624,7 @@ export const VideoLab: React.FC = () => {
 
       {/* ==================== Agent Tab ==================== */}
       {activeTab === 'agent' && (
-        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div style={{ padding: '0.75rem', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <AlertCircle size={16} style={{ color: '#f59e0b' }} />
             <span style={{ fontSize: '0.8rem', color: '#f59e0b' }}>模板功能即将下线 (API 已标记为 deprecated)</span>

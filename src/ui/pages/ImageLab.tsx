@@ -10,6 +10,7 @@ import { AssetSaveDialog } from '../components/AssetPicker';
 import { ImageUploadField } from '../components/ImageUploadField';
 import { ImageGallery, type GalleryImage } from '../components/ImageGallery';
 import { ImageAdvancedSettings, type ImageAdvancedSettingsValue } from '../components/ImageAdvancedSettings';
+import { LabPageLayout } from '../components/LabPageLayout';
 
 type ImageLabTab = 't2i' | 'i2i';
 
@@ -202,42 +203,18 @@ export const ImageLab: React.FC = () => {
   const isI2I = activeTab === 'i2i';
 
   return (
-    <div className="fade-in" style={{ padding: '2rem', maxWidth: '1000px', margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
-        <div style={{ padding: '1rem', background: 'rgba(99,102,241,0.1)', borderRadius: 'var(--radius-lg)', color: '#818cf8' }}>
-          <ImageIcon size={32} />
-        </div>
-        <div>
-          <h1 style={{ fontSize: '1.8rem', fontWeight: 700, margin: 0, background: 'var(--gradient-primary)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            {t('imageLab.title', '图片实验室 (Image Lab)')}
-          </h1>
-          <p style={{ color: 'var(--text-muted)', margin: '0.5rem 0 0 0', fontSize: '0.9rem' }}>
-            {t('imageLab.desc', '文生图、图生图，支持多模型、多比例、批量生成')}
-          </p>
-        </div>
-      </div>
-
-      {/* Tab Bar */}
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
-        {tabs.map(tab => (
-          <button
-            key={tab.key}
-            className={`btn ${activeTab === tab.key ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setActiveTab(tab.key)}
-            style={{
-              background: activeTab === tab.key ? tab.color : 'transparent',
-              border: activeTab === tab.key ? 'none' : '1px solid var(--border-color)',
-              fontSize: '0.85rem',
-            }}
-          >
-            {tab.icon} {tab.label}
-          </button>
-        ))}
-      </div>
-
+    <LabPageLayout
+      icon={<ImageIcon size={32} />}
+      iconBg="rgba(99,102,241,0.1)"
+      iconColor="#818cf8"
+      title={t('imageLab.title', '图片实验室 (Image Lab)')}
+      subtitle={t('imageLab.desc', '文生图、图生图，支持多模型、多比例、批量生成')}
+      tabs={tabs}
+      activeTab={activeTab}
+      onTabChange={(key) => setActiveTab(key as ImageLabTab)}
+    >
       {/* ==================== 配置面板 ==================== */}
-      <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      <div className="glass-panel slide-up form-section" style={{ flexDirection: 'column', gap: '1.5rem' }}>
         {/* I2I: 参考图上传 */}
         {isI2I && (
           <ImageUploadField
@@ -268,8 +245,8 @@ export const ImageLab: React.FC = () => {
         </div>
 
         {/* 模型 + 比例 + Prompt优化 */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem', padding: '1.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: 'var(--radius-md)' }}>
-          <div style={{ flex: 1, minWidth: '200px' }}>
+        <div className="form-section">
+          <div className="form-section-item">
             <label className="form-label">{t('imageLab.model', '生成模型')}</label>
             <select className="form-select" value={model} onChange={e => handleModelChange(e.target.value as ImageModel)}>
               <option value="image-01">image-01 (写实/通用)</option>
@@ -277,7 +254,7 @@ export const ImageLab: React.FC = () => {
             </select>
           </div>
 
-          <div style={{ flex: 1, minWidth: '200px' }}>
+          <div className="form-section-item">
             <label className="form-label">{t('imageLab.aspectRatio', '图片比例')}</label>
             <select className="form-select" value={aspectRatio} onChange={e => setAspectRatio(e.target.value as ImageAspectRatio)}>
               <option value="16:9">16:9 (横屏视频)</option>
@@ -313,8 +290,7 @@ export const ImageLab: React.FC = () => {
 
         {/* 生成按钮 */}
         <button
-          className="btn btn-primary"
-          style={{ padding: '1rem', fontSize: '1.1rem', justifyContent: 'center' }}
+          className="btn btn-primary btn-generate"
           disabled={!currentPrompt.trim() || (isI2I && !referenceImage) || isGenerating}
           onClick={() => handleGenerate(currentPrompt, isI2I)}
         >
@@ -325,9 +301,9 @@ export const ImageLab: React.FC = () => {
 
       {/* ==================== 生成结果画廊 ==================== */}
       {gallery.length > 0 && (
-        <div className="glass-panel slide-up" style={{ marginTop: '2rem', padding: '1.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-            <h3 style={{ margin: 0, color: 'var(--text-muted)' }}>{t('imageLab.gallery', '生成结果')} ({gallery.length})</h3>
+        <div className="result-panel">
+          <div className="result-panel-header">
+            <h3 className="result-panel-title">{t('imageLab.gallery', '生成结果')} ({gallery.length})</h3>
             <button
               className="btn btn-secondary"
               style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
@@ -352,6 +328,6 @@ export const ImageLab: React.FC = () => {
           onCancel={() => { setShowSaveDialog(false); setSaveTargetImage(null); }}
         />
       )}
-    </div>
+    </LabPageLayout>
   );
 };
