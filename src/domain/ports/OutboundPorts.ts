@@ -443,6 +443,16 @@ export interface IMusicPort {
 
 // --- Text Generation ---
 
+export type TextModel =
+  | 'MiniMax-M3'
+  | 'MiniMax-M2.7'
+  | 'MiniMax-M2.7-highspeed'
+  | 'MiniMax-M2.5'
+  | 'MiniMax-M2.5-highspeed'
+  | 'MiniMax-M2.1'
+  | 'MiniMax-M2.1-highspeed'
+  | 'MiniMax-M2';
+
 export interface TextGenerationCacheControl {
   type: 'ephemeral';
 }
@@ -453,18 +463,35 @@ export interface TextGenerationSystemBlock {
   cache_control?: TextGenerationCacheControl;
 }
 
+export type TextContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'image'; source: { type: 'url'; url: string } | { type: 'base64'; media_type: string; data: string } };
+
 export interface TextGenerationMessage {
   role: 'system' | 'user' | 'assistant';
-  content: string;
+  content: string | TextContentBlock[];
   cache_control?: TextGenerationCacheControl;
 }
 
+export interface TextStreamCallbacks {
+  onTextDelta: (text: string) => void;
+  onThinkingDelta: (thinking: string) => void;
+  onComplete: (result: TextGenerationResult) => void;
+  onError: (error: Error) => void;
+}
+
 export interface TextGenerationContext {
-  model?: 'MiniMax-M3' | 'MiniMax-M2.5' | 'MiniMax-M2.5-highspeed' | 'MiniMax-M2.1' | 'MiniMax-M2.1-highspeed' | 'MiniMax-M2';
+  model?: TextModel;
   messages: TextGenerationMessage[];
   maxTokens?: number;
   temperature?: number;
+  topP?: number;
   stream?: boolean;
+  thinking?: {
+    type: 'adaptive' | 'disabled';
+    budget_tokens?: number;
+  };
+  serviceTier?: 'standard' | 'priority';
   tools?: Array<{
     name: string;
     description: string;
@@ -498,6 +525,7 @@ export interface RefineResult {
 
 export interface ITextGenerationPort {
   chatCompletion(context: TextGenerationContext): Promise<TextGenerationResult>;
+  chatCompletionStream(context: TextGenerationContext, callbacks: TextStreamCallbacks): AbortController;
 }
 
 // --- Model Management ---

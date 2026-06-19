@@ -1,7 +1,9 @@
 import type {
   ITextGenerationPort,
   TextGenerationContext,
-  TextGenerationResult
+  TextGenerationResult,
+  TextStreamCallbacks,
+  TextContentBlock,
 } from '../../../domain/ports/OutboundPorts';
 import { ApiConfigStore } from '../config/ApiConfigStore';
 import { getMiniMaxErrorMessage } from './MiniMaxErrorUtils';
@@ -31,6 +33,195 @@ export class MiniMaxTextAdapter implements ITextGenerationPort {
   }
 
   /**
+   * 流式输出 — 使用 Anthropic SSE 端点
+   * 返回 AbortController 用于取消请求
+   */
+  chatCompletionStream(context: TextGenerationContext, callbacks: TextStreamCallbacks): AbortController {
+    const controller = new AbortController();
+
+    const config = ApiConfigStore.load();
+    if (!config.minimaxApiKey) {
+      callbacks.onError(new Error('API Key not configured'));
+      return controller;
+    }
+
+    const baseUrl = (config.minimaxAnthropicBaseUrl || 'https://api.minimaxi.com/anthropic').replace(/\/+$/, '');
+    const model = context.model || 'MiniMax-M3';
+
+    // Build system blocks
+    const systemBlocks = context.systemBlocks || [];
+    if (systemBlocks.length === 0) {
+      const systemMsg = context.messages.find(m => m.role === 'system');
+      if (systemMsg) {
+        const text = typeof systemMsg.content === 'string' ? systemMsg.content : '';
+        systemBlocks.push({ type: 'text', text, cache_control: systemMsg.cache_control });
+      }
+    }
+
+    // Build messages (exclude system role)
+    const anthropicMessages = context.messages
+      .filter(m => m.role !== 'system')
+      .map(m => {
+        const content = typeof m.content === 'string'
+          ? [{ type: 'text' as const, text: m.content }]
+          : m.content.map((b: TextContentBlock) => {
+              if (b.type === 'text') return { type: 'text' as const, text: b.text };
+              // image block
+              return { type: 'image' as const, source: b.source };
+            });
+        return { role: m.role as 'user' | 'assistant', content };
+      });
+
+    const payload: Record<string, unknown> = {
+      model,
+      max_tokens: context.maxTokens ?? 4096,
+      messages: anthropicMessages,
+      stream: true,
+    };
+
+    if (systemBlocks.length > 0) payload.system = systemBlocks;
+    if (context.temperature !== undefined) payload.temperature = context.temperature;
+    if (context.topP !== undefined) payload.top_p = context.topP;
+    if (context.thinking) payload.thinking = context.thinking;
+    if (context.serviceTier) payload.service_tier = context.serviceTier;
+
+    console.log(`[MiniMaxTextAdapter] Stream Anthropic, model: ${model}`);
+
+    // SSE streaming
+    const url = `${baseUrl}/v1/messages`;
+
+    (async () => {
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'x-api-key': config.minimaxApiKey,
+            'anthropic-version': '2023-06-01',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          callbacks.onError(new Error(`HTTP ${response.status}: ${errText}`));
+          return;
+        }
+
+        const reader = response.body?.getReader();
+        if (!reader) {
+          callbacks.onError(new Error('No response body'));
+          return;
+        }
+
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let fullContent = '';
+        let fullThinking = '';
+        let usageData: TextGenerationResult['usage'];
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed === 'event: ping') continue;
+
+            if (trimmed.startsWith('data: ')) {
+              const jsonStr = trimmed.slice(6);
+              if (jsonStr === '[DONE]') continue;
+
+              try {
+                const event = JSON.parse(jsonStr);
+                this.handleSSEEvent(event, callbacks, {
+                  onContent: (text: string) => { fullContent += text; },
+                  onThinking: (text: string) => { fullThinking += text; },
+                  onUsage: (u: TextGenerationResult['usage']) => { usageData = u; },
+                });
+              } catch {
+                // Skip malformed JSON
+              }
+            }
+          }
+        }
+
+        // Stream complete
+        callbacks.onComplete({
+          content: fullContent,
+          thinking: fullThinking || undefined,
+          usage: usageData,
+        });
+      } catch (e) {
+        if (controller.signal.aborted) return;
+        callbacks.onError(e instanceof Error ? e : new Error(String(e)));
+      }
+    })();
+
+    return controller;
+  }
+
+  /**
+   * Handle a single SSE event from Anthropic streaming
+   */
+  private handleSSEEvent(
+    event: Record<string, unknown>,
+    callbacks: TextStreamCallbacks,
+    accumulators: {
+      onContent: (text: string) => void;
+      onThinking: (text: string) => void;
+      onUsage: (u: TextGenerationResult['usage']) => void;
+    },
+  ): void {
+    const type = event.type as string;
+
+    if (type === 'content_block_delta') {
+      const delta = event.delta as Record<string, unknown> | undefined;
+      if (!delta) return;
+
+      const deltaType = delta.type as string;
+      if (deltaType === 'text_delta') {
+        const text = String(delta.text || '');
+        callbacks.onTextDelta(text);
+        accumulators.onContent(text);
+      } else if (deltaType === 'thinking_delta') {
+        const thinking = String(delta.thinking || '');
+        callbacks.onThinkingDelta(thinking);
+        accumulators.onThinking(thinking);
+      }
+    } else if (type === 'message_delta') {
+      const usage = event.usage as Record<string, number> | undefined;
+      if (usage) {
+        accumulators.onUsage({
+          promptTokens: (usage.input_tokens || 0) + (usage.cache_read_input_tokens || 0) + (usage.cache_creation_input_tokens || 0),
+          completionTokens: usage.output_tokens || 0,
+          cachedTokens: usage.cache_read_input_tokens,
+          cacheCreationTokens: usage.cache_creation_input_tokens,
+        });
+      }
+    } else if (type === 'message_start') {
+      const message = event.message as Record<string, unknown> | undefined;
+      if (message?.usage) {
+        const u = message.usage as Record<string, number>;
+        accumulators.onUsage({
+          promptTokens: (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0),
+          completionTokens: u.output_tokens || 0,
+          cachedTokens: u.cache_read_input_tokens,
+          cacheCreationTokens: u.cache_creation_input_tokens,
+        });
+      }
+    } else if (type === 'error') {
+      const error = event.error as Record<string, unknown> | undefined;
+      callbacks.onError(new Error(String(error?.message || 'Stream error')));
+    }
+  }
+
+  /**
    * OpenAI-compatible endpoint: POST /v1/chat/completions
    */
   private async chatCompletionOpenAI(
@@ -44,20 +235,19 @@ export class MiniMaxTextAdapter implements ITextGenerationPort {
       model,
       messages: context.messages.map(m => ({
         role: m.role,
-        content: m.content,
+        content: typeof m.content === 'string' ? m.content : m.content.map(b => b.type === 'text' ? b.text : '[image]').join(' '),
       })),
       max_tokens: context.maxTokens ?? 4096,
       temperature: context.temperature ?? 0.7,
     };
 
+    if (context.topP !== undefined) payload.top_p = context.topP;
+    if (context.serviceTier) payload.service_tier = context.serviceTier;
+
     if (context.tools && context.tools.length > 0) {
       payload.tools = context.tools.map(t => ({
         type: 'function',
-        function: {
-          name: t.name,
-          description: t.description,
-          parameters: t.parameters,
-        },
+        function: { name: t.name, description: t.description, parameters: t.parameters },
       }));
     }
 
@@ -79,7 +269,6 @@ export class MiniMaxTextAdapter implements ITextGenerationPort {
 
   /**
    * Anthropic-compatible endpoint: POST /anthropic/v1/messages
-   * Supports cache_control for active prompt caching.
    */
   private async chatCompletionAnthropic(
     context: TextGenerationContext,
@@ -90,25 +279,26 @@ export class MiniMaxTextAdapter implements ITextGenerationPort {
 
     // Build system blocks
     const systemBlocks = context.systemBlocks || [];
-    // If no systemBlocks but there's a system message, convert it
     if (systemBlocks.length === 0) {
       const systemMsg = context.messages.find(m => m.role === 'system');
       if (systemMsg) {
-        systemBlocks.push({
-          type: 'text',
-          text: systemMsg.content,
-          cache_control: systemMsg.cache_control,
-        });
+        const text = typeof systemMsg.content === 'string' ? systemMsg.content : '';
+        systemBlocks.push({ type: 'text', text, cache_control: systemMsg.cache_control });
       }
     }
 
-    // Build messages (exclude system role — it goes into system field)
+    // Build messages (exclude system role)
     const anthropicMessages = context.messages
       .filter(m => m.role !== 'system')
-      .map(m => ({
-        role: m.role as 'user' | 'assistant',
-        content: [{ type: 'text' as const, text: m.content }],
-      }));
+      .map(m => {
+        const content = typeof m.content === 'string'
+          ? [{ type: 'text' as const, text: m.content }]
+          : m.content.map((b: TextContentBlock) => {
+              if (b.type === 'text') return { type: 'text' as const, text: b.text };
+              return { type: 'image' as const, source: b.source };
+            });
+        return { role: m.role as 'user' | 'assistant', content };
+      });
 
     const payload: Record<string, unknown> = {
       model,
@@ -116,13 +306,11 @@ export class MiniMaxTextAdapter implements ITextGenerationPort {
       messages: anthropicMessages,
     };
 
-    if (systemBlocks.length > 0) {
-      payload.system = systemBlocks;
-    }
-
-    if (context.temperature !== undefined) {
-      payload.temperature = context.temperature;
-    }
+    if (systemBlocks.length > 0) payload.system = systemBlocks;
+    if (context.temperature !== undefined) payload.temperature = context.temperature;
+    if (context.topP !== undefined) payload.top_p = context.topP;
+    if (context.thinking) payload.thinking = context.thinking;
+    if (context.serviceTier) payload.service_tier = context.serviceTier;
 
     if (context.tools && context.tools.length > 0) {
       payload.tools = context.tools.map(t => ({
@@ -150,8 +338,9 @@ export class MiniMaxTextAdapter implements ITextGenerationPort {
    * Parse OpenAI-compatible response format.
    */
   private parseOpenAIResponse(data: Record<string, unknown>): TextGenerationResult {
-    const statusCode = data?.base_resp?.status_code;
-    const error = getMiniMaxErrorMessage(statusCode as number | undefined, data?.base_resp?.status_msg as string, 'MiniMax Text Generation error');
+    const baseResp = data?.base_resp as Record<string, unknown> | undefined;
+    const statusCode = baseResp?.status_code;
+    const error = getMiniMaxErrorMessage(statusCode as number | undefined, baseResp?.status_msg as string, 'MiniMax Text Generation error');
     if (error) throw new Error(error);
 
     const choice = (data?.choices as Array<Record<string, unknown>>)?.[0];
@@ -159,7 +348,6 @@ export class MiniMaxTextAdapter implements ITextGenerationPort {
 
     const content = String(message.content || '');
 
-    // Extract thinking from reasoning_details (M3/M2.5 with reasoning_split=true)
     let thinking: string | undefined;
     const reasoningDetails = message.reasoning_details;
     if (Array.isArray(reasoningDetails)) {
@@ -169,21 +357,15 @@ export class MiniMaxTextAdapter implements ITextGenerationPort {
         .join('\n');
     }
 
-    // Extract tool calls
     let toolCalls: TextGenerationResult['toolCalls'];
     const rawToolCalls = message.tool_calls;
     if (Array.isArray(rawToolCalls)) {
       toolCalls = rawToolCalls.map((tc: Record<string, unknown>) => {
         const fn = tc.function as Record<string, unknown> | undefined;
-        return {
-          id: String(tc.id || ''),
-          name: String(fn?.name || ''),
-          arguments: String(fn?.arguments || ''),
-        };
+        return { id: String(tc.id || ''), name: String(fn?.name || ''), arguments: String(fn?.arguments || '') };
       });
     }
 
-    // Extract usage with cache info
     const usage = data?.usage as Record<string, number> | undefined;
     const promptDetails = usage?.prompt_tokens_details as Record<string, number> | undefined;
 
@@ -234,7 +416,6 @@ export class MiniMaxTextAdapter implements ITextGenerationPort {
       if (tcList.length > 0) toolCalls = tcList;
     }
 
-    // Extract usage with cache info
     const usage = data?.usage as Record<string, number> | undefined;
 
     return {

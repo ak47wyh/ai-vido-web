@@ -35,6 +35,7 @@ import { VoiceService } from './domain/services/VoiceService';
 import { MusicService } from './domain/services/MusicService';
 import { MusicLabService } from './domain/services/MusicLabService';
 import { TextGenerationService } from './domain/services/TextGenerationService';
+import { TextLabService } from './domain/services/TextLabService';
 import { ModelManagementService } from './domain/services/ModelManagementService';
 import { FileManagementService } from './domain/services/FileManagementService';
 import { AgentService } from './domain/services/AgentService';
@@ -86,6 +87,8 @@ export const imageGenerationService = new ImageGenerationService(
 );
 
 export const textGenerationService = new TextGenerationService(textAdapter);
+
+export const textLabService = new TextLabService(textAdapter);
 
 // ========================================
 // 视音频域服务（视频生成/配音/BGM/后期）

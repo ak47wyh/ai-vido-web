@@ -16,7 +16,8 @@ const DEFAULT_CONFIG: ApiConfig = {
   minimaxApiKey: '',
   minimaxGroupId: '',
   minimaxBaseUrl: 'https://api.minimaxi.com/v1',
-  minimaxAnthropicBaseUrl: 'https://api.minimaxi.com/anthropic',
+  // 开发环境使用 Vite 代理（/anthropic → https://api.minimaxi.com/anthropic），避免 CORS
+  minimaxAnthropicBaseUrl: import.meta.env.DEV ? '/anthropic' : 'https://api.minimaxi.com/anthropic',
 };
 
 export const ApiConfigStore = {
@@ -24,7 +25,12 @@ export const ApiConfigStore = {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return { ...DEFAULT_CONFIG };
-      return { ...DEFAULT_CONFIG, ...JSON.parse(raw) };
+      const config = { ...DEFAULT_CONFIG, ...JSON.parse(raw) };
+      // 开发环境强制使用 Vite 代理，避免 CORS
+      if (import.meta.env.DEV) {
+        config.minimaxAnthropicBaseUrl = '/anthropic';
+      }
+      return config;
     } catch {
       return { ...DEFAULT_CONFIG };
     }
