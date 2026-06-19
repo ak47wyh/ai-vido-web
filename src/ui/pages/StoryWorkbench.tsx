@@ -1,5 +1,5 @@
 import React, { useMemo, useEffect, useRef, useCallback, useReducer } from 'react';
-import { storyService, videoGenerationService, imageAdapter, voiceService, musicService, textGenerationService, pipelineService } from '../../dependencies';
+import { storyService, videoGenerationService, imageAdapter, voiceService, musicService, textGenerationService, pipelineService, assetLibraryService } from '../../dependencies';
 import { Spline, Sparkles, AlertTriangle, ImagePlus, PlayCircle, Film } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -659,7 +659,14 @@ export const StoryWorkbench: React.FC = () => {
                 onSuggestBGMStyle={handleSuggestBGMStyle}
                 onUpdateActionContent={handleUpdateActionContent}
                 onUpdateFirstFrameImage={handleUpdateFirstFrameImage}
-                onPickImage={() => openPicker('image', (asset: SavedImage) => { handleUpdateFirstFrameImage(seg.id, asset.blobKey || ''); })}
+                onPickImage={() => openPicker('image', async (asset: SavedImage) => {
+                  try {
+                    const url = await assetLibraryService.getImageBlobUrl(asset);
+                    handleUpdateFirstFrameImage(seg.id, url);
+                  } catch {
+                    handleUpdateFirstFrameImage(seg.id, '');
+                  }
+                })}
                 onPickNarrationPrompt={() => openPicker('prompt', (asset: SavedPrompt) => { handleUpdateActionContent(seg.id, asset.content || ''); }, 'narration')}
               />
             ))}

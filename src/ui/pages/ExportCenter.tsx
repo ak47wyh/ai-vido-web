@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Download, Trash2, Film, Filter, RefreshCw, FilmIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { db } from '../../adapters/outbound/repositories/DexieDatabase';
+import { finalCutRepo } from '../../dependencies';
 import { useSpaceScopedStories, useSpaceScopedFinalCuts } from '../hooks/useSpaceScopedQuery';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -50,7 +50,7 @@ export const ExportCenter: React.FC = () => {
     if (!ok) return;
     setDeletingId(cut.id);
     try {
-      await db.finalCuts.delete(cut.id);
+      await finalCutRepo.delete(cut.id);
       showToast('success', t('export.deleted'));
       if (previewCutId === cut.id) setPreviewCutId(null);
     } catch (e) {
@@ -148,7 +148,7 @@ export const ExportCenter: React.FC = () => {
                 videoUrl={null}
                 onVideoProcessed={({ blob }) => {
                   cut.videoBlob = blob;
-                  db.finalCuts.put(cut);
+                  finalCutRepo.save(cut);
                   showToast('success', t('export.videoUpdated'));
                 }}
               />

@@ -1,12 +1,12 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { PipelineTask, PipelineStatus, PipelineStep, StorySegment, VideoTask, Character, FinalCut } from '../entities/models';
-import { db } from '../../adapters/outbound/repositories/DexieDatabase';
 import type {
   IVideoTaskRepository,
   IStoryRepository,
   IStorySegmentRepository,
   ICharacterRepository,
   IBackgroundRepository,
+  IFinalCutRepository,
   ITextGenerationPort,
   IImageGeneratorPort,
   IVideoGeneratorPort,
@@ -40,6 +40,7 @@ interface PipelineDeps {
   characterRepo: ICharacterRepository;
   backgroundRepo: IBackgroundRepository;
   videoTaskRepo: IVideoTaskRepository;
+  finalCutRepo: IFinalCutRepository;
   textPort: ITextGenerationPort;
   imagePort: IImageGeneratorPort;
   videoPort: IVideoGeneratorPort;
@@ -241,9 +242,29 @@ export class PipelineService {
 
       // 阶段 2: 生成图片 (10% → 20%)
       this.startStage(task.id, 'generating_images', '生成角色/背景图片', 10);
-      // 此处假设图片已经预生成（如通过拆解），跳过实际生成，仅更新进度
+      let imageCount = 0;
+      for (let i = 0; i < segments.length; i++) {
+        const seg = segments[i];
+        // 为缺少首帧图的分镜生成图片
+        if (!seg.firstFrameImageUrl && seg.content) {
+          try {
+            const imgResult = await this.deps.imagePort.generateImage({
+              prompt: seg.content.slice(0, 500),
+              aspectRatio: '16:9',
+              model: 'image-01-live',
+            });
+            if (imgResult.imageUrl) {
+              seg.firstFrameImageUrl = imgResult.imageUrl;
+              await this.deps.segmentRepo.save(seg);
+              imageCount++;
+            }
+          } catch (e) {
+            console.warn(`[Pipeline] Failed to generate image for segment ${seg.id}:`, e);
+          }
+        }
+      }
       this.completeStage(task.id, 'generating_images');
-      emitProgress('generating_images', 20, '图片就绪');
+      emitProgress('generating_images', 20, imageCount > 0 ? `已生成 ${imageCount} 张图片` : '图片就绪');
 
       // 阶段 3: 生成旁白 (25% → 40%)
       if (includeNarration) {
@@ -446,7 +467,7 @@ export class PipelineService {
     };
     
     onProgress?.(95, '正在保存至导出中心...');
-    await db.finalCuts.put(finalCut);
+    await this.deps.finalCutRepo.save(finalCut);
     
     onProgress?.(100, '合成完成！');
     return finalCut;

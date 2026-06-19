@@ -111,4 +111,11 @@ export class StorySpaceService {
   async getSpaceById(id: string): Promise<StorySpace | null> {
     return this.spaceRepo.findById(id);
   }
+
+  async getSpaceStats(spaceId: string): Promise<{ characters: number; backgrounds: number; stories: number }> {
+    const characters = await this.characterRepo.findBySpaceId(spaceId);
+    const backgrounds = await this.backgroundRepo.findBySpaceId(spaceId);
+    const stories = await this.storyRepo.findBySpaceId(spaceId);
+    return { characters: characters.length, backgrounds: backgrounds.length, stories: stories.length };
+  }
 }

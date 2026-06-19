@@ -3,7 +3,7 @@
 // ========================================
 
 // ==================== 仓储层（数据持久化） ====================
-import { StorySpaceRepositoryAdapter, CharacterRepositoryAdapter, StoryRepositoryAdapter, StorySegmentRepositoryAdapter, BackgroundRepositoryAdapter, VideoTaskRepositoryAdapter } from './adapters/outbound/repositories/IndexedDBAdapters';
+import { StorySpaceRepositoryAdapter, CharacterRepositoryAdapter, StoryRepositoryAdapter, StorySegmentRepositoryAdapter, BackgroundRepositoryAdapter, VideoTaskRepositoryAdapter, FinalCutRepositoryAdapter } from './adapters/outbound/repositories/IndexedDBAdapters';
 
 // ==================== 基础设施层（外部API适配器） ====================
 import { MiniMaxVideoAdapter } from './adapters/outbound/api/MiniMaxVideoAdapter';
@@ -52,6 +52,7 @@ export const storyRepo = new StoryRepositoryAdapter();
 export const segmentRepo = new StorySegmentRepositoryAdapter();
 export const backgroundRepo = new BackgroundRepositoryAdapter();
 export const videoTaskRepo = new VideoTaskRepositoryAdapter();
+export const finalCutRepo = new FinalCutRepositoryAdapter();
 
 // ========================================
 // 基础设施实例
@@ -113,7 +114,7 @@ export const subtitleService = new SubtitleService(whisperAdapter, textAdapter);
 // 业务管线服务（全流程编排）
 // ========================================
 export const pipelineService = new PipelineService({
-  storyRepo, segmentRepo, characterRepo, backgroundRepo, videoTaskRepo,
+  storyRepo, segmentRepo, characterRepo, backgroundRepo, videoTaskRepo, finalCutRepo,
   textPort: textAdapter, imagePort: imageAdapter, videoPort: videoAdapter,
   voicePort: voiceAdapter, musicPort: musicAdapter,
   postProcess: postProcessService, subtitle: subtitleService,

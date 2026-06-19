@@ -1,12 +1,13 @@
 import { db } from './DexieDatabase';
-import type { Character, Background, Story, StorySegment, StorySpace, VideoTask, VideoTaskStatus } from '../../../domain/entities/models';
-import type { 
-  ICharacterRepository, 
-  IBackgroundRepository, 
-  IStoryRepository, 
-  IStorySegmentRepository, 
+import type { Character, Background, Story, StorySegment, StorySpace, VideoTask, VideoTaskStatus, FinalCut } from '../../../domain/entities/models';
+import type {
+  ICharacterRepository,
+  IBackgroundRepository,
+  IStoryRepository,
+  IStorySegmentRepository,
   IVideoTaskRepository,
-  IStorySpaceRepository
+  IStorySpaceRepository,
+  IFinalCutRepository
 } from '../../../domain/ports/OutboundPorts';
 
 export class StorySpaceRepositoryAdapter implements IStorySpaceRepository {
@@ -127,5 +128,23 @@ export class VideoTaskRepositoryAdapter implements IVideoTaskRepository {
       if (errorMessage !== undefined) task.errorMessage = errorMessage;
       await db.videoTasks.put(task);
     }
+  }
+}
+
+export class FinalCutRepositoryAdapter implements IFinalCutRepository {
+  async save(cut: FinalCut): Promise<void> {
+    await db.finalCuts.put(cut);
+  }
+  async findById(id: string): Promise<FinalCut | undefined> {
+    return db.finalCuts.get(id);
+  }
+  async findByStoryIds(storyIds: string[]): Promise<FinalCut[]> {
+    if (storyIds.length === 0) return [];
+    const all = await db.finalCuts.toArray();
+    const idSet = new Set(storyIds);
+    return all.filter(c => idSet.has(c.storyId)).sort((a, b) => b.createdAt - a.createdAt);
+  }
+  async delete(id: string): Promise<void> {
+    await db.finalCuts.delete(id);
   }
 }

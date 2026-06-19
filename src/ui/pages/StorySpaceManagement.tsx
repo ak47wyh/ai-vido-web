@@ -1,17 +1,16 @@
 import React, { useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../../adapters/outbound/repositories/DexieDatabase';
 import { storySpaceService } from '../../dependencies';
 import { Plus, Pencil, Trash2, Copy, Layers } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useSpace } from '../contexts/SpaceContext';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { useAllSpaces } from '../hooks/useSpaceScopedQuery';
 import type { StorySpace } from '../../domain/entities/models';
 
 export const StorySpaceManagement: React.FC = () => {
   const { t } = useTranslation();
-  const spaces = useLiveQuery(() => db.storySpaces.toArray());
+  const spaces = useAllSpaces();
   const { currentSpaceId, setCurrentSpaceId } = useSpace();
   const { showToast } = useToast();
   const { confirm } = useConfirm();
@@ -87,31 +86,25 @@ export const StorySpaceManagement: React.FC = () => {
     setCopyTargetId('');
   };
 
-  const characterCounts = useLiveQuery(async () => {
-    if (!spaces) return {};
-    const counts: Record<string, number> = {};
-    for (const space of spaces) {
-      counts[space.id] = await db.characters.where('spaceId').equals(space.id).count();
-    }
-    return counts;
-  }, [spaces]);
+  const [counts, setCounts] = useState<Record<string, { characters: number; backgrounds: number; stories: number }>>({});
 
-  const backgroundCounts = useLiveQuery(async () => {
-    if (!spaces) return {};
-    const counts: Record<string, number> = {};
-    for (const space of spaces) {
-      counts[space.id] = await db.backgrounds.where('spaceId').equals(space.id).count();
-    }
-    return counts;
-  }, [spaces]);
-
-  const storyCounts = useLiveQuery(async () => {
-    if (!spaces) return {};
-    const counts: Record<string, number> = {};
-    for (const space of spaces) {
-      counts[space.id] = await db.stories.where('spaceId').equals(space.id).count();
-    }
-    return counts;
+  React.useEffect(() => {
+    if (!spaces || spaces.length === 0) return;
+    let cancelled = false;
+    const loadCounts = async () => {
+      const result: Record<string, { characters: number; backgrounds: number; stories: number }> = {};
+      for (const space of spaces) {
+        try {
+          const stats = await storySpaceService.getSpaceStats(space.id);
+          result[space.id] = stats;
+        } catch {
+          result[space.id] = { characters: 0, backgrounds: 0, stories: 0 };
+        }
+      }
+      if (!cancelled) setCounts(result);
+    };
+    loadCounts();
+    return () => { cancelled = true; };
   }, [spaces]);
 
   return (
@@ -205,9 +198,9 @@ export const StorySpaceManagement: React.FC = () => {
               <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>{space.description}</p>
             )}
             <div style={{ display: 'flex', gap: '1rem', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-              <span>{t('space.characterCount', { count: characterCounts?.[space.id] ?? 0 })}</span>
-              <span>{t('space.backgroundCount', { count: backgroundCounts?.[space.id] ?? 0 })}</span>
-              <span>{t('space.storyCount', { count: storyCounts?.[space.id] ?? 0 })}</span>
+              <span>{t('space.characterCount', { count: counts[space.id]?.characters ?? 0 })}</span>
+              <span>{t('space.backgroundCount', { count: counts[space.id]?.backgrounds ?? 0 })}</span>
+              <span>{t('space.storyCount', { count: counts[space.id]?.stories ?? 0 })}</span>
             </div>
             <div style={{ position: 'absolute', top: '1rem', right: '1rem', display: 'flex', gap: '0.5rem' }}>
               <button

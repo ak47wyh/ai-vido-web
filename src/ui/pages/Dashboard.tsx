@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Image as ImageIcon, BookOpen, Settings, ArrowRight, CheckCircle, XCircle, Clock, Film, Mic, MessageSquare, Sparkles } from 'lucide-react';
+import { Users, Image as ImageIcon, BookOpen, Settings, ArrowRight, CheckCircle, XCircle, Clock, Film, Mic, MessageSquare, Sparkles, Music } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useSpaceScopedCharacters, useSpaceScopedBackgrounds, useSpaceScopedStories, useSpaceVideoTaskStats, useRecentStories } from '../hooks/useSpaceScopedQuery';
 
@@ -135,6 +135,7 @@ export const Dashboard: React.FC = () => {
             { icon: <ImageIcon size={20} />, label: t('nav.imageLab', '图片生成'), path: '/labs/image', color: '#ec4899', desc: t('dashboard.aiImageDesc', 'AI 图片生成与编辑') },
             { icon: <Film size={20} />, label: t('nav.videoLab', '视频生成'), path: '/labs/video', color: '#3b82f6', desc: t('dashboard.aiVideoDesc', '文生视频、图生视频、首尾帧、主体参考') },
             { icon: <Mic size={20} />, label: t('nav.voiceLab', '音色与配音'), path: '/labs/voice', color: '#10b981', desc: t('dashboard.aiVoiceDesc', '音色克隆、文本配音、音色设计') },
+            { icon: <Music size={20} />, label: t('nav.musicLab', '音乐生成'), path: '/labs/music', color: '#8b5cf6', desc: t('dashboard.aiMusicDesc', 'AI 音乐创作与 BGM 生成') },
             { icon: <MessageSquare size={20} />, label: t('nav.textLab', '文本润色'), path: '/labs/text', color: '#f59e0b', desc: t('dashboard.aiTextDesc', 'AI 文本优化与改写') },
           ].map(item => (
             <div
