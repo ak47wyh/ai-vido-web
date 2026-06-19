@@ -33,6 +33,7 @@ import { SubtitleService } from './domain/services/SubtitleService';
 import { ImageGenerationService } from './domain/services/ImageGenerationService';
 import { VoiceService } from './domain/services/VoiceService';
 import { MusicService } from './domain/services/MusicService';
+import { MusicLabService } from './domain/services/MusicLabService';
 import { TextGenerationService } from './domain/services/TextGenerationService';
 import { ModelManagementService } from './domain/services/ModelManagementService';
 import { FileManagementService } from './domain/services/FileManagementService';
@@ -98,6 +99,8 @@ export const videoLabService = new VideoLabService(videoAdapter);
 export const voiceService = new VoiceService(voiceAdapter, characterRepo);
 
 export const musicService = new MusicService(musicAdapter, segmentRepo);
+
+export const musicLabService = new MusicLabService(musicAdapter);
 
 export const postProcessService = new PostProcessService(ffmpegAdapter, whisperAdapter);
 

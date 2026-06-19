@@ -13,7 +13,8 @@
     "spaces": "Story Spaces",
     "settings": "Settings",
     "export": "Export Center",
-    "videoLab": "Генерация видео"
+    "videoLab": "Генерация видео",
+    "musicLab": "Генерация музыки"
   },
   "dashboard": {
     "title": "Dashboard",

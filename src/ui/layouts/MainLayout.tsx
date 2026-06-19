@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Image as ImageIcon, BookOpen, Settings,
   FolderOpen, Download, Mic, MessageSquare, Sparkles, Film,
-  ChevronLeft, ChevronRight, Plus, Zap, Palette
+  ChevronLeft, ChevronRight, Plus, Zap, Palette, Music as MusicIcon
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAllSpaces } from '../hooks/useSpaceScopedQuery';
@@ -65,6 +65,7 @@ export const MainLayout: React.FC = () => {
         { to: '/labs/image', icon: <ImageIcon size={18} />, label: t('nav.imageLab', '图片生成') },
         { to: '/labs/video', icon: <Film size={18} />, label: t('nav.videoLab', '视频生成') },
         { to: '/labs/voice', icon: <Mic size={18} />, label: t('nav.voiceLab', '音色与配音') },
+        { to: '/labs/music', icon: <MusicIcon size={18} />, label: t('nav.musicLab', '音乐生成') },
         { to: '/labs/text', icon: <MessageSquare size={18} />, label: t('nav.textLab', '文本润色') },
       ],
     },

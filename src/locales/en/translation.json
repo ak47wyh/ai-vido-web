@@ -15,7 +15,8 @@
     "export": "Export Center",
     "imageLab": "Image Generation",
     "videoLab": "Video Generation",
-    "voiceLab": "Voice & Dubbing"
+    "voiceLab": "Voice & Dubbing",
+    "musicLab": "Music Generation"
   },
   "dashboard": {
     "title": "Dashboard",

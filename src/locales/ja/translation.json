@@ -13,7 +13,8 @@
     "spaces": "Story Spaces",
     "settings": "Settings",
     "export": "Export Center",
-    "videoLab": "動画生成"
+    "videoLab": "動画生成",
+    "musicLab": "音楽生成"
   },
   "dashboard": {
     "title": "Dashboard",
