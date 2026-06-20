@@ -1,181 +1,679 @@
-import React, { useState, useEffect } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../../adapters/outbound/repositories/DexieDatabase';
-import { storyService, videoGenerationService } from '../../dependencies';
-import { Play, Spline } from 'lucide-react';
-import type { StorySegment } from '../../domain/entities/models';
+import React, { useMemo, useEffect, useRef, useCallback, useReducer } from 'react';
+import { storyService, videoGenerationService, imageAdapter, voiceService, musicService, textGenerationService, pipelineService, assetLibraryService } from '../../dependencies';
+import { Spline, Sparkles, AlertTriangle, ImagePlus, PlayCircle, Film } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import type { VideoTask, Character, SavedImage, SavedPrompt } from '../../domain/entities/models';
+import type { ImageGenerationContext } from '../../domain/ports/OutboundPorts';
+import { useSpace } from '../contexts/SpaceContext';
+import { useToast } from '../contexts/ToastContext';
+import { useConfirm } from '../contexts/ConfirmContext';
+import { getErrorMessage } from '../utils/errorUtils';
+import { useSpaceScopedCharacters, useSpaceScopedBackgrounds, useSpaceScopedStories, useStoryScopedSegments, useSegmentScopedVideoTasks } from '../hooks/useSpaceScopedQuery';
+import { StoryListPanel } from '../components/StoryListPanel';
+import { BreakdownPreview } from '../components/BreakdownPreview';
+import { SegmentCard } from '../components/SegmentCard';
+import { PipelinePanel } from '../components/PipelinePanel';
+import { workbenchReducer, initialWorkbenchState, breakdownReducer, initialBreakdownState, bgmReducer, initialBGMState } from '../hooks/useWorkbenchState';
+import { AssetPicker } from '../components/AssetPicker';
+import { useAssetPicker } from '../hooks/useAssetPicker';
 
 export const StoryWorkbench: React.FC = () => {
   const { t } = useTranslation();
-  const stories = useLiveQuery(() => db.stories.toArray());
-  const backgrounds = useLiveQuery(() => db.backgrounds.toArray());
-  const videoTasks = useLiveQuery(() => db.videoTasks.toArray());
-  
-  const [title, setTitle] = useState('');
-  const [originalText, setOriginalText] = useState('');
-  const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null);
-  const [segments, setSegments] = useState<StorySegment[]>([]);
-  const [isSplitting, setIsSplitting] = useState(false);
+  const navigate = useNavigate();
+  const { currentSpaceId } = useSpace();
+  const { showToast } = useToast();
+  const { confirm } = useConfirm();
+  const { state: assetPickerState, openPicker, closePicker } = useAssetPicker();
 
-  // Auto-load segments when a story is selected
+  // 数据层：通过 hooks 获取，不直调 db
+  const stories = useSpaceScopedStories();
+  const backgrounds = useSpaceScopedBackgrounds();
+  const characters = useSpaceScopedCharacters();
+
+  // 3 个领域 reducer 替代 30+ useState
+  const [ws, wsDispatch] = useReducer(workbenchReducer, initialWorkbenchState);
+  const [bd, bdDispatch] = useReducer(breakdownReducer, initialBreakdownState);
+  const [bgm, bgmDispatch] = useReducer(bgmReducer, initialBGMState);
+
+  // 段落和视频任务通过 hooks 获取
+  const segments = useStoryScopedSegments(ws.selectedStoryId);
+  const segmentIds = useMemo(() => segments.map(s => s.id), [segments]);
+  const videoTasks = useSegmentScopedVideoTasks(segmentIds);
+
+  const narrationPollersRef = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map());
+
   useEffect(() => {
-    if (selectedStoryId) {
-      loadSegments(selectedStoryId);
-    } else {
-      setSegments([]);
+    const currentPollers = narrationPollersRef.current;
+    return () => {
+      for (const [, interval] of currentPollers) clearInterval(interval);
+      currentPollers.clear();
+    };
+  }, []);
+
+  const latestTaskMap = useMemo(() => {
+    const map = new Map<string, VideoTask>();
+    const sorted = [...videoTasks].sort((a, b) => b.createdAt - a.createdAt);
+    for (const task of sorted) {
+      if (!map.has(task.segmentId)) map.set(task.segmentId, task);
     }
-  }, [selectedStoryId]);
+    return map;
+  }, [videoTasks]);
 
-  const loadSegments = async (storyId: string) => {
-    const segs = await storyService.getSegments(storyId);
-    setSegments(segs);
-  };
+  const characterMap = useMemo(() => {
+    const map = new Map<string, Character>();
+    for (const c of characters) map.set(c.id, c);
+    return map;
+  }, [characters]);
 
-  const handleCreateAndSplit = async () => {
-    if (!title || !originalText) return;
-    setIsSplitting(true);
+  const selectedStory = useMemo(
+    () => stories.find(s => s.id === ws.selectedStoryId) ?? null,
+    [stories, ws.selectedStoryId]
+  );
+
+  const progressStats = useMemo(() => {
+    if (segments.length === 0) return null;
+    let success = 0, processing = 0, pending = 0, failed = 0, ready = 0;
+    for (const seg of segments) {
+      const task = latestTaskMap.get(seg.id);
+      if (!task) { ready++; } else {
+        switch (task.status) {
+          case 'SUCCESS': success++; break;
+          case 'PROCESSING': processing++; break;
+          case 'PENDING': pending++; break;
+          case 'FAILED': failed++; break;
+        }
+      }
+    }
+    return { total: segments.length, success, processing, pending, failed, ready };
+  }, [segments, latestTaskMap]);
+
+  const switchStory = useCallback((storyId: string | null) => {
+    wsDispatch({ type: 'SELECT_STORY', storyId });
+    // 切换故事时清理轮询
+    for (const [, interval] of narrationPollersRef.current) clearInterval(interval);
+    narrationPollersRef.current.clear();
+    wsDispatch({ type: 'CLEAR_NARRATION' });
+    bgmDispatch({ type: 'RESET' });
+  }, []);
+
+  // ---- Story CRUD ----
+
+  const handleCreateStory = async () => {
+    if (!currentSpaceId) return;
+    wsDispatch({ type: 'SET_SPLITTING', value: true });
+    let createdId: string | null = null;
     try {
-      const story = await storyService.createStory(title, originalText);
-      setSelectedStoryId(story.id);
+      const story = await storyService.createStory('', '', currentSpaceId);
+      createdId = story.id;
+      switchStory(story.id);
       await storyService.splitStory(story.id);
-      await loadSegments(story.id);
-      setTitle('');
-      setOriginalText('');
-    } catch (e) {
-      console.error(e);
-      alert(t('workbench.splitFailed'));
+    } catch {
+      if (createdId) { try { await storyService.deleteStory(createdId); } catch { /* rollback */ } switchStory(null); }
+      showToast('error', t('workbench.splitFailed'));
     } finally {
-      setIsSplitting(false);
+      wsDispatch({ type: 'SET_SPLITTING', value: false });
     }
   };
+
+  const handleCreateAndBreakdown = async () => {
+    if (!currentSpaceId) return;
+    wsDispatch({ type: 'SET_BREAKING_DOWN', value: true });
+    bdDispatch({ type: 'RESET' });
+    let createdId: string | null = null;
+    try {
+      const story = await storyService.createStory('', '', currentSpaceId);
+      createdId = story.id;
+      switchStory(story.id);
+      const result = await storyService.previewBreakdown(story.id);
+      bdDispatch({ type: 'SET_DRAFTS', characters: result.characters, backgrounds: result.backgrounds, segments: result.segments });
+      bdDispatch({ type: 'SHOW_PREVIEW' });
+    } catch {
+      if (createdId) { try { await storyService.deleteStory(createdId); } catch { /* rollback */ } switchStory(null); }
+      showToast('error', t('workbench.breakdownFailed'));
+    } finally {
+      wsDispatch({ type: 'SET_BREAKING_DOWN', value: false });
+    }
+  };
+
+  const handleQuickSplit = async (storyId: string) => {
+    switchStory(storyId);
+    wsDispatch({ type: 'SET_SPLITTING', value: true });
+    try { await storyService.splitStory(storyId); }
+    catch { showToast('error', t('workbench.splitFailed')); }
+    finally { wsDispatch({ type: 'SET_SPLITTING', value: false }); }
+  };
+
+  const handleDeleteStory = async (storyId: string) => {
+    const ok = await confirm({ title: t('workbench.confirmDeleteTitle'), message: t('workbench.confirmDelete'), confirmLabel: t('workbench.deleteConfirmBtn'), danger: true });
+    if (!ok) return;
+    await storyService.deleteStory(storyId);
+    showToast('success', t('workbench.deleteSuccess'));
+    if (ws.selectedStoryId === storyId) switchStory(null);
+  };
+
+  const handleSaveStory = async (storyId: string, title: string, originalText: string) => {
+    try { await storyService.updateStory(storyId, title, originalText); showToast('success', t('workbench.saveSuccess')); }
+    catch (e) { showToast('error', getErrorMessage(e)); }
+  };
+
+  const handleReSplit = async () => {
+    if (!ws.selectedStoryId) return;
+    const ok = await confirm({ title: t('workbench.confirmReSplitTitle'), message: t('workbench.confirmReSplit'), confirmLabel: t('workbench.reSplitBtn'), danger: true });
+    if (!ok) return;
+    wsDispatch({ type: 'SET_SPLITTING', value: true });
+    try { await storyService.splitStory(ws.selectedStoryId); }
+    catch { showToast('error', t('workbench.splitFailed')); }
+    finally { wsDispatch({ type: 'SET_SPLITTING', value: false }); }
+  };
+
+  const handleReBreakdown = async () => {
+    if (!ws.selectedStoryId) return;
+    const ok = await confirm({ title: t('workbench.confirmReBreakdownTitle'), message: t('workbench.confirmReBreakdown'), confirmLabel: t('workbench.reBreakdownBtn'), danger: true });
+    if (!ok) return;
+    wsDispatch({ type: 'SET_BREAKING_DOWN', value: true });
+    bdDispatch({ type: 'RESET' });
+    try {
+      const result = await storyService.previewBreakdown(ws.selectedStoryId);
+      bdDispatch({ type: 'SET_DRAFTS', characters: result.characters, backgrounds: result.backgrounds, segments: result.segments });
+      bdDispatch({ type: 'SHOW_PREVIEW' });
+    } catch { showToast('error', t('workbench.breakdownFailed')); }
+    finally { wsDispatch({ type: 'SET_BREAKING_DOWN', value: false }); }
+  };
+
+  // ---- Breakdown ----
+
+  const handleCloseBreakdownPreview = async () => {
+    const ok = await confirm({ title: t('workbench.confirmClosePreviewTitle'), message: t('workbench.confirmClosePreview'), confirmLabel: t('workbench.closePreview'), danger: true });
+    if (!ok) return;
+    bdDispatch({ type: 'RESET' });
+  };
+
+  const handleApplyBreakdown = async () => {
+    if (!ws.selectedStoryId) return;
+    bdDispatch({ type: 'SET_APPLYING', value: true });
+    try {
+      const confirmedChars = bd.draftCharacters.filter((_, i) => bd.confirmedCharIndices.has(i));
+      const confirmedBgs = bd.draftBackgrounds.filter((_, i) => bd.confirmedBgIndices.has(i));
+      await storyService.applyBreakdown(ws.selectedStoryId, confirmedChars, confirmedBgs, bd.draftSegments);
+      bdDispatch({ type: 'RESET' });
+      showToast('success', t('workbench.breakdownApplied'));
+    } catch { showToast('error', t('workbench.breakdownApplyFailed')); }
+    finally { bdDispatch({ type: 'SET_APPLYING', value: false }); }
+  };
+
+  // ---- Video ----
 
   const handleSelectBackground = async (segmentId: string, bgId: string) => {
-    if (!selectedStoryId) return;
-    await storyService.updateSegmentBackground(segmentId, bgId, selectedStoryId);
-    await loadSegments(selectedStoryId); // reload
+    await storyService.updateSegmentBackground(segmentId, bgId);
   };
 
   const handleGenerateVideo = async (segmentId: string) => {
-    if (!selectedStoryId) return;
+    if (!ws.selectedStoryId) return;
+    const seg = segments.find(s => s.id === segmentId);
+    if (!seg) return;
     try {
-      await videoGenerationService.generateVideo(segmentId, selectedStoryId, 'MINIMAX');
-    } catch (e: any) {
-      alert(e.message);
+      await videoGenerationService.generateVideo(segmentId, ws.selectedStoryId, 'MINIMAX', {
+        mode: ws.videoMode, model: ws.videoModel, resolution: ws.videoResolution,
+        duration: ws.videoDuration, promptOptimizer: ws.videoPromptOptimizer,
+        firstFrameImage: seg.firstFrameImage,
+      });
+    } catch (e: unknown) { showToast('error', getErrorMessage(e)); }
+  };
+
+  const handleBatchGenerate = async () => {
+    if (!ws.selectedStoryId) return;
+    wsDispatch({ type: 'SET_BATCH_GENERATING', value: true });
+    try {
+      const eligible = segments.filter(seg => {
+        if (!seg.selectedBackgroundId) return false;
+        const task = latestTaskMap.get(seg.id);
+        return !task || task.status === 'FAILED';
+      });
+      const noVoice = eligible.filter(seg => seg.mentionedCharacters.some(id => !characters.find(c => c.id === id)?.voiceId));
+      const noBGM = eligible.filter(seg => !seg.bgmAudioUrl);
+      if (noVoice.length > 0 || noBGM.length > 0) {
+        const warnings: string[] = [];
+        if (noVoice.length > 0) warnings.push(t('workbench.noVoiceWarning', { count: noVoice.length }));
+        if (noBGM.length > 0) warnings.push(t('workbench.noBGMWarning', { count: noBGM.length }));
+        const ok = await confirm({ title: t('workbench.batchWarningsTitle'), message: warnings.join('\n'), confirmLabel: t('workbench.batchGenerateBtn'), danger: false });
+        if (!ok) { wsDispatch({ type: 'SET_BATCH_GENERATING', value: false }); return; }
+      }
+      let successCount = 0, failCount = 0;
+      for (const seg of eligible) {
+        try {
+          await videoGenerationService.generateVideo(seg.id, ws.selectedStoryId!, 'MINIMAX', {
+            mode: ws.videoMode, model: ws.videoModel, resolution: ws.videoResolution,
+            duration: ws.videoDuration, promptOptimizer: ws.videoPromptOptimizer,
+            firstFrameImage: seg.firstFrameImage,
+          });
+          successCount++;
+        } catch { /* skip failed segment */ failCount++; }
+      }
+      if (successCount > 0) showToast('info', t('workbench.batchStarted', { count: successCount }));
+      if (failCount > 0) showToast('warning', t('workbench.batchPartialFailed', { count: failCount }));
+      if (successCount === 0 && failCount === 0) showToast('warning', t('workbench.batchNoEligible'));
+    } catch (e: unknown) { showToast('error', getErrorMessage(e)); }
+    finally { wsDispatch({ type: 'SET_BATCH_GENERATING', value: false }); }
+  };
+
+  const handleBatchSetBackground = async () => {
+    if (!ws.selectedStoryId || !ws.batchBgId) return;
+    try {
+      for (const seg of segments) await storyService.updateSegmentBackground(seg.id, ws.batchBgId);
+      showToast('success', t('workbench.batchBgSuccess', { count: segments.length }));
+      wsDispatch({ type: 'SET_BATCH_BG_ID', value: '' });
+    } catch (e: unknown) { showToast('error', getErrorMessage(e)); }
+  };
+
+  const handleUpdateActionContent = async (segmentId: string, content: string) => {
+    try {
+      const seg = segments.find(s => s.id === segmentId);
+      if (seg) {
+        seg.actionContent = content;
+        await storyService.segmentRepo.save(seg);
+      }
+    } catch (e) { showToast('error', getErrorMessage(e)); }
+  };
+
+  const handleUpdateFirstFrameImage = async (segmentId: string, url: string) => {
+    try {
+      const seg = segments.find(s => s.id === segmentId);
+      if (seg) {
+        seg.firstFrameImage = url;
+        await storyService.segmentRepo.save(seg);
+      }
+    } catch (e) { showToast('error', getErrorMessage(e)); }
+  };
+
+  const handleAssembleFinalVideo = async () => {
+    if (!ws.selectedStoryId) return;
+    wsDispatch({ type: 'SET_ASSEMBLING', value: true, progress: { percent: 0, message: '初始化合成任务...' } });
+    try {
+      await pipelineService.assembleFinalVideo(ws.selectedStoryId, ws.narrationUrls, (percent, message) => {
+        wsDispatch({ type: 'SET_ASSEMBLING', value: true, progress: { percent, message } });
+      });
+      showToast('success', t('workbench.assembleSuccess', '合成成功，已保存至导出中心！'));
+      navigate('/export');
+    } catch (e: unknown) {
+      showToast('error', getErrorMessage(e, t('workbench.assembleFailed', '合成失败')));
+    } finally {
+      wsDispatch({ type: 'SET_ASSEMBLING', value: false, progress: null });
     }
   };
 
-  const getTaskForSegment = (segmentId: string) => {
-    return videoTasks?.find(t => t.segmentId === segmentId);
+  // ---- Narration ----
+
+  const handleGenerateNarration = async (segmentId: string, content: string, characterIds: string[]) => {
+    const charWithVoice = characterIds.map(id => characters.find(c => c.id === id)).find(c => c?.voiceId);
+    if (!charWithVoice?.voiceId) { showToast('warning', t('character.noVoice')); return; }
+    wsDispatch({ type: 'SET_NARRATION_STATUS', segmentId, status: 'running' });
+    try {
+      const result = await voiceService.generateNarrationAudio(content, charWithVoice.voiceId);
+      if (result.audioUrl) {
+        wsDispatch({ type: 'SET_NARRATION_STATUS', segmentId, status: 'done' });
+        wsDispatch({ type: 'SET_NARRATION_URL', segmentId, url: result.audioUrl });
+        showToast('success', t('character.narrationGenerated'));
+      } else if (result.taskId) {
+        let retries = 0;
+        const maxRetries = 60;
+        const pollInterval = setInterval(async () => {
+          try {
+            retries++;
+            const pollResult = await voiceService.queryNarrationStatus(result.taskId!);
+            if (pollResult.status === 'success') {
+              clearInterval(pollInterval); narrationPollersRef.current.delete(segmentId);
+              wsDispatch({ type: 'SET_NARRATION_STATUS', segmentId, status: 'done' });
+              if (pollResult.audioUrl) wsDispatch({ type: 'SET_NARRATION_URL', segmentId, url: pollResult.audioUrl });
+              showToast('success', t('character.narrationGenerated'));
+            } else if (pollResult.status === 'failed') {
+              clearInterval(pollInterval); narrationPollersRef.current.delete(segmentId);
+              wsDispatch({ type: 'SET_NARRATION_STATUS', segmentId, status: 'failed' });
+              showToast('error', pollResult.errorMessage || t('character.narrationFailed'));
+            } else if (retries >= maxRetries) {
+              clearInterval(pollInterval); narrationPollersRef.current.delete(segmentId);
+              wsDispatch({ type: 'SET_NARRATION_STATUS', segmentId, status: 'failed' });
+              showToast('error', t('character.narrationFailed'));
+            }
+          } catch {
+            clearInterval(pollInterval); narrationPollersRef.current.delete(segmentId);
+            wsDispatch({ type: 'SET_NARRATION_STATUS', segmentId, status: 'failed' });
+          }
+        }, 3000);
+        narrationPollersRef.current.set(segmentId, pollInterval);
+      }
+    } catch (e: unknown) {
+      wsDispatch({ type: 'SET_NARRATION_STATUS', segmentId, status: 'failed' });
+      showToast('error', getErrorMessage(e, t('character.narrationFailed')));
+    }
   };
 
+  // ---- BGM ----
+
+  const handleGenerateBGM = async (segmentId: string) => {
+    if (!bgm.prompt.trim()) { showToast('warning', t('music.promptLabel')); return; }
+    bgmDispatch({ type: 'SET_GENERATING', value: true });
+    try {
+      if (bgm.mode === 'cover') {
+        if (!bgm.coverAudioUrl.trim()) { showToast('warning', t('music.coverAudioRequired')); return; }
+        await musicService.generateCoverBGM(segmentId, bgm.coverAudioUrl.trim(), bgm.prompt.trim(), { lyrics: bgm.lyrics || undefined, model: bgm.model });
+      } else {
+        const options: { isInstrumental?: boolean; lyrics?: string; lyricsOptimizer?: boolean; model?: typeof bgm.model } = { model: bgm.model };
+        if (bgm.mode === 'instrumental') options.isInstrumental = true;
+        else if (bgm.mode === 'autoLyrics') { options.isInstrumental = false; options.lyricsOptimizer = true; }
+        else { options.isInstrumental = false; options.lyrics = bgm.lyrics || undefined; }
+        await musicService.generateBGM(segmentId, bgm.prompt.trim(), options);
+      }
+      showToast('success', t('music.bgmGenerated'));
+      bgmDispatch({ type: 'GENERATED' });
+    } catch (e: unknown) { showToast('error', getErrorMessage(e, t('music.bgmGenerateFailed'))); }
+    finally { bgmDispatch({ type: 'SET_GENERATING', value: false }); }
+  };
+
+  const handleRemoveBGM = async (segmentId: string) => {
+    const ok = await confirm({ title: t('music.removeBGM'), message: t('music.confirmRemoveBGM'), confirmLabel: t('music.removeBGMBtn'), danger: true });
+    if (!ok) return;
+    try { await musicService.removeBGMFromSegment(segmentId); showToast('success', t('music.removeBGM')); }
+    catch (e: unknown) { showToast('error', getErrorMessage(e)); }
+  };
+
+  const handleGenerateLyrics = async () => {
+    if (!bgm.prompt.trim()) return;
+    bgmDispatch({ type: 'SET_GENERATING_LYRICS', value: true });
+    try {
+      const result = await musicService.generateLyrics(bgm.prompt.trim());
+      bgmDispatch({ type: 'SET_LYRICS', value: result.lyrics });
+      showToast('success', t('music.lyricsGenerated'));
+    } catch (e: unknown) { showToast('error', getErrorMessage(e)); }
+    finally { bgmDispatch({ type: 'SET_GENERATING_LYRICS', value: false }); }
+  };
+
+  // ---- AI Refine ----
+
+  const handleRefineStoryText = async (text: string): Promise<string> => {
+    wsDispatch({ type: 'SET_REFINING_STORY_TEXT', value: true });
+    try { const result = await textGenerationService.refineText(text); showToast('success', t('textAI.textRefined')); return result.content; }
+    catch (e) { showToast('error', getErrorMessage(e, t('textAI.promptRefineFailed'))); return text; }
+    finally { wsDispatch({ type: 'SET_REFINING_STORY_TEXT', value: false }); }
+  };
+
+  const handleRefineCharAppearance = async (index: number, prompt: string) => {
+    bdDispatch({ type: 'SET_REFINING_CHAR', field: { index, field: 'appearance' } });
+    try { const result = await textGenerationService.refinePrompt(prompt, 'character_appearance'); bdDispatch({ type: 'UPDATE_CHAR', index, field: 'appearancePrompt', value: result.content }); showToast('success', t('textAI.promptRefined')); }
+    catch (e) { showToast('error', getErrorMessage(e, t('textAI.promptRefineFailed'))); }
+    finally { bdDispatch({ type: 'SET_REFINING_CHAR', field: null }); }
+  };
+
+  const handleRefineCharPersonality = async (index: number, prompt: string) => {
+    bdDispatch({ type: 'SET_REFINING_CHAR', field: { index, field: 'personality' } });
+    try { const result = await textGenerationService.refinePrompt(prompt, 'character_personality'); bdDispatch({ type: 'UPDATE_CHAR', index, field: 'personalityPrompt', value: result.content }); showToast('success', t('textAI.promptRefined')); }
+    catch (e) { showToast('error', getErrorMessage(e, t('textAI.promptRefineFailed'))); }
+    finally { bdDispatch({ type: 'SET_REFINING_CHAR', field: null }); }
+  };
+
+  const handleRefineBackground = async (index: number, prompt: string) => {
+    bdDispatch({ type: 'SET_REFINING_BG', field: { index, field: 'environment' } });
+    try { const result = await textGenerationService.refinePrompt(prompt, 'background'); bdDispatch({ type: 'UPDATE_BG', index, field: 'environmentPrompt', value: result.content }); showToast('success', t('textAI.promptRefined')); }
+    catch (e) { showToast('error', getErrorMessage(e, t('textAI.promptRefineFailed'))); }
+    finally { bdDispatch({ type: 'SET_REFINING_BG', field: null }); }
+  };
+
+  // ---- Draft image generation ----
+
+  const handleGenerateCharDraftImage = async (index: number, context: ImageGenerationContext) => {
+    bdDispatch({ type: 'SET_GENERATING_CHAR_IMAGE', index, value: true });
+    try {
+      const result = await imageAdapter.generateImage(context);
+      bdDispatch({ type: 'UPDATE_CHAR', index, field: 'referenceImageUrl', value: result.imageDataUri || result.imageUrls?.[0] || '' });
+      showToast('success', t('workbench.draftImageGenerated'));
+    } catch (e: unknown) { showToast('error', getErrorMessage(e)); }
+    finally { bdDispatch({ type: 'SET_GENERATING_CHAR_IMAGE', index, value: false }); }
+  };
+
+  const handleGenerateBgDraftImage = async (index: number, context: ImageGenerationContext) => {
+    bdDispatch({ type: 'SET_GENERATING_BG_IMAGE', index, value: true });
+    try {
+      const result = await imageAdapter.generateImage(context);
+      bdDispatch({ type: 'UPDATE_BG', index, field: 'referenceImageUrl', value: result.imageDataUri || result.imageUrls?.[0] || '' });
+      showToast('success', t('workbench.draftImageGenerated'));
+    } catch (e: unknown) { showToast('error', getErrorMessage(e)); }
+    finally { bdDispatch({ type: 'SET_GENERATING_BG_IMAGE', index, value: false }); }
+  };
+
+  // ---- BGM Style suggestion ----
+
+  const handleSuggestBGMStyle = async (segmentContent: string) => {
+    bgmDispatch({ type: 'SET_SUGGESTING_STYLE', value: true });
+    try { const result = await textGenerationService.suggestBGMStyle(segmentContent); bgmDispatch({ type: 'SET_PROMPT', value: result.content }); showToast('success', t('textAI.bgmStyleSuggested')); }
+    catch (e) { showToast('error', getErrorMessage(e, t('textAI.promptRefineFailed'))); }
+    finally { bgmDispatch({ type: 'SET_SUGGESTING_STYLE', value: false }); }
+  };
+
+  const hasCharacters = characters.length > 0;
+  const hasBackgrounds = backgrounds.length > 0;
+
   return (
-    <div style={{ display: 'flex', gap: '2rem', height: '100%' }}>
-      {/* Left panel: Stories list & creation */}
-      <div style={{ flex: '0 0 350px', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        <div className="glass-panel" style={{ padding: '1.5rem' }}>
-          <h3>{t('workbench.newStory')}</h3>
-          <div className="form-group" style={{ marginTop: '1rem' }}>
-            <input className="form-input" placeholder={t('workbench.storyTitlePlaceholder')} value={title} onChange={e => setTitle(e.target.value)} />
-          </div>
-          <div className="form-group">
-            <textarea className="form-textarea" placeholder={t('workbench.storyContentPlaceholder')} value={originalText} onChange={e => setOriginalText(e.target.value)} />
-          </div>
-          <button className="btn btn-primary w-full" onClick={handleCreateAndSplit} disabled={isSplitting || !title || !originalText}>
-            {isSplitting ? t('workbench.splitting') : <><Spline size={16} /> {t('workbench.splitBtn')}</>}
-          </button>
-        </div>
+    <div className="workbench fade-in">
+      <StoryListPanel
+        stories={stories}
+        selectedStoryId={ws.selectedStoryId}
+        isSplitting={ws.isSplitting}
+        isBreakingDown={ws.isBreakingDown}
+        refiningStoryText={ws.isRefiningStoryText}
+        onSwitchStory={switchStory}
+        onCreateStory={handleCreateStory}
+        onCreateAndBreakdown={handleCreateAndBreakdown}
+        onQuickSplit={handleQuickSplit}
+        onDeleteStory={handleDeleteStory}
+        onRefineStoryText={handleRefineStoryText}
+        onSaveStory={handleSaveStory}
+      />
 
-        <div className="glass-panel" style={{ padding: '1.5rem', flex: 1, overflowY: 'auto' }}>
-          <h3>{t('workbench.yourStories')}</h3>
-          <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {stories?.map(s => (
-              <div 
-                key={s.id} 
-                className="glass-panel" 
-                style={{ 
-                  padding: '1rem', 
-                  cursor: 'pointer', 
-                  borderColor: selectedStoryId === s.id ? 'var(--primary-color)' : 'var(--border-color)',
-                  background: selectedStoryId === s.id ? 'var(--bg-panel-hover)' : 'var(--bg-panel)'
-                }}
-                onClick={() => setSelectedStoryId(s.id)}
-              >
-                <div style={{ fontWeight: 600 }}>{s.title}</div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{t('workbench.status')}: {s.status}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Right panel: Segments and Video Generation */}
-      <div className="glass-panel" style={{ flex: 1, padding: '2rem', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
-        <div className="page-header" style={{ marginBottom: '1.5rem' }}>
+      <div className="workbench-right-panel">
+        <div className="workbench-header">
           <h2>{t('workbench.segmentsTitle')}</h2>
+          <div className="workbench-actions">
+            {selectedStory && (
+              <>
+                <button className="btn btn-secondary btn-sm" onClick={handleReSplit} disabled={ws.isSplitting}>
+                  <Spline size={14} /> {ws.isSplitting ? t('workbench.splitting') : t('workbench.reSplitBtn')}
+                </button>
+                <button className="btn btn-primary btn-sm" onClick={handleReBreakdown} disabled={ws.isBreakingDown}>
+                  <Sparkles size={14} />
+                  {ws.isBreakingDown ? t('workbench.breakingDown') : t('workbench.reBreakdownBtn')}
+                </button>
+              </>
+            )}
+          </div>
         </div>
-        
-        {!selectedStoryId ? (
+
+        {ws.selectedStoryId && (
+          <PipelinePanel storyId={ws.selectedStoryId} storyTitle={selectedStory?.title ?? ''} />
+        )}
+
+        {bd.showPreview && (bd.draftCharacters.length > 0 || bd.draftBackgrounds.length > 0) && (
+          <BreakdownPreview
+            draftCharacters={bd.draftCharacters}
+            draftBackgrounds={bd.draftBackgrounds}
+            confirmedCharIndices={bd.confirmedCharIndices}
+            confirmedBgIndices={bd.confirmedBgIndices}
+            generatingDraftCharImageIndices={bd.generatingCharImageIndices}
+            generatingDraftBgImageIndices={bd.generatingBgImageIndices}
+            refiningDraftCharField={bd.refiningCharField}
+            refiningDraftBgField={bd.refiningBgField}
+            isApplyingBreakdown={bd.isApplying}
+            onUpdateDraftCharacter={(i, f, v) => bdDispatch({ type: 'UPDATE_CHAR', index: i, field: f, value: v })}
+            onRemoveDraftCharacter={(i) => bdDispatch({ type: 'REMOVE_CHAR', index: i })}
+            onToggleConfirmChar={(i) => bdDispatch({ type: 'TOGGLE_CONFIRM_CHAR', index: i })}
+            onToggleConfirmAllChars={() => bdDispatch({ type: 'TOGGLE_CONFIRM_ALL_CHARS' })}
+            onUpdateDraftBackground={(i, f, v) => bdDispatch({ type: 'UPDATE_BG', index: i, field: f, value: v })}
+            onRemoveDraftBackground={(i) => bdDispatch({ type: 'REMOVE_BG', index: i })}
+            onToggleConfirmBg={(i) => bdDispatch({ type: 'TOGGLE_CONFIRM_BG', index: i })}
+            onToggleConfirmAllBgs={() => bdDispatch({ type: 'TOGGLE_CONFIRM_ALL_BGS' })}
+            onGenerateCharImage={handleGenerateCharDraftImage}
+            onGenerateBgImage={handleGenerateBgDraftImage}
+            onRefineCharAppearance={handleRefineCharAppearance}
+            onRefineCharPersonality={handleRefineCharPersonality}
+            onRefineBackground={handleRefineBackground}
+            onApplyBreakdown={handleApplyBreakdown}
+            onCloseBreakdownPreview={handleCloseBreakdownPreview}
+          />
+        )}
+
+        {selectedStory && segments.length > 0 && (!hasCharacters || !hasBackgrounds) && (
+          <div style={{ padding: '0.5rem 0.75rem', marginBottom: '0.5rem', borderRadius: 'var(--radius-md)', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.25)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <AlertTriangle size={16} color="#fbbf24" />
+            <div style={{ flex: 1 }}>
+              {!hasCharacters && <span style={{ fontSize: '0.8rem', color: '#fbbf24', marginRight: '0.75rem' }}>{t('workbench.noCharactersWarning')}</span>}
+              {!hasBackgrounds && <span style={{ fontSize: '0.8rem', color: '#fbbf24' }}>{t('workbench.noBackgroundsWarning')}</span>}
+            </div>
+            <button className="btn btn-secondary btn-xs"
+              onClick={() => navigate(hasCharacters ? '/backgrounds' : '/characters')}>
+              {hasCharacters ? t('workbench.goBackgrounds') : t('workbench.goCharacters')}
+            </button>
+          </div>
+        )}
+
+        {/* Compact progress + toolbar */}
+        {selectedStory && segments.length > 0 && (
+          <>
+            {progressStats && progressStats.total > 0 && (
+              <div className="workbench-progress">
+                <span className="workbench-progress-label">{progressStats.success}/{progressStats.total} {t('workbench.completed')}</span>
+                <div className="workbench-progress-bar">
+                  {progressStats.success > 0 && <div style={{ width: `${(progressStats.success / progressStats.total) * 100}%`, background: '#34d399', transition: 'width 0.3s' }} />}
+                  {progressStats.processing + progressStats.pending > 0 && <div style={{ width: `${((progressStats.processing + progressStats.pending) / progressStats.total) * 100}%`, background: '#fbbf24', transition: 'width 0.3s' }} />}
+                  {progressStats.failed > 0 && <div style={{ width: `${(progressStats.failed / progressStats.total) * 100}%`, background: '#f87171', transition: 'width 0.3s' }} />}
+                </div>
+                <div className="workbench-progress-stats">
+                  {progressStats.success > 0 && <span style={{ color: '#34d399' }}>{progressStats.success}✓</span>}
+                  {progressStats.processing + progressStats.pending > 0 && <span style={{ color: '#fbbf24' }}>{progressStats.processing + progressStats.pending}⏳</span>}
+                  {progressStats.failed > 0 && <span style={{ color: '#f87171' }}>{progressStats.failed}✗</span>}
+                  {progressStats.ready > 0 && <span>{progressStats.ready}○</span>}
+                </div>
+              </div>
+            )}
+
+            <div className="workbench-toolbar">
+              <select className="form-select btn-xs" style={{ width: '140px' }}
+                value={ws.batchBgId} onChange={e => wsDispatch({ type: 'SET_BATCH_BG_ID', value: e.target.value })}>
+                <option value="">{t('workbench.batchBgPlaceholder')}</option>
+                {backgrounds.map(bg => <option key={bg.id} value={bg.id}>{bg.name}</option>)}
+              </select>
+              <button className="btn btn-secondary btn-xs" disabled={!ws.batchBgId} onClick={handleBatchSetBackground}>
+                <ImagePlus size={12} /> {t('workbench.batchBgBtn')}
+              </button>
+              <div className="workbench-toolbar-divider" />
+              <button className="btn btn-primary btn-xs" onClick={handleBatchGenerate}
+                disabled={ws.isBatchGenerating || !hasBackgrounds}>
+                <PlayCircle size={12} />
+                {ws.isBatchGenerating ? t('workbench.batchGenerating') : t('workbench.batchGenerateBtn')}
+              </button>
+              <button className="btn btn-primary btn-xs" onClick={handleAssembleFinalVideo}
+                disabled={ws.isAssembling || progressStats?.success !== progressStats?.total}>
+                <Film size={12} />
+                {ws.isAssembling ? (ws.assembleProgress?.message || t('workbench.assembling', '合成中...')) : t('workbench.assembleBtn', '一键合成导出')}
+              </button>
+              <div className="workbench-toolbar-divider" />
+              <select className="form-select btn-xs" style={{ width: '90px' }}
+                value={ws.videoMode} onChange={e => wsDispatch({ type: 'SET_VIDEO_MODE', value: e.target.value as typeof ws.videoMode })}>
+                <option value="t2v">{t('video.modeT2V')}</option>
+                <option value="fl2v">{t('video.modeFL2V')}</option>
+                <option value="s2v">{t('video.modeS2V')}</option>
+              </select>
+              {ws.videoMode === 't2v' && (
+                <select className="form-select btn-xs" style={{ width: '130px' }}
+                  value={ws.videoModel} onChange={e => wsDispatch({ type: 'SET_VIDEO_MODEL', value: e.target.value as typeof ws.videoModel })}>
+                  <option value="MiniMax-Hailuo-2.3">Hailuo 2.3</option>
+                  <option value="MiniMax-Hailuo-02">Hailuo 02</option>
+                  <option value="T2V-01-Director">T2V-01 Director</option>
+                  <option value="T2V-01">T2V-01</option>
+                </select>
+              )}
+              <select className="form-select btn-xs" style={{ width: '65px' }}
+                value={ws.videoResolution} onChange={e => wsDispatch({ type: 'SET_VIDEO_RESOLUTION', value: e.target.value as typeof ws.videoResolution })}>
+                <option value="768P">768P</option>
+                <option value="1080P">1080P</option>
+              </select>
+              <select className="form-select btn-xs" style={{ width: '55px' }}
+                value={ws.videoDuration} onChange={e => wsDispatch({ type: 'SET_VIDEO_DURATION', value: Number(e.target.value) as 6 | 10 })}>
+                <option value={6}>6s</option>
+                <option value={10}>10s</option>
+              </select>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.7rem' }}>
+                <input type="checkbox" checked={ws.videoPromptOptimizer} onChange={e => wsDispatch({ type: 'SET_VIDEO_PROMPT_OPTIMIZER', value: e.target.checked })}
+                  style={{ width: '12px', height: '12px' }} />
+                {t('video.promptOptimizer')}
+              </label>
+            </div>
+          </>
+        )}
+
+        {!ws.selectedStoryId ? (
           <p style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: '2rem' }}>{t('workbench.selectStory')}</p>
         ) : segments.length === 0 ? (
           <p style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: '2rem' }}>{t('workbench.noSegments')}</p>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            {segments.map((seg, idx) => {
-              const task = getTaskForSegment(seg.id);
-              
-              return (
-                <div key={seg.id} className="glass-panel" style={{ padding: '1.5rem', display: 'flex', gap: '1.5rem' }}>
-                  <div style={{ flex: '0 0 60px', fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--text-muted)' }}>
-                    #{idx + 1}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ marginBottom: '1rem', lineHeight: 1.6 }}>{seg.content}</p>
-                    
-                    <div className="flex gap-4 items-center">
-                      <select 
-                        className="form-select" 
-                        style={{ width: '200px' }}
-                        value={seg.selectedBackgroundId || ''}
-                        onChange={(e) => handleSelectBackground(seg.id, e.target.value)}
-                      >
-                        <option value="">{t('workbench.selectBg')}</option>
-                        {backgrounds?.map(bg => (
-                          <option key={bg.id} value={bg.id}>{bg.name}</option>
-                        ))}
-                      </select>
-                      
-                      <button 
-                        className="btn btn-primary"
-                        disabled={!seg.selectedBackgroundId || task?.status === 'PROCESSING'}
-                        onClick={() => handleGenerateVideo(seg.id)}
-                      >
-                        <Play size={16} /> 
-                        {task?.status === 'PROCESSING' ? t('workbench.generating') : t('workbench.generateBtn')}
-                      </button>
-
-                      {task && (
-                        <div style={{ 
-                          fontSize: '0.875rem', 
-                          color: task.status === 'SUCCESS' ? 'lightgreen' : task.status === 'FAILED' ? 'lightcoral' : 'orange' 
-                        }}>
-                          {t('workbench.status')}: {task.status}
-                        </div>
-                      )}
-                    </div>
-                    
-                    {task?.status === 'SUCCESS' && task.videoUrl && (
-                      <div style={{ marginTop: '1.5rem' }}>
-                        <video src={task.videoUrl} controls style={{ width: '100%', maxHeight: '300px', borderRadius: 'var(--radius-md)' }} />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+          <div className="workbench-segments">
+            {segments.map((seg, idx) => (
+              <SegmentCard
+                key={seg.id}
+                segment={seg}
+                index={idx}
+                task={latestTaskMap.get(seg.id)}
+                characterMap={characterMap}
+                backgrounds={backgrounds}
+                narrationStatus={ws.narrationStatuses[seg.id]}
+                narrationUrl={ws.narrationUrls[seg.id]}
+                isBGMEditing={bgm.segmentId === seg.id}
+                bgmPrompt={bgm.prompt}
+                bgmMode={bgm.mode}
+                bgmLyrics={bgm.lyrics}
+                bgmModel={bgm.model}
+                bgmCoverAudioUrl={bgm.coverAudioUrl}
+                isGeneratingBGM={bgm.isGenerating}
+                isGeneratingLyrics={bgm.isGeneratingLyrics}
+                suggestingBGMStyle={bgm.isSuggestingStyle}
+                onSelectBackground={handleSelectBackground}
+                onGenerateVideo={handleGenerateVideo}
+                onGenerateNarration={handleGenerateNarration}
+                onRemoveBGM={handleRemoveBGM}
+                onBGMEditStart={() => bgmDispatch({ type: 'START_EDIT', segmentId: seg.id })}
+                onBGMEditCancel={() => bgmDispatch({ type: 'CANCEL_EDIT' })}
+                onBgmPromptChange={(v) => bgmDispatch({ type: 'SET_PROMPT', value: v })}
+                onBgmModeChange={(v) => bgmDispatch({ type: 'SET_MODE', value: v })}
+                onBgmModelChange={(v) => bgmDispatch({ type: 'SET_MODEL', value: v })}
+                onBgmLyricsChange={(v) => bgmDispatch({ type: 'SET_LYRICS', value: v })}
+                onBgmCoverAudioUrlChange={(v) => bgmDispatch({ type: 'SET_COVER_URL', value: v })}
+                onGenerateBGM={() => handleGenerateBGM(seg.id)}
+                onGenerateLyrics={() => handleGenerateLyrics()}
+                onSuggestBGMStyle={handleSuggestBGMStyle}
+                onUpdateActionContent={handleUpdateActionContent}
+                onUpdateFirstFrameImage={handleUpdateFirstFrameImage}
+                onPickImage={() => openPicker('image', async (asset) => {
+                  if (!('blobKey' in asset)) return;
+                  try {
+                    const url = await assetLibraryService.getImageBlobUrl(asset as SavedImage);
+                    handleUpdateFirstFrameImage(seg.id, url);
+                  } catch {
+                    handleUpdateFirstFrameImage(seg.id, '');
+                  }
+                })}
+                onPickNarrationPrompt={() => openPicker('prompt', (asset) => { if ('content' in asset) handleUpdateActionContent(seg.id, (asset as SavedPrompt).content || ''); }, 'narration')}
+              />
+            ))}
           </div>
         )}
       </div>
+      {assetPickerState.isOpen && currentSpaceId && (
+        <AssetPicker
+          type={assetPickerState.type}
+          spaceId={currentSpaceId}
+          category={assetPickerState.category}
+          onSelect={assetPickerState.onSelect!}
+          onClose={closePicker}
+        />
+      )}
     </div>
   );
 };

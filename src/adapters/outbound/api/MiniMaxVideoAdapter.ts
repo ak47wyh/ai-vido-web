@@ -1,57 +1,359 @@
-import type { IVideoGeneratorPort, VideoPromptContext, VideoTaskResult } from '../../../domain/ports/OutboundPorts';
-import { v4 as uuidv4 } from 'uuid';
+import type { IVideoGeneratorPort, VideoPromptContext, VideoTaskResult, VideoDownloadResult, VideoAgentContext, VideoAgentTaskResult } from '../../../domain/ports/OutboundPorts';
+import { ApiConfigStore } from '../config/ApiConfigStore';
+import { getMiniMaxErrorMessage } from './MiniMaxErrorUtils';
+import axios from 'axios';
 
 /**
  * Adapter for MiniMax Video Generation API.
- * In a real scenario, you'd securely call your backend proxy which holds the API key,
- * or use the API key directly (not recommended for production).
- * Here we mock the actual network call to simulate the experience since we don't have a real API key.
+ *
+ * Supports 4 generation modes:
+ *   - T2V (Text-to-Video): prompt-only, supports Hailuo-2.3/Hailuo-02/T2V-01-Director/T2V-01
+ *   - I2V (Image-to-Video): first_frame_image + prompt, supports Hailuo-2.3/Hailuo-2.3-Fast/Hailuo-02/I2V-01-*
+ *   - FL2V (First-Last-Frame): first_frame_image + last_frame_image, only Hailuo-02
+ *   - S2V (Subject-Reference): subject_reference images, only S2V-01
+ *
+ * Also supports Video Agent (template-based generation, deprecated):
+ *   - Create: POST /v1/video_template_generation
+ *   - Query:  GET  /v1/query/video_template_generation
+ *
+ * API Endpoints:
+ *   - Submit task: POST https://api.minimaxi.com/v1/video_generation
+ *   - Query status: GET  https://api.minimaxi.com/v1/query/video_generation?task_id={id}
+ *   - Download file: GET  https://api.minimaxi.com/v1/files/retrieve?file_id={id}
+ *
+ * Task statuses: Preparing → Queueing → Processing → Success / Fail
  */
 export class MiniMaxVideoAdapter implements IVideoGeneratorPort {
-  
+
   async submitVideoTask(context: VideoPromptContext): Promise<string> {
-    // 1. Build the prompt according to the best practice formula: 
-    // "主体 + 动作 + 环境 + 镜头语言"
-    let promptStr = '';
-    
-    // Add characters
-    if (context.characters && context.characters.length > 0) {
-      promptStr += context.characters.map(c => `${c.appearancePrompt}`).join('和') + '，';
+    const config = ApiConfigStore.load();
+
+    // ── Mock mode (no API key configured) ──────────────────────────────────
+    if (!config.minimaxApiKey) {
+      console.warn('[MiniMaxVideoAdapter] No API key configured — running in mock mode.');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      return `mock-task-${Date.now()}`;
     }
 
-    // Add background
-    if (context.background) {
-      promptStr += `在${context.background.environmentPrompt}中，`;
+    // ── Build prompt from legacy fields if prompt not directly provided ─────
+    const prompt = context.prompt || this.buildPrompt(context);
+
+    // ── Determine mode and model ────────────────────────────────────────────
+    const mode = context.mode || this.inferMode(context);
+    const model = context.model || this.getDefaultModel(mode);
+
+    // ── Build request payload ───────────────────────────────────────────────
+    const payload: Record<string, unknown> = {
+      model,
+      prompt,
+      prompt_optimizer: context.promptOptimizer !== undefined ? context.promptOptimizer : true,
+    };
+
+    // Mode-specific fields
+    if (mode === 'i2v') {
+      if (!context.firstFrameImage) {
+        throw new Error('I2V mode requires firstFrameImage');
+      }
+      payload.first_frame_image = context.firstFrameImage;
+    } else if (mode === 'fl2v') {
+      if (!context.firstFrameImage) {
+        throw new Error('FL2V mode requires firstFrameImage');
+      }
+      payload.first_frame_image = context.firstFrameImage;
+      if (context.lastFrameImage) {
+        payload.last_frame_image = context.lastFrameImage;
+      }
+    } else if (mode === 's2v') {
+      if (!context.subjectReference || context.subjectReference.length === 0) {
+        throw new Error('S2V mode requires subjectReference');
+      }
+      payload.subject_reference = context.subjectReference;
     }
 
-    // Add action
-    promptStr += `${context.actionContent}。`;
+    // Common optional fields
+    if (context.fastPretreatment !== undefined && (
+      model === 'MiniMax-Hailuo-2.3' || model === 'MiniMax-Hailuo-2.3-Fast' || model === 'MiniMax-Hailuo-02'
+    )) {
+      payload.fast_pretreatment = context.fastPretreatment;
+    }
+    if (context.duration) {
+      payload.duration = context.duration;
+    }
+    if (context.resolution) {
+      payload.resolution = context.resolution;
+    }
+    if (context.callbackUrl) {
+      payload.callback_url = context.callbackUrl;
+    }
+    if (context.aigcWatermark !== undefined) {
+      payload.aigc_watermark = context.aigcWatermark;
+    }
 
-    console.log('[MiniMaxVideoAdapter] Sending generation request with prompt:', promptStr);
-    
-    // Simulating API latency
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // Simulating returned external task ID
-    return `ext-minimax-${uuidv4()}`;
+    // Voice and BGM (T2V mode with Director model)
+    if (context.characterVoiceIds && Object.keys(context.characterVoiceIds).length > 0) {
+      payload.character_voice_ids = context.characterVoiceIds;
+    }
+    if (context.bgmAudioUrl) {
+      payload.bgm_audio_url = context.bgmAudioUrl;
+    }
+
+    console.log(`[MiniMaxVideoAdapter] Submitting ${mode.toUpperCase()} task, model: ${model}`);
+
+    // ── Real API call ───────────────────────────────────────────────────────
+    const baseUrl = config.minimaxBaseUrl.replace(/\/+$/, '');
+    const response = await axios.post(
+      `${baseUrl}/video_generation`,
+      payload,
+      {
+        headers: {
+          Authorization: `Bearer ${config.minimaxApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        params: config.minimaxGroupId ? { group_id: config.minimaxGroupId } : undefined,
+      }
+    );
+
+    const data = response.data;
+    const statusCode = data?.base_resp?.status_code;
+    const statusMsg = data?.base_resp?.status_msg || '';
+    const error = getMiniMaxErrorMessage(statusCode, statusMsg);
+    if (error) throw new Error(error);
+
+    const taskId: string = data?.task_id;
+    if (!taskId) {
+      console.error('[MiniMaxVideoAdapter] Unexpected response:', JSON.stringify(data));
+      throw new Error('MiniMax API did not return a task_id. Please check your API Key and Group ID configuration.');
+    }
+    return taskId;
   }
 
   async queryTaskStatus(externalTaskId: string): Promise<VideoTaskResult> {
-    console.log(`[MiniMaxVideoAdapter] Polling status for ${externalTaskId}...`);
-    
-    // Simulating API latency
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Randomly decide if it's done (simulate processing time)
-    const isDone = Math.random() > 0.7; // 30% chance to finish per poll
-    
-    if (isDone) {
-      return {
-        status: 'SUCCESS',
-        videoUrl: 'https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_1mb.mp4' // Mock video URL
-      };
+    const config = ApiConfigStore.load();
+
+    // ── Mock mode ───────────────────────────────────────────────────────────
+    if (!config.minimaxApiKey || externalTaskId.startsWith('mock-task-')) {
+      await new Promise(resolve => setTimeout(resolve, 800));
+      const isDone = Math.random() > 0.65;
+      if (isDone) {
+        return {
+          status: 'SUCCESS',
+          videoUrl: 'https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_1mb.mp4',
+          fileId: 'mock-file-id',
+          videoWidth: 1280,
+          videoHeight: 720,
+        };
+      }
+      return { status: 'PROCESSING' };
     }
 
+    // ── Real API call ───────────────────────────────────────────────────────
+    const baseUrl = config.minimaxBaseUrl.replace(/\/+$/, '');
+    const response = await axios.get(
+      `${baseUrl}/query/video_generation`,
+      {
+        params: {
+          task_id: externalTaskId,
+          ...(config.minimaxGroupId ? { group_id: config.minimaxGroupId } : {}),
+        },
+        headers: {
+          Authorization: `Bearer ${config.minimaxApiKey}`,
+        },
+      }
+    );
+
+    const data = response.data;
+    const status: string = data?.status ?? '';
+
+    // Check for API-level errors
+    const statusCode = data?.base_resp?.status_code;
+    if (statusCode !== undefined && statusCode !== 0) {
+      if (statusCode === 1002) {
+        return { status: 'PROCESSING' };
+      }
+      const statusMsg = data?.base_resp?.status_msg || `API error (code ${statusCode})`;
+      return { status: 'FAILED', errorMessage: statusMsg };
+    }
+
+    if (status === 'Success') {
+      const fileId = data?.file_id;
+      const videoWidth = data?.video_width;
+      const videoHeight = data?.video_height;
+      // Use download API to get the actual download URL
+      let videoUrl: string | undefined;
+      if (fileId) {
+        try {
+          const downloadResult = await this.downloadVideo(String(fileId));
+          videoUrl = downloadResult.downloadUrl;
+        } catch {
+          // Fallback: construct URL from file_id
+          videoUrl = `${baseUrl}/files/${fileId}`;
+        }
+      }
+      return { status: 'SUCCESS', videoUrl, fileId: fileId ? String(fileId) : undefined, videoWidth, videoHeight };
+    }
+    if (status === 'Fail') {
+      const failMsg = data?.base_resp?.status_msg || 'Video generation failed';
+      return { status: 'FAILED', errorMessage: failMsg };
+    }
+    // Preparing / Queueing / Processing → all map to PROCESSING
     return { status: 'PROCESSING' };
+  }
+
+  async downloadVideo(fileId: string): Promise<VideoDownloadResult> {
+    const config = ApiConfigStore.load();
+
+    if (!config.minimaxApiKey) {
+      throw new Error('API key is required to download videos');
+    }
+
+    const baseUrl = config.minimaxBaseUrl.replace(/\/+$/, '');
+    const response = await axios.get(
+      `${baseUrl}/files/retrieve`,
+      {
+        params: {
+          file_id: fileId,
+          ...(config.minimaxGroupId ? { group_id: config.minimaxGroupId } : {}),
+        },
+        headers: {
+          Authorization: `Bearer ${config.minimaxApiKey}`,
+        },
+      }
+    );
+
+    const data = response.data;
+    const statusCode = data?.base_resp?.status_code;
+    const error = getMiniMaxErrorMessage(statusCode, data?.base_resp?.status_msg);
+    if (error) throw new Error(error);
+
+    const file = data?.file;
+    if (!file?.download_url) {
+      throw new Error('No download URL returned from file retrieval API');
+    }
+
+    return {
+      downloadUrl: file.download_url,
+      filename: file.filename || 'output_aigc.mp4',
+      bytes: file.bytes || 0,
+      createdAt: file.created_at || 0,
+    };
+  }
+
+  async createAgentTask(context: VideoAgentContext): Promise<string> {
+    const config = ApiConfigStore.load();
+
+    if (!config.minimaxApiKey) {
+      console.warn('[MiniMaxVideoAdapter] No API key configured — running in mock mode for Agent.');
+      await new Promise(r => setTimeout(r, 1000));
+      return `mock-agent-${Date.now()}`;
+    }
+
+    const payload: Record<string, unknown> = {
+      template_id: context.templateId,
+    };
+    if (context.textInputs?.length) payload.text_inputs = context.textInputs;
+    if (context.mediaInputs?.length) payload.media_inputs = context.mediaInputs;
+    if (context.callbackUrl) payload.callback_url = context.callbackUrl;
+
+    const baseUrl = config.minimaxBaseUrl.replace(/\/+$/, '');
+    const response = await axios.post(
+      `${baseUrl}/video_template_generation`,
+      payload,
+      {
+        headers: {
+          Authorization: `Bearer ${config.minimaxApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        params: config.minimaxGroupId ? { group_id: config.minimaxGroupId } : undefined,
+      }
+    );
+
+    const data = response.data;
+    const error = getMiniMaxErrorMessage(data?.base_resp?.status_code, data?.base_resp?.status_msg);
+    if (error) throw new Error(error);
+
+    const taskId = data?.task_id;
+    if (!taskId) throw new Error('Agent API did not return task_id');
+    return taskId;
+  }
+
+  async queryAgentTask(taskId: string): Promise<VideoAgentTaskResult> {
+    const config = ApiConfigStore.load();
+
+    if (!config.minimaxApiKey || taskId.startsWith('mock-agent-')) {
+      await new Promise(r => setTimeout(r, 800));
+      return Math.random() > 0.5
+        ? { status: 'Success', videoUrl: 'https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_1mb.mp4' }
+        : { status: 'Processing' };
+    }
+
+    const baseUrl = config.minimaxBaseUrl.replace(/\/+$/, '');
+    const response = await axios.get(
+      `${baseUrl}/query/video_template_generation`,
+      {
+        params: {
+          task_id: taskId,
+          ...(config.minimaxGroupId ? { group_id: config.minimaxGroupId } : {}),
+        },
+        headers: { Authorization: `Bearer ${config.minimaxApiKey}` },
+      }
+    );
+
+    const data = response.data;
+    const status: string = data?.status ?? '';
+
+    if (status === 'Success') {
+      return { status: 'Success', videoUrl: data?.video_url };
+    }
+    if (status === 'Fail') {
+      return { status: 'Fail', errorMessage: data?.base_resp?.status_msg || 'Agent task failed' };
+    }
+    return { status: 'Processing' };
+  }
+
+  /**
+   * Build prompt from legacy context fields (characters, background, actionContent).
+   */
+  private buildPrompt(context: VideoPromptContext): string {
+    const parts: string[] = [];
+
+    if (context.characters && context.characters.length > 0) {
+      const charDescs = context.characters.map(c => {
+        let desc = c.appearancePrompt;
+        if (c.personalityPrompt) desc += `, ${c.personalityPrompt}`;
+        return desc;
+      });
+      parts.push(charDescs.join(' and '));
+    }
+    if (context.background) {
+      parts.push(`in ${context.background.environmentPrompt}`);
+    }
+    if (context.actionContent) {
+      parts.push(context.actionContent);
+    }
+
+    return parts.join(', ') + '.';
+  }
+
+  /**
+   * Infer generation mode from context fields.
+   */
+  private inferMode(context: VideoPromptContext): 't2v' | 'i2v' | 'fl2v' | 's2v' {
+    if (context.subjectReference && context.subjectReference.length > 0) return 's2v';
+    if (context.firstFrameImage && context.lastFrameImage) return 'fl2v';
+    if (context.firstFrameImage) return 'i2v';
+    return 't2v';
+  }
+
+  /**
+   * Get default model for a given mode.
+   */
+  private getDefaultModel(mode: 't2v' | 'i2v' | 'fl2v' | 's2v'): string {
+    switch (mode) {
+      case 'i2v': return 'I2V-01';
+      case 'fl2v': return 'MiniMax-Hailuo-02';
+      case 's2v': return 'S2V-01';
+      case 't2v':
+      default: return 'MiniMax-Hailuo-2.3';
+    }
   }
 }
