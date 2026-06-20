@@ -1,7 +1,7 @@
 [中文](./README.md) | English
 
 # AI Video Studio
-
+Currently only MiniMax is supported, everyone is welcome to help optimize it.
 An AI short video creation platform built with React + TypeScript. Input your story text, and AI automatically handles character extraction, scene splitting, image/video/voiceover/BGM generation, and finally composes a complete short video via FFmpeg post-processing.
 
 ## Core Features

@@ -2,6 +2,7 @@
 
 # AI Video Studio
 
+目前仅支持MiniMax欢迎所有人参与优化
 基于 React + TypeScript 的 AI 短视频创作平台。输入故事文本，AI 自动完成角色提取、场景拆分、图片/视频/配音/BGM 生成，最终通过 FFmpeg 后期合成完整短视频。
 
 ## 核心功能
