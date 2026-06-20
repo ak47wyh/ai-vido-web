@@ -1,3 +1,5 @@
+中文 | [English](./CODE_WIKI_EN.md)
+
 # AI Video Studio — Code Wiki
 
 > 最后更新：2026-06-19
