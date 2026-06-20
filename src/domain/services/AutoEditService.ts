@@ -15,7 +15,8 @@ export interface CutSuggestion {
 }
 
 export class AutoEditService {
-  constructor(private ffmpegPort: IFFmpegPort) {}
+  private ffmpegPort: IFFmpegPort;
+  constructor(ffmpegPort: IFFmpegPort) { this.ffmpegPort = ffmpegPort; }
 
   /**
    * Detect keyframes by sampling frames at regular intervals and comparing

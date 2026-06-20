@@ -42,7 +42,7 @@ export class SubtitleService {
     const transcripts = await this.whisperPort.transcribe(audio, language);
 
     // Step 2: align to segments using AI (or fallback to even distribution)
-    const aligned = this.transcripts.length > 0
+    const aligned = transcripts.length > 0
       ? await this.alignToSegments(transcripts, segments)
       : this.distributeEvenly(segments);
 

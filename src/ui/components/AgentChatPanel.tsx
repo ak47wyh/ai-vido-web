@@ -43,8 +43,7 @@ export const AgentChatPanel: React.FC = () => {
 
     try {
       const response = await agentService.chat(
-        [...agentMessages, { role: 'user', content: userInput }],
-        () => {}
+        [...agentMessages, { role: 'user', content: userInput }]
       );
       const assistantMsg: AgentChatMessage = {
         id: `asst_${Date.now()}`,

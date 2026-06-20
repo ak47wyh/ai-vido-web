@@ -321,7 +321,7 @@ export const StoryWorkbench: React.FC = () => {
           try {
             retries++;
             const pollResult = await voiceService.queryNarrationStatus(result.taskId!);
-            if (pollResult.status === 'done') {
+            if (pollResult.status === 'success') {
               clearInterval(pollInterval); narrationPollersRef.current.delete(segmentId);
               wsDispatch({ type: 'SET_NARRATION_STATUS', segmentId, status: 'done' });
               if (pollResult.audioUrl) wsDispatch({ type: 'SET_NARRATION_URL', segmentId, url: pollResult.audioUrl });
@@ -650,15 +650,16 @@ export const StoryWorkbench: React.FC = () => {
                 onSuggestBGMStyle={handleSuggestBGMStyle}
                 onUpdateActionContent={handleUpdateActionContent}
                 onUpdateFirstFrameImage={handleUpdateFirstFrameImage}
-                onPickImage={() => openPicker('image', async (asset: SavedImage) => {
+                onPickImage={() => openPicker('image', async (asset) => {
+                  if (!('blobKey' in asset)) return;
                   try {
-                    const url = await assetLibraryService.getImageBlobUrl(asset);
+                    const url = await assetLibraryService.getImageBlobUrl(asset as SavedImage);
                     handleUpdateFirstFrameImage(seg.id, url);
                   } catch {
                     handleUpdateFirstFrameImage(seg.id, '');
                   }
                 })}
-                onPickNarrationPrompt={() => openPicker('prompt', (asset: SavedPrompt) => { handleUpdateActionContent(seg.id, asset.content || ''); }, 'narration')}
+                onPickNarrationPrompt={() => openPicker('prompt', (asset) => { if ('content' in asset) handleUpdateActionContent(seg.id, (asset as SavedPrompt).content || ''); }, 'narration')}
               />
             ))}
           </div>

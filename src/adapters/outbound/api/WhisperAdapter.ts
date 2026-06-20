@@ -24,7 +24,7 @@ export class WhisperAdapter implements IWhisperPort {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async transcribe(audio: Blob | string, language = 'zh'): Promise<TranscriptSegment[]> {
+  async transcribe(_audio: Blob | string, _language = 'zh'): Promise<TranscriptSegment[]> {
     await this.load();
     console.warn('WhisperAdapter: 当前为占位实现，请接入真实 Whisper 服务以获得字幕转录');
     return [];

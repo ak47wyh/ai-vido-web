@@ -1,15 +1,16 @@
+import type { Table, Collection } from 'dexie';
 import { db } from './DexieDatabase';
 import type { SavedImage, SavedVoice, SavedPrompt } from '../../../domain/entities/models';
 import type { ISavedImageRepository, ISavedVoiceRepository, ISavedPromptRepository, AssetQueryParams } from '../../../domain/ports/AssetLibraryPorts';
 
 function applyQuery<T extends { spaceId: string; name: string; tags: string[]; sourceType: string; createdAt: number }>(
-  collection: Dexie.Table<T, string>,
+  collection: Table<T, string>,
   params: AssetQueryParams
-): Dexie.Collection<T, string> {
+): Collection<T, string> {
   const query = collection.where('spaceId').equals(params.spaceId);
   // Dexie filter for additional criteria
   return query.filter(item => {
-    if (params.keyword && !item.name.toLowerCase().includes(params.keyword.toLowerCase()) && !item.tags.some(t => t.toLowerCase().includes(params.keyword.toLowerCase()))) {
+    if (params.keyword && !item.name.toLowerCase().includes(params.keyword!.toLowerCase()) && !item.tags.some(t => t.toLowerCase().includes(params.keyword!.toLowerCase()))) {
       return false;
     }
     if (params.tags && params.tags.length > 0 && !params.tags.some(t => item.tags.includes(t))) {
@@ -23,12 +24,12 @@ function applyQuery<T extends { spaceId: string; name: string; tags: string[]; s
 }
 
 function applyPromptQuery(
-  collection: Dexie.Table<SavedPrompt, string>,
+  collection: Table<SavedPrompt, string>,
   params: AssetQueryParams
-): Dexie.Collection<SavedPrompt, string> {
+): Collection<SavedPrompt, string> {
   const query = collection.where('spaceId').equals(params.spaceId);
   return query.filter(item => {
-    if (params.keyword && !item.name.toLowerCase().includes(params.keyword.toLowerCase()) && !item.tags.some(t => t.toLowerCase().includes(params.keyword.toLowerCase()))) {
+    if (params.keyword && !item.name.toLowerCase().includes(params.keyword!.toLowerCase()) && !item.tags.some(t => t.toLowerCase().includes(params.keyword!.toLowerCase()))) {
       return false;
     }
     if (params.tags && params.tags.length > 0 && !params.tags.some(t => item.tags.includes(t))) {

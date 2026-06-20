@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Pencil, Plus, Trash2, Copy, Users, ChevronDown, ChevronUp, Sparkles, RefreshCw, Mic, Upload, Volume2, Wand2, Palette, Play } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { Character, SavedVoice } from '../../domain/entities/models';
+import type { ImageAspectRatio } from '../../domain/ports/OutboundPorts';
 import { useSpace } from '../contexts/SpaceContext';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -229,7 +230,7 @@ export const CharacterManagement: React.FC = () => {
               </select>
             </div>
             <button type="button" className="btn btn-secondary btn-xs"
-              onClick={() => openPicker('voice', (asset: SavedVoice) => { setSelectedVoiceId(asset.voiceId || ''); })}>
+              onClick={() => openPicker('voice', (asset) => { if ('voiceId' in asset) setSelectedVoiceId((asset as SavedVoice).voiceId || ''); })}>
               {t('assetLibrary.pickerTitle', '从素材库选择').replace('{{type}}', t('assetLibrary.typeVoice', '音色'))}
             </button>
           </div>
@@ -344,7 +345,7 @@ export const CharacterManagement: React.FC = () => {
                     onClick={async () => {
                       if (!appearance.trim() && !personality.trim()) { showToast('warning', t('character.noPromptForImage')); return; }
                       const prompt = [appearance.trim(), personality.trim()].filter(Boolean).join(', ');
-                      try { const result = await imageAdapter.generateImage({ prompt, aspectRatio: generateAspectRatio, promptOptimizer: true }); setImageUrl(result.imageDataUri || result.imageUrls?.[0]); }
+                      try { const result = await imageAdapter.generateImage({ prompt, aspectRatio: generateAspectRatio as ImageAspectRatio, promptOptimizer: true }); setImageUrl(result.imageDataUri || result.imageUrls?.[0] || ''); }
                       catch (err: unknown) { showToast('error', getErrorMessage(err, 'Image generation failed')); }
                     }}>
                     <Sparkles size={12} /> {isGenerating ? t('character.generatingImage') : t('character.generateBtn')}

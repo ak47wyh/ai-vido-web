@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Mic, Volume2, Upload, RefreshCw, Save, BookmarkPlus, Palette, FileText, Settings, Trash2, Play, Search, ChevronDown, ChevronUp, ArrowRight } from 'lucide-react';
+import { Mic, Volume2, Upload, RefreshCw, Save, BookmarkPlus, Palette, FileText, Trash2, Play, Search, ChevronDown, ChevronUp, ArrowRight } from 'lucide-react';
 import { voiceService, assetLibraryService } from '../../dependencies';
 import type { T2ASyncModel, VoiceListResult, VoiceInfo } from '../../domain/ports/OutboundPorts';
 import { VOICES_BY_LANGUAGE, LANGUAGE_LABELS } from '../../domain/data/systemVoices';

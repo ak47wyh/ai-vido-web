@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Pencil, Plus, Trash2, Copy, Image as ImageIcon, ChevronDown, ChevronUp, Sparkles, RefreshCw, Wand2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { Background } from '../../domain/entities/models';
+import type { ImageAspectRatio } from '../../domain/ports/OutboundPorts';
 import { useSpace } from '../contexts/SpaceContext';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -213,8 +214,8 @@ export const BackgroundManagement: React.FC = () => {
                     return;
                   }
                   try {
-                    const result = await imageAdapter.generateImage({ prompt: environmentPrompt.trim(), aspectRatio: generateAspectRatio, promptOptimizer: true });
-                    setImageUrl(result.imageDataUri || result.imageUrls?.[0]);
+                    const result = await imageAdapter.generateImage({ prompt: environmentPrompt.trim(), aspectRatio: generateAspectRatio as ImageAspectRatio, promptOptimizer: true });
+                    setImageUrl(result.imageDataUri || result.imageUrls?.[0] || '');
                   } catch (err: unknown) {
                     const msg = getErrorMessage(err, 'Image generation failed');
                     showToast('error', msg);

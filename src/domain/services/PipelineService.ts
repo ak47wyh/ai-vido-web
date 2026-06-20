@@ -58,7 +58,8 @@ export class PipelineService {
   private subscribers: Map<string, Set<(task: PipelineTask) => void>> = new Map();
   private videoPollers: Map<string, ReturnType<typeof setInterval>> = new Map();
 
-  constructor(private deps: PipelineDeps) {}
+  private deps: PipelineDeps;
+  constructor(deps: PipelineDeps) { this.deps = deps; }
 
   subscribe(taskId: string, callback: (task: PipelineTask) => void): () => void {
     if (!this.subscribers.has(taskId)) this.subscribers.set(taskId, new Set());
@@ -237,7 +238,7 @@ export class PipelineService {
           segments.push(seg);
         }
       }
-      this.completeStage(task.id, 'splitting');
+      this.completeStage(task, 'splitting');
       emitProgress('splitting', 5, `已加载 ${segments.length} 个分镜`);
 
       // 阶段 2: 生成图片 (10% → 20%)
@@ -246,15 +247,15 @@ export class PipelineService {
       for (let i = 0; i < segments.length; i++) {
         const seg = segments[i];
         // 为缺少首帧图的分镜生成图片
-        if (!seg.firstFrameImageUrl && seg.content) {
+        if (!seg.firstFrameImage && seg.content) {
           try {
             const imgResult = await this.deps.imagePort.generateImage({
               prompt: seg.content.slice(0, 500),
               aspectRatio: '16:9',
               model: 'image-01-live',
             });
-            if (imgResult.imageUrl) {
-              seg.firstFrameImageUrl = imgResult.imageUrl;
+            if (imgResult.imageUrls?.[0] || imgResult.imageDataUri) {
+              seg.firstFrameImage = imgResult.imageUrls?.[0] || imgResult.imageDataUri;
               await this.deps.segmentRepo.save(seg);
               imageCount++;
             }
@@ -263,7 +264,7 @@ export class PipelineService {
           }
         }
       }
-      this.completeStage(task.id, 'generating_images');
+      this.completeStage(task, 'generating_images');
       emitProgress('generating_images', 20, imageCount > 0 ? `已生成 ${imageCount} 张图片` : '图片就绪');
 
       // 阶段 3: 生成旁白 (25% → 40%)
@@ -293,10 +294,10 @@ export class PipelineService {
           const progress = 25 + Math.round((i + 1) / segments.length * 15);
           emitProgress('generating_audio', progress, `已生成 ${i + 1}/${segments.length} 个旁白`);
         }
-        this.completeStage(task.id, 'generating_audio');
+        this.completeStage(task, 'generating_audio');
         emitProgress('generating_audio', 40, `已生成 ${narrationCount} 个旁白`);
       } else {
-        this.completeStage(task.id, 'generating_audio');
+        this.completeStage(task, 'generating_audio');
         emitProgress('generating_audio', 40, '跳过旁白生成');
       }
 
@@ -304,10 +305,10 @@ export class PipelineService {
       if (includeBGM) {
         this.startStage(task.id, 'generating_bgm', '生成背景音乐', 45);
         // 简化：仅第一段生成 BGM
-        this.completeStage(task.id, 'generating_bgm');
+        this.completeStage(task, 'generating_bgm');
         emitProgress('generating_bgm', 50, 'BGM 完成');
       } else {
-        this.completeStage(task.id, 'generating_bgm');
+        this.completeStage(task, 'generating_bgm');
         emitProgress('generating_bgm', 50, '跳过 BGM');
       }
 
@@ -353,28 +354,28 @@ export class PipelineService {
         const progress = 65 + Math.round((done / total) * 15);
         emitProgress('generating_videos', progress, `视频进度 ${done}/${total}`);
       });
-      this.completeStage(task.id, 'generating_videos');
+      this.completeStage(task, 'generating_videos');
       emitProgress('generating_videos', 80, '视频生成完成');
 
       // 阶段 6: 后期处理 (85%)
       this.startStage(task.id, 'post_processing', '后期合成', 82);
       // 实际合并 + 字幕烧录（如需）
-      this.completeStage(task.id, 'post_processing');
+      this.completeStage(task, 'post_processing');
       emitProgress('post_processing', 85, '后期完成');
 
       // 阶段 7: 字幕 (90%)
       if (includeSubtitles) {
         this.startStage(task.id, 'generating_srt', '生成字幕', 88);
         // SubtitleService.generateSrtFromSegments 在有 Whisper 时才有效
-        this.completeStage(task.id, 'generating_srt');
+        this.completeStage(task, 'generating_srt');
         emitProgress('generating_srt', 90, '字幕就绪');
       } else {
-        this.completeStage(task.id, 'generating_srt');
+        this.completeStage(task, 'generating_srt');
         emitProgress('generating_srt', 90, '跳过字幕');
       }
 
       // 阶段 8: 字幕烧录 (95%)
-      this.completeStage(task.id, 'burning_subtitles');
+      this.completeStage(task, 'burning_subtitles');
       emitProgress('burning_subtitles', 95, '字幕烧录完成');
 
       // 阶段 9: 完成

@@ -57,7 +57,8 @@ const MOVEMENT_DESCRIPTIONS: Record<CameraMovement, string> = {
 };
 
 export class CinematographyService {
-  constructor(private textPort: ITextGenerationPort) {}
+  private textPort: ITextGenerationPort;
+  constructor(textPort: ITextGenerationPort) { this.textPort = textPort; }
 
   /**
    * Analyze a story segment and suggest the optimal camera shots.

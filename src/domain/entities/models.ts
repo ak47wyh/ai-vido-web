@@ -54,9 +54,9 @@ export interface StorySegment {
 
 export type VideoTaskStatus = 'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAILED';
 
-export type VideoModel = 'MiniMax-Hailuo-2.3' | 'MiniMax-Hailuo-02' | 'T2V-01-Director' | 'T2V-01' | 'S2V-01';
-export type VideoResolution = '720P' | '768P' | '1080P';
-export type VideoGenerationMode = 't2v' | 'fl2v' | 's2v';
+export type VideoModel = 'MiniMax-Hailuo-2.3' | 'MiniMax-Hailuo-2.3-Fast' | 'MiniMax-Hailuo-02' | 'T2V-01-Director' | 'T2V-01' | 'I2V-01-Director' | 'I2V-01-live' | 'I2V-01' | 'S2V-01';
+export type VideoResolution = '512P' | '720P' | '768P' | '1080P';
+export type VideoGenerationMode = 't2v' | 'i2v' | 'fl2v' | 's2v';
 
 export interface VideoTask {
   id: string;

@@ -276,7 +276,7 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
     // 如果响应是 JSON（错误响应），解析错误信息
     if (contentType.includes('application/json') || (data.byteLength < 1024 && this.isJsonArrayBuffer(data))) {
       const text = new TextDecoder().decode(data);
-      let parsed: Record<string, unknown>;
+      let parsed: Record<string, unknown> | undefined;
       try { parsed = JSON.parse(text); } catch { /* ignore */ }
       if (parsed) {
         const statusCode = (parsed?.base_resp as Record<string, unknown>)?.status_code;

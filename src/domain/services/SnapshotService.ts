@@ -12,15 +12,20 @@ export interface SpaceSnapshot {
 }
 
 export class SnapshotService {
+  private spaceRepo: IStorySpaceRepository;
+  private snapshots: Map<string, SpaceSnapshot[]>;
   constructor(
-    private spaceRepo: IStorySpaceRepository,
-    private characterRepo: ICharacterRepository,
-    private backgroundRepo: IBackgroundRepository,
-    private storyRepo: IStoryRepository,
-    private segmentRepo: IStorySegmentRepository,
-    private videoTaskRepo: IVideoTaskRepository,
-    private snapshots: Map<string, SpaceSnapshot[]>
-  ) {}
+    spaceRepo: IStorySpaceRepository,
+    _characterRepo: ICharacterRepository,
+    _backgroundRepo: IBackgroundRepository,
+    _storyRepo: IStoryRepository,
+    _segmentRepo: IStorySegmentRepository,
+    _videoTaskRepo: IVideoTaskRepository,
+    snapshots: Map<string, SpaceSnapshot[]>
+  ) {
+    this.spaceRepo = spaceRepo;
+    this.snapshots = snapshots;
+  }
 
   /**
    * Create a manual snapshot of the current space state

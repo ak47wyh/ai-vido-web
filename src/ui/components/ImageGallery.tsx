@@ -134,7 +134,7 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
             {images.length > 1 && (
               <>
                 <button
-                  onClick={() => setPreviewIndex(prev => (prev - 1 + images.length) % images.length)}
+                  onClick={() => setPreviewIndex(prev => ((prev ?? 0) - 1 + images.length) % images.length)}
                   style={{
                     position: 'absolute', left: '-3rem', top: '50%', transform: 'translateY(-50%)',
                     background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%',
@@ -143,7 +143,7 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
                   }}
                 >‹</button>
                 <button
-                  onClick={() => setPreviewIndex(prev => (prev + 1) % images.length)}
+                  onClick={() => setPreviewIndex(prev => ((prev ?? 0) + 1) % images.length)}
                   style={{
                     position: 'absolute', right: '-3rem', top: '50%', transform: 'translateY(-50%)',
                     background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%',

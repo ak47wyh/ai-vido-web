@@ -7,11 +7,18 @@ function generateId(): string {
 }
 
 export class AssetLibraryService {
+  private imageRepo: ISavedImageRepository;
+  private voiceRepo: ISavedVoiceRepository;
+  private promptRepo: ISavedPromptRepository;
   constructor(
-    private imageRepo: ISavedImageRepository,
-    private voiceRepo: ISavedVoiceRepository,
-    private promptRepo: ISavedPromptRepository,
-  ) {}
+    imageRepo: ISavedImageRepository,
+    voiceRepo: ISavedVoiceRepository,
+    promptRepo: ISavedPromptRepository,
+  ) {
+    this.imageRepo = imageRepo;
+    this.voiceRepo = voiceRepo;
+    this.promptRepo = promptRepo;
+  }
 
   // ===== Image Assets =====
 

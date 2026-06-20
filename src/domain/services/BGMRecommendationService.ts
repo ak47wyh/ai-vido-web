@@ -42,7 +42,8 @@ const CATEGORY_DESCRIPTIONS: Record<BGMCategory, { emotion: string; tempo: strin
 };
 
 export class BGMRecommendationService {
-  constructor(private textPort: ITextGenerationPort) {}
+  private textPort: ITextGenerationPort;
+  constructor(textPort: ITextGenerationPort) { this.textPort = textPort; }
 
   /**
    * Analyze video segment content and recommend the best BGM style.

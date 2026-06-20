@@ -1,4 +1,4 @@
-import type { IImageGeneratorPort, ImageGenerationContext } from '../ports/OutboundPorts';
+import type { IImageGeneratorPort, ImageGenerationContext, ImageAspectRatio } from '../ports/OutboundPorts';
 import type { ICharacterRepository, IBackgroundRepository } from '../ports/OutboundPorts';
 
 /**
@@ -34,7 +34,7 @@ export class ImageGenerationService {
 
     const context: ImageGenerationContext = {
       prompt: parts.join(', '),
-      aspectRatio,
+      aspectRatio: aspectRatio as ImageAspectRatio,
       subjectReferenceUrl: character.referenceImageUrl?.startsWith('http')
         ? character.referenceImageUrl
         : undefined,
@@ -42,10 +42,10 @@ export class ImageGenerationService {
 
     const result = await this.imageGeneratorPort.generateImage(context);
 
-    character.referenceImageUrl = result.imageDataUri;
+    character.referenceImageUrl = result.imageDataUri || result.imageUrls?.[0] || '';
     await this.characterRepo.save(character);
 
-    return result.imageDataUri;
+    return result.imageDataUri || result.imageUrls?.[0] || '';
   }
 
   async generateBackgroundImage(backgroundId: string, aspectRatio: string = '16:9'): Promise<string> {
@@ -58,14 +58,14 @@ export class ImageGenerationService {
 
     const context: ImageGenerationContext = {
       prompt: background.environmentPrompt,
-      aspectRatio,
+      aspectRatio: aspectRatio as ImageAspectRatio,
     };
 
     const result = await this.imageGeneratorPort.generateImage(context);
 
-    background.referenceImageUrl = result.imageDataUri;
+    background.referenceImageUrl = result.imageDataUri || result.imageUrls?.[0] || '';
     await this.backgroundRepo.save(background);
 
-    return result.imageDataUri;
+    return result.imageDataUri || result.imageUrls?.[0] || '';
   }
 }

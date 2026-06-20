@@ -43,7 +43,7 @@ export class FFmpegAdapter implements IFFmpegPort {
   private async readFile(name: string): Promise<Blob> {
     const ffmpeg = this.ensureLoaded();
     const data = await ffmpeg.readFile(name);
-    return new Blob([data as Uint8Array], { type: 'video/mp4' });
+    return new Blob([new Uint8Array(data as Uint8Array)], { type: 'video/mp4' });
   }
 
   private async safeDelete(name: string): Promise<void> {
@@ -343,7 +343,7 @@ export class FFmpegAdapter implements IFFmpegPort {
         outName
       ]);
       const data = await ffmpeg.readFile(outName);
-      return new Blob([data as Uint8Array], { type: `image/${format}` });
+      return new Blob([new Uint8Array(data as Uint8Array)], { type: `image/${format}` });
     } finally {
       await this.safeDelete(inputName);
       await this.safeDelete(outName);

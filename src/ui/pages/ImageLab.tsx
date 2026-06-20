@@ -173,8 +173,8 @@ export const ImageLab: React.FC = () => {
         name,
         imageUrl: saveTargetImage.url,
         prompt: saveTargetImage.prompt,
-        model: saveTargetImage.model,
-        aspectRatio: saveTargetImage.aspectRatio,
+        model: saveTargetImage.model || '',
+        aspectRatio: saveTargetImage.aspectRatio || '',
         tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [],
         sourceType: 'lab',
       });
