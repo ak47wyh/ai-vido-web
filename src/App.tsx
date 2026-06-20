@@ -28,7 +28,7 @@ function App() {
 
   return (
     <ErrorBoundary>
-      <BrowserRouter>
+      <BrowserRouter basename="/ai-vido-web">
         <SpaceProvider>
           <ToastProvider>
             <ConfirmProvider>
