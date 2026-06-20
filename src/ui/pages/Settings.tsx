@@ -96,12 +96,12 @@ export const Settings: React.FC = () => {
       <form onSubmit={handleSave} style={{ width: '100%' }}>
 
         {/* ── MiniMax Section ──────────────────────────────────── */}
-        <div className="glass-panel" style={{ padding: '2rem', marginBottom: '1rem' }}>
+        <div className="glass-panel" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
 
           {/* Section header */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
             <Key size={20} style={{ color: 'var(--primary-color)' }} />
-            <h2 style={{ margin: 0, fontSize: '1.2rem' }}>{t('settings.minimaxSection')}</h2>
+            <h2 style={{ margin: 0, fontSize: '1rem' }}>{t('settings.minimaxSection')}</h2>
             {/* Live / Mock badge */}
             <span style={{
               marginLeft: 'auto',
@@ -122,9 +122,9 @@ export const Settings: React.FC = () => {
             display: 'flex',
             alignItems: 'flex-start',
             gap: '0.6rem',
-            padding: '0.75rem 1rem',
+            padding: '0.5rem 0.75rem',
             borderRadius: 'var(--radius-sm)',
-            marginBottom: '1.75rem',
+            marginBottom: '1rem',
             background: isLive ? 'rgba(52,211,153,0.08)' : 'rgba(251,191,36,0.08)',
             border: `1px solid ${isLive ? 'rgba(52,211,153,0.25)' : 'rgba(251,191,36,0.25)'}`,
             fontSize: '0.875rem',
@@ -137,7 +137,7 @@ export const Settings: React.FC = () => {
             <span>{isLive ? t('settings.liveHint') : t('settings.mockHint')}</span>
           </div>
 
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '1.5rem' }}>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '1rem' }}>
             {t('settings.minimaxDesc')}
           </p>
 
@@ -220,14 +220,14 @@ export const Settings: React.FC = () => {
         </div>
 
         {/* ── Available Models Section ──────────────────────────── */}
-        <div className="glass-panel" style={{ padding: '2rem', marginBottom: '1rem' }}>
+        <div className="glass-panel" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
             <Cpu size={20} style={{ color: 'var(--primary-color)' }} />
-            <h2 style={{ margin: 0, fontSize: '1.2rem' }}>{t('models.title')}</h2>
+            <h2 style={{ margin: 0, fontSize: '1rem' }}>{t('models.title')}</h2>
             <button
               type="button"
-              className="btn btn-secondary"
-              style={{ marginLeft: 'auto', fontSize: '0.75rem', padding: '0.3rem 0.6rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+              className="btn btn-secondary btn-xs"
+              style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
               disabled={isLoadingModels}
               onClick={handleRefreshModels}
             >
@@ -243,7 +243,7 @@ export const Settings: React.FC = () => {
           )}
 
           {/* Text Models (dynamic) */}
-          <div style={{ marginBottom: '1rem' }}>
+          <div style={{ marginBottom: '0.75rem' }}>
             <h4 style={{ fontSize: '0.85rem', marginBottom: '0.5rem', color: '#818cf8' }}>
               {t('models.textModels')} <span style={{ fontSize: '0.7rem', opacity: 0.7 }}>({t('models.dynamic')})</span>
             </h4>
@@ -309,14 +309,14 @@ export const Settings: React.FC = () => {
         </div>
 
         {/* ── File Management Section ───────────────────────────── */}
-        <div className="glass-panel" style={{ padding: '2rem', marginBottom: '1rem' }}>
+        <div className="glass-panel" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
             <FolderOpen size={20} style={{ color: 'var(--primary-color)' }} />
-            <h2 style={{ margin: 0, fontSize: '1.2rem' }}>{t('settings.fileManagement')}</h2>
+            <h2 style={{ margin: 0, fontSize: '1rem' }}>{t('settings.fileManagement')}</h2>
             <button
               type="button"
-              className="btn btn-secondary"
-              style={{ marginLeft: 'auto', fontSize: '0.75rem', padding: '0.3rem 0.6rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+              className="btn btn-secondary btn-xs"
+              style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
               disabled={isLoadingFiles}
               onClick={handleLoadFiles}
             >
@@ -366,7 +366,7 @@ export const Settings: React.FC = () => {
         </div>
 
         {/* ── Save button ──────────────────────────────────────── */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <button
             id="settings-save-btn"
             type="submit"

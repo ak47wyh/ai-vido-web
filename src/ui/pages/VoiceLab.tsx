@@ -432,21 +432,20 @@ export const VoiceLab: React.FC = () => {
     >
       {/* ==================== TTS Tab ==================== */}
       {activeTab === 'tts' && (
-        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div className="glass-panel slide-up lab-tab-panel">
           <div>
             <label className="form-label">配音文本</label>
             <textarea
-              className="form-input"
+              className="form-input lab-textarea-compact"
               rows={4}
               value={ttsText}
               onChange={e => setTtsText(e.target.value)}
-              style={{ fontSize: '1rem', padding: '1rem' }}
             />
             {/* 语气词快捷插入 */}
-            <div style={{ display: 'flex', gap: '0.3rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginRight: '0.3rem' }}>语气词:</span>
+            <div style={{ display: 'flex', gap: '0.3rem', marginTop: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>语气词:</span>
               {EMOTION_TAGS.map(tag => (
-                <button key={tag} className="btn btn-secondary" style={{ fontSize: '0.7rem', padding: '0.15rem 0.4rem' }} onClick={() => insertEmotionTag(tag)}>
+                <button key={tag} className="lab-chip" onClick={() => insertEmotionTag(tag)}>
                   {tag}
                 </button>
               ))}
@@ -454,7 +453,7 @@ export const VoiceLab: React.FC = () => {
           </div>
 
           <div className="form-section">
-            <div className="form-section-item" style={{ minWidth: '200px' }}>
+            <div className="form-section-item">
               <label className="form-label">发音人 (Voice ID)</label>
               <select className="form-select" value={ttsVoiceId} onChange={e => setTtsVoiceId(e.target.value)}>
                 {Object.entries(allVoiceOptions).map(([group, voices]) => (
@@ -464,7 +463,7 @@ export const VoiceLab: React.FC = () => {
                 ))}
               </select>
             </div>
-            <div className="form-section-item" style={{ minWidth: '150px' }}>
+            <div className="form-section-item">
               <label className="form-label">TTS 模型</label>
               <select className="form-select" value={ttsModel} onChange={e => setTtsModel(e.target.value as T2ASyncModel)}>
                 <option value="speech-2.8-turbo">2.8 Turbo OpenAI兼容</option>
@@ -473,17 +472,17 @@ export const VoiceLab: React.FC = () => {
                 <option value="speech-02-hd">02 HD</option>
               </select>
             </div>
-            <div className="form-section-item" style={{ minWidth: '150px' }}>
+            <div className="form-section-item">
               <label className="form-label">语速 ({ttsSpeed}x)</label>
-              <input type="range" min="0.5" max="2" step="0.1" value={ttsSpeed} onChange={e => setTtsSpeed(parseFloat(e.target.value))} style={{ width: '100%', accentColor: 'var(--primary-color)', marginTop: '0.5rem' }} />
+              <input type="range" min="0.5" max="2" step="0.1" value={ttsSpeed} onChange={e => setTtsSpeed(parseFloat(e.target.value))} style={{ width: '100%', accentColor: 'var(--primary-color)' }} />
             </div>
-            <div className="form-section-item" style={{ minWidth: '150px' }}>
+            <div className="form-section-item">
               <label className="form-label">音量 ({ttsVolume})</label>
-              <input type="range" min="0" max="10" step="0.5" value={ttsVolume} onChange={e => setTtsVolume(parseFloat(e.target.value))} style={{ width: '100%', accentColor: 'var(--primary-color)', marginTop: '0.5rem' }} />
+              <input type="range" min="0" max="10" step="0.5" value={ttsVolume} onChange={e => setTtsVolume(parseFloat(e.target.value))} style={{ width: '100%', accentColor: 'var(--primary-color)' }} />
             </div>
-            <div className="form-section-item" style={{ minWidth: '150px' }}>
+            <div className="form-section-item">
               <label className="form-label">音调 ({ttsPitch})</label>
-              <input type="range" min="-12" max="12" step="1" value={ttsPitch} onChange={e => setTtsPitch(parseInt(e.target.value))} style={{ width: '100%', accentColor: 'var(--primary-color)', marginTop: '0.5rem' }} />
+              <input type="range" min="-12" max="12" step="1" value={ttsPitch} onChange={e => setTtsPitch(parseInt(e.target.value))} style={{ width: '100%', accentColor: 'var(--primary-color)' }} />
             </div>
           </div>
 
@@ -494,7 +493,7 @@ export const VoiceLab: React.FC = () => {
             </button>
             {showAdvancedTTS && (
               <div className="advanced-content">
-                <div className="form-section-item" style={{ minWidth: '150px' }}>
+                <div className="form-section-item">
                   <label className="form-label">情感</label>
                   <select className="form-select" value={ttsEmotion} onChange={e => setTtsEmotion(e.target.value)}>
                     <option value="">默认</option>
@@ -506,7 +505,7 @@ export const VoiceLab: React.FC = () => {
                     <option value="surprised">惊讶</option>
                   </select>
                 </div>
-                <div className="form-section-item" style={{ minWidth: '150px' }}>
+                <div className="form-section-item">
                   <label className="form-label">语种增强</label>
                   <select className="form-select" value={ttsLanguageBoost} onChange={e => setTtsLanguageBoost(e.target.value)}>
                     <option value="auto">自动</option>
@@ -517,7 +516,7 @@ export const VoiceLab: React.FC = () => {
                     <option value="Korean">韩语</option>
                   </select>
                 </div>
-                <div className="form-section-item" style={{ minWidth: '120px' }}>
+                <div className="form-section-item">
                   <label className="form-label">音频格式</label>
                   <select className="form-select" value={ttsAudioFormat} onChange={e => setTtsAudioFormat(e.target.value)}>
                     <option value="mp3">MP3</option>
@@ -525,7 +524,7 @@ export const VoiceLab: React.FC = () => {
                     <option value="flac">FLAC</option>
                   </select>
                 </div>
-                <div className="form-section-item" style={{ minWidth: '120px' }}>
+                <div className="form-section-item">
                   <label className="form-label">采样率</label>
                   <select className="form-select" value={ttsSampleRate} onChange={e => setTtsSampleRate(Number(e.target.value))}>
                     <option value={16000}>16000</option>
@@ -533,16 +532,16 @@ export const VoiceLab: React.FC = () => {
                     <option value={32000}>32000</option>
                   </select>
                 </div>
-                <div className="form-section-item" style={{ minWidth: '120px' }}>
+                <div className="form-section-item">
                   <label className="form-label">输出格式</label>
                   <select className="form-select" value={ttsOutputFormat} onChange={e => setTtsOutputFormat(e.target.value as 'hex' | 'url')}>
                     <option value="url">URL (24h有效)</option>
                     <option value="hex">HEX</option>
                   </select>
                 </div>
-                <div className="form-section-item" style={{ minWidth: '120px', display: 'flex', alignItems: 'center', gap: '0.5rem', paddingTop: '1.2rem' }}>
+                <div className="form-section-item" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', paddingTop: '1.2rem' }}>
                   <input type="checkbox" checked={ttsSubtitleEnable} onChange={e => setTtsSubtitleEnable(e.target.checked)} />
-                  <label style={{ fontSize: '0.85rem' }}>开启字幕</label>
+                  <label className="lab-checkbox-label">开启字幕</label>
                 </div>
               </div>
             )}
@@ -561,14 +560,14 @@ export const VoiceLab: React.FC = () => {
 
       {/* ==================== Clone Tab ==================== */}
       {activeTab === 'clone' && (
-        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div className="glass-panel slide-up lab-tab-panel">
           <div>
             <label className="form-label">上传复刻音频 (清晰人声, 10秒~5分钟, ≤20MB)</label>
             <div
-              style={{ border: '2px dashed var(--border-color)', borderRadius: 'var(--radius-md)', padding: '2rem', textAlign: 'center', cursor: 'pointer', background: 'rgba(0,0,0,0.1)' }}
+              className="lab-upload-zone"
               onClick={() => document.getElementById('cloneFileInput')?.click()}
             >
-              <Upload size={32} style={{ color: 'var(--text-muted)', marginBottom: '1rem' }} />
+              <Upload size={24} style={{ color: 'var(--text-muted)', marginBottom: '0.5rem' }} />
               <p style={{ margin: 0, color: 'var(--text-color)' }}>
                 {cloneFile ? cloneFile.name : '点击选择本地音频文件 (.mp3, .wav, .m4a)'}
               </p>
@@ -579,7 +578,7 @@ export const VoiceLab: React.FC = () => {
           <div>
             <label className="form-label">示例音频（可选，少于8秒，增强克隆效果）</label>
             <div
-              style={{ border: '2px dashed rgba(139,92,246,0.3)', borderRadius: 'var(--radius-md)', padding: '1rem', textAlign: 'center', cursor: 'pointer', background: 'rgba(139,92,246,0.05)' }}
+              className="lab-upload-zone lab-upload-zone-sm" style={{ borderColor: 'rgba(139,92,246,0.3)', background: 'rgba(139,92,246,0.05)' }}
               onClick={() => document.getElementById('promptFileInput')?.click()}
             >
               <p style={{ margin: 0, color: 'var(--text-color)', fontSize: '0.85rem' }}>
@@ -592,7 +591,7 @@ export const VoiceLab: React.FC = () => {
             )}
           </div>
 
-          <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
+          <div>
             <div style={{ flex: 1, minWidth: '200px' }}>
               <label className="form-label">音色名称</label>
               <input type="text" className="form-input" placeholder="给这个新声音起个名字" value={cloneName} onChange={e => setCloneName(e.target.value)} />
@@ -611,10 +610,10 @@ export const VoiceLab: React.FC = () => {
             </button>
             {showAdvancedClone && (
               <div className="advanced-content">
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.85rem' }}>
+                <label className="lab-checkbox-label">
                   <input type="checkbox" checked={cloneNeedNoiseReduction} onChange={e => setCloneNeedNoiseReduction(e.target.checked)} /> 开启降噪
                 </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.85rem' }}>
+                <label className="lab-checkbox-label">
                   <input type="checkbox" checked={cloneNeedVolumeNorm} onChange={e => setCloneNeedVolumeNorm(e.target.checked)} /> 音量归一化
                 </label>
               </div>
@@ -645,7 +644,7 @@ export const VoiceLab: React.FC = () => {
                 />
               )}
               <div className="success-banner-actions">
-                <button className="btn btn-secondary" style={{ fontSize: '0.8rem' }} onClick={() => handleUseVoice(clonedVoiceId)}>
+                <button className="btn btn-secondary btn-xs" onClick={() => handleUseVoice(clonedVoiceId)}>
                   <ArrowRight size={14} /> 去配音使用
                 </button>
               </div>
@@ -656,7 +655,7 @@ export const VoiceLab: React.FC = () => {
 
       {/* ==================== Design Tab ==================== */}
       {activeTab === 'design' && (
-        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div className="glass-panel slide-up lab-tab-panel">
           <div>
             <label className="form-label">音色描述</label>
             <textarea
@@ -684,7 +683,7 @@ export const VoiceLab: React.FC = () => {
             <label className="form-label">快捷模板</label>
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               {VOICE_DESIGN_TEMPLATES.map(tpl => (
-                <button key={tpl.name} className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.7rem' }} onClick={() => applyTemplate(tpl)}>
+                <button key={tpl.name} className="lab-template-chip" onClick={() => applyTemplate(tpl)}>
                   {tpl.name}
                 </button>
               ))}
@@ -713,7 +712,7 @@ export const VoiceLab: React.FC = () => {
                 onDownload={handleDownloadAudio}
               />
               <div className="success-banner-actions">
-                <button className="btn btn-secondary" style={{ fontSize: '0.8rem' }} onClick={() => handleUseVoice(designResult.voiceId)}>
+                <button className="btn btn-secondary btn-xs" onClick={() => handleUseVoice(designResult.voiceId)}>
                   <ArrowRight size={14} /> 去配音使用
                 </button>
               </div>
@@ -724,24 +723,21 @@ export const VoiceLab: React.FC = () => {
 
       {/* ==================== Async Tab ==================== */}
       {activeTab === 'async' && (
-        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div className="glass-panel slide-up lab-tab-panel">
           <div>
             <label className="form-label">长文本内容（≤ 50,000 字符）</label>
             <textarea
-              className="form-input"
+              className="form-input lab-textarea-compact"
               rows={8}
               value={asyncText}
               onChange={e => setAsyncText(e.target.value)}
               placeholder="输入或粘贴长文本内容，适合整篇故事、有声书等场景..."
-              style={{ fontSize: '0.95rem', padding: '1rem' }}
             />
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.25rem 0 0 0' }}>
-              当前字数: {asyncText.length} / 50000
-            </p>
+            <div className="lab-char-count">当前字数: {asyncText.length} / 50000</div>
           </div>
 
           <div className="form-section">
-            <div className="form-section-item" style={{ minWidth: '200px' }}>
+            <div className="form-section-item">
               <label className="form-label">音色</label>
               <select className="form-select" value={asyncVoiceId} onChange={e => setAsyncVoiceId(e.target.value)}>
                 {Object.entries(allVoiceOptions).map(([group, voices]) => (
@@ -751,7 +747,7 @@ export const VoiceLab: React.FC = () => {
                 ))}
               </select>
             </div>
-            <div className="form-section-item" style={{ minWidth: '150px' }}>
+            <div className="form-section-item">
               <label className="form-label">模型</label>
               <select className="form-select" value={asyncModel} onChange={e => setAsyncModel(e.target.value)}>
                 <option value="speech-2.8-hd">2.8 HD（推荐）</option>
@@ -773,10 +769,10 @@ export const VoiceLab: React.FC = () => {
 
           {/* 任务列表 */}
           {asyncTasks.length > 0 && (
-            <div style={{ marginTop: '1rem' }}>
+            <div>
               <label className="form-label">任务列表</label>
               {asyncTasks.map((task, idx) => (
-                <div key={task.taskId} style={{ padding: '0.75rem', background: 'rgba(0,0,0,0.15)', borderRadius: 'var(--radius-md)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div key={task.taskId} className="lab-voice-card" style={{ marginBottom: '0.5rem' }}>
                   <span style={{ fontSize: '0.85rem', flex: 1 }}>
                     任务 #{idx + 1}: "{task.text}..."
                   </span>
@@ -814,15 +810,13 @@ export const VoiceLab: React.FC = () => {
 
       {/* ==================== Manage Tab ==================== */}
       {activeTab === 'manage' && (
-        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-            <div style={{ flex: 1, minWidth: '200px' }}>
-              <div style={{ position: 'relative' }}>
-                <Search size={16} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                <input className="form-input" style={{ paddingLeft: '2.2rem' }} placeholder="搜索音色..." value={voiceSearch} onChange={e => setVoiceSearch(e.target.value)} />
-              </div>
+        <div className="glass-panel slide-up lab-tab-panel">
+          <div className="lab-manage-toolbar">
+            <div className="lab-search-bar">
+              <Search size={16} className="lab-search-bar-icon" />
+              <input className="form-input" placeholder="搜索音色..." value={voiceSearch} onChange={e => setVoiceSearch(e.target.value)} />
             </div>
-            <select className="form-select" style={{ width: 'auto' }} value={voiceFilter} onChange={e => { setVoiceFilter(e.target.value as typeof voiceFilter); loadVoices(); }}>
+            <select className="form-select" value={voiceFilter} onChange={e => { setVoiceFilter(e.target.value as typeof voiceFilter); loadVoices(); }}>
               <option value="all">全部</option>
               <option value="system">系统音色</option>
               <option value="voice_cloning">克隆音色</option>
@@ -836,22 +830,22 @@ export const VoiceLab: React.FC = () => {
           {/* 系统音色 */}
           {voiceList?.systemVoices && voiceFilter !== 'voice_cloning' && voiceFilter !== 'voice_generation' && (
             <div>
-              <h3 style={{ fontSize: '1rem', margin: '0 0 0.75rem 0', color: 'var(--text-muted)' }}>系统音色 ({voiceList.systemVoices.length})</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '0.75rem' }}>
+              <h3 style={{ fontSize: '0.9rem', margin: '0 0 0.5rem 0', color: 'var(--text-muted)' }}>系统音色 ({voiceList.systemVoices.length})</h3>
+              <div className="lab-voice-system-grid">
                 {voiceList.systemVoices
                   .filter(v => !voiceSearch || v.voiceId.toLowerCase().includes(voiceSearch.toLowerCase()) || v.voiceName.toLowerCase().includes(voiceSearch.toLowerCase()))
                   .map(v => (
-                  <div key={v.voiceId} style={{ padding: '0.75rem', background: 'rgba(0,0,0,0.15)', borderRadius: 'var(--radius-md)' }}>
-                    <p style={{ margin: '0 0 0.25rem 0', fontWeight: 600, fontSize: '0.9rem' }}>{v.voiceName}</p>
-                    <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>{v.voiceId}</p>
-                    {v.description && <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>{v.description}</p>}
-                    <div style={{ display: 'flex', gap: '0.3rem', marginTop: '0.5rem' }}>
-                      <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                  <div key={v.voiceId} className="lab-voice-system-card">
+                    <p className="lab-voice-card-name">{v.voiceName}</p>
+                    <p className="lab-voice-card-id">{v.voiceId}</p>
+                    {v.description && <p className="lab-voice-card-desc">{v.description}</p>}
+                    <div className="lab-voice-card-actions">
+                      <button className="btn btn-secondary btn-xs"
                         disabled={isPreviewing && previewingVoiceId === v.voiceId}
                         onClick={() => handlePreviewVoice(v.voiceId)}>
                         <Play size={12} /> 试听
                       </button>
-                      <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                      <button className="btn btn-secondary btn-xs"
                         onClick={() => handleUseVoice(v.voiceId)}>
                         <ArrowRight size={12} /> 使用
                       </button>
@@ -865,25 +859,25 @@ export const VoiceLab: React.FC = () => {
           {/* 克隆音色 */}
           {voiceList?.clonedVoices && voiceFilter !== 'system' && voiceFilter !== 'voice_generation' && (
             <div>
-              <h3 style={{ fontSize: '1rem', margin: '0 0 0.75rem 0', color: '#ec4899' }}>克隆音色 ({voiceList.clonedVoices.length})</h3>
+              <h3 style={{ fontSize: '0.9rem', margin: '0 0 0.5rem 0', color: '#ec4899' }}>克隆音色 ({voiceList.clonedVoices.length})</h3>
               {voiceList.clonedVoices
                 .filter(v => !voiceSearch || v.voiceId.toLowerCase().includes(voiceSearch.toLowerCase()))
                 .map(v => (
-                <div key={v.voiceId} style={{ padding: '0.75rem', background: 'rgba(236,72,153,0.05)', border: '1px solid rgba(236,72,153,0.15)', borderRadius: 'var(--radius-md)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ margin: 0, fontWeight: 600, fontSize: '0.9rem' }}>{v.voiceName || v.voiceId}</p>
-                    <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>创建: {v.createdTime || '未知'}</p>
+                <div key={v.voiceId} className="lab-voice-custom-card" style={{ background: 'rgba(236,72,153,0.05)', border: '1px solid rgba(236,72,153,0.15)' }}>
+                  <div className="lab-voice-custom-info">
+                    <p className="lab-voice-card-name">{v.voiceName || v.voiceId}</p>
+                    <p className="lab-voice-card-id">创建: {v.createdTime || '未知'}</p>
                   </div>
-                  <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                  <button className="btn btn-secondary btn-xs"
                     disabled={isPreviewing && previewingVoiceId === v.voiceId}
                     onClick={() => handlePreviewVoice(v.voiceId)}>
                     <Play size={12} /> 试听
                   </button>
-                  <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                  <button className="btn btn-secondary btn-xs"
                     onClick={() => handleUseVoice(v.voiceId)}>
                     <ArrowRight size={12} /> 使用
                   </button>
-                  <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', color: '#ef4444' }}
+                  <button className="btn btn-secondary btn-xs" style={{ color: '#ef4444' }}
                     disabled={deletingVoiceId === v.voiceId}
                     onClick={() => handleDeleteVoice('voice_cloning', v.voiceId)}>
                     <Trash2 size={12} /> 删除
@@ -896,25 +890,25 @@ export const VoiceLab: React.FC = () => {
           {/* 设计音色 */}
           {voiceList?.designedVoices && voiceFilter !== 'system' && voiceFilter !== 'voice_cloning' && (
             <div>
-              <h3 style={{ fontSize: '1rem', margin: '0 0 0.75rem 0', color: '#8b5cf6' }}>设计音色 ({voiceList.designedVoices.length})</h3>
+              <h3 style={{ fontSize: '0.9rem', margin: '0 0 0.5rem 0', color: '#8b5cf6' }}>设计音色 ({voiceList.designedVoices.length})</h3>
               {voiceList.designedVoices
                 .filter(v => !voiceSearch || v.voiceId.toLowerCase().includes(voiceSearch.toLowerCase()))
                 .map(v => (
-                <div key={v.voiceId} style={{ padding: '0.75rem', background: 'rgba(139,92,246,0.05)', border: '1px solid rgba(139,92,246,0.15)', borderRadius: 'var(--radius-md)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ margin: 0, fontWeight: 600, fontSize: '0.9rem' }}>{v.voiceName || v.voiceId}</p>
-                    <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>创建: {v.createdTime || '未知'}</p>
+                <div key={v.voiceId} className="lab-voice-custom-card" style={{ background: 'rgba(139,92,246,0.05)', border: '1px solid rgba(139,92,246,0.15)' }}>
+                  <div className="lab-voice-custom-info">
+                    <p className="lab-voice-card-name">{v.voiceName || v.voiceId}</p>
+                    <p className="lab-voice-card-id">创建: {v.createdTime || '未知'}</p>
                   </div>
-                  <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                  <button className="btn btn-secondary btn-xs"
                     disabled={isPreviewing && previewingVoiceId === v.voiceId}
                     onClick={() => handlePreviewVoice(v.voiceId)}>
                     <Play size={12} /> 试听
                   </button>
-                  <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                  <button className="btn btn-secondary btn-xs"
                     onClick={() => handleUseVoice(v.voiceId)}>
                     <ArrowRight size={12} /> 使用
                   </button>
-                  <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', color: '#ef4444' }}
+                  <button className="btn btn-secondary btn-xs" style={{ color: '#ef4444' }}
                     disabled={deletingVoiceId === v.voiceId}
                     onClick={() => handleDeleteVoice('voice_generation', v.voiceId)}>
                     <Trash2 size={12} /> 删除

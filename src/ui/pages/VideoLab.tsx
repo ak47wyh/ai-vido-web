@@ -10,6 +10,7 @@ import { VideoTaskCard } from '../components/VideoTaskCard';
 import { ImageUploadField } from '../components/ImageUploadField';
 import { fileToBase64 } from '../utils/imageUtils';
 import type { VideoLabTask } from '../components/VideoTaskCard';
+import { LabPageLayout } from '../components/LabPageLayout';
 
 type VideoLabTab = 't2v' | 'i2v' | 'fl2v' | 's2v' | 'agent' | 'tasks';
 
@@ -85,31 +86,28 @@ const VideoModelConfig: React.FC<VideoModelConfigProps> = ({
     if (!resList.includes(resolution) && resList.length > 0) onResolutionChange(resList[0]);
   };
 
-  const labelStyle: React.CSSProperties = { fontSize: '0.85rem' };
-  const selectStyle: React.CSSProperties = { width: '100%' };
-
   return (
     <>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem', padding: '1.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: 'var(--radius-md)' }}>
+      <div className="lab-model-config">
         {models.length > 1 && (
-          <div style={{ flex: 1, minWidth: '180px' }}>
-            <label className="form-label" style={labelStyle}>模型</label>
-            <select className="form-select" style={selectStyle} value={model} onChange={e => handleModelChange(e.target.value as VideoModel)}>
+          <div className="lab-model-config-item" style={{ minWidth: '180px' }}>
+            <label className="form-label">模型</label>
+            <select className="form-select" value={model} onChange={e => handleModelChange(e.target.value as VideoModel)}>
               {models.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
           </div>
         )}
         {showDuration && (
-          <div style={{ flex: 1, minWidth: '120px' }}>
-            <label className="form-label" style={labelStyle}>时长</label>
-            <select className="form-select" style={selectStyle} value={duration} onChange={e => handleDurationChange(Number(e.target.value) as 6 | 10)}>
+          <div className="lab-model-config-item" style={{ minWidth: '120px' }}>
+            <label className="form-label">时长</label>
+            <select className="form-select" value={duration} onChange={e => handleDurationChange(Number(e.target.value) as 6 | 10)}>
               {availableDurations.map(d => <option key={d} value={d}>{d}s</option>)}
             </select>
           </div>
         )}
-        <div style={{ flex: 1, minWidth: '120px' }}>
-          <label className="form-label" style={labelStyle}>分辨率</label>
-          <select className="form-select" style={selectStyle} value={resolution} onChange={e => onResolutionChange(e.target.value as VideoResolution)}>
+        <div className="lab-model-config-item" style={{ minWidth: '120px' }}>
+          <label className="form-label">分辨率</label>
+          <select className="form-select" value={resolution} onChange={e => onResolutionChange(e.target.value as VideoResolution)}>
             {availableResolutions.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
         </div>
@@ -117,20 +115,20 @@ const VideoModelConfig: React.FC<VideoModelConfigProps> = ({
 
       {showAdvanced && (
         <div>
-          <button className="btn btn-secondary" style={{ fontSize: '0.8rem' }} onClick={() => setExpanded(!expanded)}>
+          <button className="advanced-toggle" onClick={() => setExpanded(!expanded)}>
             {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />} 高级设置
           </button>
           {expanded && (
-            <div style={{ marginTop: '0.75rem', padding: '1rem', background: 'rgba(0,0,0,0.15)', borderRadius: 'var(--radius-md)', display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.85rem' }}>
+            <div className="advanced-content">
+              <label className="lab-checkbox-label">
                 <input type="checkbox" checked={promptOptimizer} onChange={e => onPromptOptimizerChange(e.target.checked)} /> Prompt 优化
               </label>
               {cfg?.supportsFastPretreatment && (
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.85rem' }}>
+                <label className="lab-checkbox-label">
                   <input type="checkbox" checked={fastPretreatment} onChange={e => onFastPretreatmentChange(e.target.checked)} /> 快速预处理
                 </label>
               )}
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.85rem' }}>
+              <label className="lab-checkbox-label">
                 <input type="checkbox" checked={watermark} onChange={e => onWatermarkChange(e.target.checked)} /> 添加水印
               </label>
             </div>
@@ -408,56 +406,32 @@ export const VideoLab: React.FC = () => {
   ];
 
   return (
-    <div className="fade-in" style={{ padding: '1.25rem', width: '100%' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
-        <div style={{ padding: '1rem', background: 'rgba(59,130,246,0.1)', borderRadius: 'var(--radius-lg)', color: '#3b82f6' }}>
-          <Film size={32} />
-        </div>
-        <div>
-          <h1 style={{ fontSize: '1.8rem', fontWeight: 700, margin: 0, background: 'var(--gradient-primary)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            视频实验室 (Video Lab)
-          </h1>
-          <p style={{ color: 'var(--text-muted)', margin: '0.5rem 0 0 0', fontSize: '0.9rem' }}>
-            文本转视频、图片驱动、首尾帧、主体参考、视频模板与任务管理
-          </p>
-        </div>
-      </div>
-
-      {/* Tab Bar */}
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem', flexWrap: 'wrap' }}>
-        {tabs.map(tab => (
-          <button
-            key={tab.key}
-            className={`btn ${activeTab === tab.key ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setActiveTab(tab.key)}
-            style={{
-              background: activeTab === tab.key ? (tab.color || 'var(--primary-color)') : 'transparent',
-              border: activeTab === tab.key ? 'none' : '1px solid var(--border-color)',
-              fontSize: '0.85rem',
-            }}
-          >
-            {tab.icon} {tab.label}
-          </button>
-        ))}
-      </div>
+    <LabPageLayout
+      icon={<Film size={32} />}
+      iconBg="rgba(59,130,246,0.1)"
+      iconColor="#3b82f6"
+      title="视频实验室 (Video Lab)"
+      subtitle="文本转视频、图片驱动、首尾帧、主体参考、视频模板与任务管理"
+      tabs={tabs}
+      activeTab={activeTab}
+      onTabChange={(key) => setActiveTab(key as VideoLabTab)}
+    >
 
       {/* ==================== T2V Tab ==================== */}
       {activeTab === 't2v' && (
-        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div className="glass-panel slide-up lab-tab-panel">
           <div>
             <label className="form-label">视频描述 (Prompt)</label>
             <textarea
-              className="form-input"
+              className="form-input lab-textarea-compact"
               rows={4}
               value={t2vPrompt}
               onChange={e => setT2vPrompt(e.target.value)}
               placeholder="描述你想要生成的视频内容，支持 [运镜指令] 语法，例如：一个人拿起一本书 [推进], 然后阅读 [固定]"
-              style={{ fontSize: '1rem', padding: '1rem' }}
               maxLength={2000}
             />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t2vPrompt.length} / 2000</span>
+              <span className="lab-char-count">{t2vPrompt.length} / 2000</span>
             </div>
             {MODEL_CONFIG[t2vModel]?.supportsCameraDirective && (
               <CameraDirectivePanel onInsert={d => insertDirective(setT2vPrompt, d)} style={{ marginTop: '0.5rem' }} />
@@ -474,8 +448,7 @@ export const VideoLab: React.FC = () => {
           />
 
           <button
-            className="btn btn-primary"
-            style={{ padding: '1rem', fontSize: '1.1rem', justifyContent: 'center' }}
+            className="btn btn-primary btn-generate"
             disabled={!t2vPrompt.trim() || isSubmittingT2V}
             onClick={handleT2VSubmit}
           >
@@ -487,7 +460,7 @@ export const VideoLab: React.FC = () => {
 
       {/* ==================== I2V Tab ==================== */}
       {activeTab === 'i2v' && (
-        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div className="glass-panel slide-up lab-tab-panel">
           <ImageUploadField
             label="起始帧图片 (必填)"
             value={i2vFirstFrame}
@@ -514,8 +487,8 @@ export const VideoLab: React.FC = () => {
           />
 
           <button
-            className="btn btn-primary"
-            style={{ padding: '1rem', fontSize: '1.1rem', justifyContent: 'center', background: '#3b82f6' }}
+            className="btn btn-primary btn-generate"
+            style={{ background: '#3b82f6' }}
             disabled={!i2vFirstFrame || isSubmittingI2V}
             onClick={handleI2VSubmit}
           >
@@ -527,7 +500,7 @@ export const VideoLab: React.FC = () => {
 
       {/* ==================== FL2V Tab ==================== */}
       {activeTab === 'fl2v' && (
-        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div className="glass-panel slide-up lab-tab-panel">
           <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: '200px' }}>
               <ImageUploadField
@@ -551,7 +524,7 @@ export const VideoLab: React.FC = () => {
             </div>
           </div>
 
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
+          <p className="lab-info-hint">
             视频尺寸遵循首帧图片；首尾帧尺寸不一致时，模型参考首帧对尾帧裁剪。模型固定为 MiniMax-Hailuo-02。
           </p>
 
@@ -571,8 +544,8 @@ export const VideoLab: React.FC = () => {
           />
 
           <button
-            className="btn btn-primary"
-            style={{ padding: '1rem', fontSize: '1.1rem', justifyContent: 'center', background: '#8b5cf6' }}
+            className="btn btn-primary btn-generate"
+            style={{ background: '#8b5cf6' }}
             disabled={!fl2vFirstFrame || !fl2vLastFrame || isSubmittingFL2V}
             onClick={handleFL2VSubmit}
           >
@@ -584,7 +557,7 @@ export const VideoLab: React.FC = () => {
 
       {/* ==================== S2V Tab ==================== */}
       {activeTab === 's2v' && (
-        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div className="glass-panel slide-up lab-tab-panel">
           <ImageUploadField
             label="人物主体图片 (必填)"
             value={s2vSubjectImage}
@@ -592,7 +565,7 @@ export const VideoLab: React.FC = () => {
             borderColor="rgba(236,72,153,0.3)"
             bgColor="rgba(236,72,153,0.05)"
           />
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '-0.75rem 0 0 0' }}>
+          <p className="lab-info-hint" style={{ margin: '-0.75rem 0 0 0' }}>
             目前仅支持单个主体，模型固定为 S2V-01
           </p>
 
@@ -601,18 +574,18 @@ export const VideoLab: React.FC = () => {
             <textarea className="form-input" rows={3} value={s2vPrompt} onChange={e => setS2vPrompt(e.target.value)} placeholder="描述视频内容" maxLength={2000} />
           </div>
 
-          <div style={{ padding: '1rem', background: 'rgba(0,0,0,0.15)', borderRadius: 'var(--radius-md)', display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.85rem' }}>
+          <div className="advanced-content">
+            <label className="lab-checkbox-label">
               <input type="checkbox" checked={s2vPromptOptimizer} onChange={e => setS2vPromptOptimizer(e.target.checked)} /> Prompt 优化
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.85rem' }}>
+            <label className="lab-checkbox-label">
               <input type="checkbox" checked={s2vWatermark} onChange={e => setS2vWatermark(e.target.checked)} /> 添加水印
             </label>
           </div>
 
           <button
-            className="btn btn-primary"
-            style={{ padding: '1rem', fontSize: '1.1rem', justifyContent: 'center', background: '#ec4899' }}
+            className="btn btn-primary btn-generate"
+            style={{ background: '#ec4899' }}
             disabled={!s2vSubjectImage || !s2vPrompt.trim() || isSubmittingS2V}
             onClick={handleS2VSubmit}
           >
@@ -624,8 +597,8 @@ export const VideoLab: React.FC = () => {
 
       {/* ==================== Agent Tab ==================== */}
       {activeTab === 'agent' && (
-        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div style={{ padding: '0.75rem', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div className="glass-panel slide-up lab-tab-panel">
+          <div className="lab-warning-banner" style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)' }}>
             <AlertCircle size={16} style={{ color: '#f59e0b' }} />
             <span style={{ fontSize: '0.8rem', color: '#f59e0b' }}>模板功能即将下线 (API 已标记为 deprecated)</span>
           </div>
@@ -647,7 +620,7 @@ export const VideoLab: React.FC = () => {
           <div>
             <label className="form-label">媒体图片 (可选)</label>
             <div
-              style={{ border: '2px dashed var(--border-color)', borderRadius: 'var(--radius-md)', padding: '1.5rem', textAlign: 'center', cursor: 'pointer', background: 'rgba(0,0,0,0.1)' }}
+              className="lab-upload-zone"
               onClick={() => document.getElementById('agentMediaInput')?.click()}
             >
               <p style={{ margin: 0, color: 'var(--text-color)', fontSize: '0.85rem' }}>
@@ -658,8 +631,8 @@ export const VideoLab: React.FC = () => {
           </div>
 
           <button
-            className="btn btn-primary"
-            style={{ padding: '1rem', fontSize: '1.1rem', justifyContent: 'center', background: '#f59e0b' }}
+            className="btn btn-primary btn-generate"
+            style={{ background: '#f59e0b' }}
             disabled={!agentTemplateId || isSubmittingAgent}
             onClick={handleAgentSubmit}
           >
@@ -671,10 +644,10 @@ export const VideoLab: React.FC = () => {
 
       {/* ==================== Tasks Tab ==================== */}
       {activeTab === 'tasks' && (
-        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <h3 style={{ margin: 0, color: 'var(--text-muted)' }}>任务列表 {tasks.length > 0 && `(${tasks.length})`}</h3>
+        <div className="glass-panel slide-up lab-tab-panel">
+          <h3 style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-muted)' }}>任务列表 {tasks.length > 0 && `(${tasks.length})`}</h3>
           {tasks.length === 0 ? (
-            <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>
+            <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '1.5rem' }}>
               暂无任务，请从其他 Tab 提交视频生成任务
             </p>
           ) : (
@@ -691,6 +664,6 @@ export const VideoLab: React.FC = () => {
           )}
         </div>
       )}
-    </div>
+    </LabPageLayout>
   );
 };

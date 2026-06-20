@@ -134,8 +134,8 @@ export const BackgroundManagement: React.FC = () => {
       </div>
 
       {isFormOpen && (
-        <form className="glass-panel" style={{ padding: '1rem', marginBottom: '2rem' }} onSubmit={handleSave}>
-          <h3 style={{ marginBottom: '1.5rem' }}>
+        <form className="glass-panel" style={{ padding: '0.75rem', marginBottom: '0.75rem' }} onSubmit={handleSave}>
+          <h3 style={{ marginBottom: '0.75rem' }}>
             {editingBackgroundId ? t('background.editTitle') : t('background.createTitle')}
           </h3>
           <div className="form-group">
@@ -147,8 +147,8 @@ export const BackgroundManagement: React.FC = () => {
             <textarea className="form-textarea" value={environmentPrompt} onChange={e => setEnvironmentPrompt(e.target.value)} placeholder={t('background.envPlaceholder')} />
             <button
               type="button"
-              className="btn btn-secondary"
-              style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', marginTop: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#f472b6' }}
+              className="btn btn-secondary btn-xs"
+              style={{ marginTop: '0.3rem', color: '#f472b6' }}
               disabled={!environmentPrompt.trim() || refiningEnv}
               onClick={async () => {
                 setRefiningEnv(true);
@@ -189,7 +189,7 @@ export const BackgroundManagement: React.FC = () => {
               <label className="form-label">{t('background.uploadLabel')}</label>
               <input className="form-input" type="file" accept="image/*" onChange={handleImageUpload} />
               {imageUploadError && (
-                <p style={{ marginTop: '0.5rem', color: 'lightcoral', fontSize: '0.875rem' }}>{imageUploadError}</p>
+                <p className="lab-info-hint" style={{ color: 'lightcoral' }}>{imageUploadError}</p>
               )}
             </div>
           ) : (
@@ -204,8 +204,8 @@ export const BackgroundManagement: React.FC = () => {
               </select>
               <button
                 type="button"
-                className="btn btn-primary"
-                style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                className="btn btn-primary btn-sm"
+                style={{ marginTop: '0.5rem' }}
                 disabled={isGenerating || !environmentPrompt.trim()}
                 onClick={async () => {
                   if (!environmentPrompt.trim()) {
@@ -227,7 +227,7 @@ export const BackgroundManagement: React.FC = () => {
             </div>
           )}
           {imageUrl && (
-            <div style={{ marginBottom: '1rem' }}>
+            <div style={{ marginBottom: '0.5rem' }}>
               <img
                 src={imageUrl}
                 alt={name || t('background.previewAlt')}
@@ -245,20 +245,20 @@ export const BackgroundManagement: React.FC = () => {
         </form>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
+      <div className="lab-compact-grid">
         {backgrounds?.map(bg => (
-          <div key={bg.id} className="glass-panel" style={{ padding: '1.5rem', position: 'relative' }}>
+          <div key={bg.id} className="glass-panel" style={{ padding: '0.75rem', position: 'relative' }}>
             {bg.referenceImageUrl && (
               <img
                 src={bg.referenceImageUrl}
                 alt={bg.name}
-                style={{ width: '100%', height: '150px', objectFit: 'cover', borderRadius: 'var(--radius-md)', marginBottom: '1rem' }}
+                style={{ width: '100%', height: '120px', objectFit: 'cover', borderRadius: 'var(--radius-md)', marginBottom: '0.5rem' }}
                 onError={(e) => (e.currentTarget.style.display = 'none')}
               />
             )}
-            <h3 style={{ marginBottom: '0.5rem' }}>{bg.name}</h3>
+            <h3 style={{ marginBottom: '0.25rem', fontSize: '0.9rem' }}>{bg.name}</h3>
             {bg.environmentPrompt && (
-              <div style={{ fontSize: '0.875rem', marginBottom: '0.5rem', opacity: 0.8 }}>
+              <div style={{ fontSize: '0.8rem', marginBottom: '0.25rem', opacity: 0.8 }}>
                 <strong>{t('background.environment')}</strong>
                 <span style={expandedFields.has(`${bg.id}-env`) ? undefined : { display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{bg.environmentPrompt}</span>
                 {bg.environmentPrompt.length > 80 && (
@@ -268,10 +268,10 @@ export const BackgroundManagement: React.FC = () => {
                 )}
               </div>
             )}
-            <div style={{ position: 'absolute', top: '1rem', right: '1rem', display: 'flex', gap: '0.5rem' }}>
+            <div style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', display: 'flex', gap: '0.3rem' }}>
               <button
                 className="btn btn-secondary"
-                style={{ padding: '0.4rem', border: 'none', color: '#f472b6' }}
+                style={{ padding: '0.3rem', border: 'none', color: '#f472b6' }}
                 onClick={() => handleGenerateBackgroundImage(bg.id)}
                 disabled={generatingBgId === bg.id}
                 title={t('background.generateImage')}
@@ -280,21 +280,21 @@ export const BackgroundManagement: React.FC = () => {
               </button>
               <button
                 className="btn btn-secondary"
-                style={{ padding: '0.4rem', border: 'none' }}
+                style={{ padding: '0.3rem', border: 'none' }}
                 onClick={() => handleEdit(bg.id)}
               >
                 <Pencil size={16} />
               </button>
               <button
                 className="btn btn-secondary"
-                style={{ padding: '0.4rem', border: 'none' }}
+                style={{ padding: '0.3rem', border: 'none' }}
                 onClick={() => handleDelete(bg.id)}
               >
                 <Trash2 size={16} />
               </button>
               <button
                 className="btn btn-secondary"
-                style={{ padding: '0.4rem', border: 'none' }}
+                style={{ padding: '0.3rem', border: 'none' }}
                 title={t('background.copyToSpace')}
                 onClick={() => startCopy(bg.id)}
               >
@@ -315,8 +315,7 @@ export const BackgroundManagement: React.FC = () => {
                   ))}
                 </select>
                 <button
-                  className="btn btn-primary"
-                  style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}
+                  className="btn btn-primary btn-xs"
                   disabled={!copyTargetSpaceId}
                   onClick={() => handleCopyToSpace(bg.id, copyTargetSpaceId)}
                 >
@@ -327,7 +326,7 @@ export const BackgroundManagement: React.FC = () => {
           </div>
         ))}
         {backgrounds?.length === 0 && !isFormOpen && (
-          <div className="glass-panel" style={{ padding: '3rem', textAlign: 'center', gridColumn: '1 / -1' }}>
+          <div className="glass-panel" style={{ padding: '2rem', textAlign: 'center', gridColumn: '1 / -1' }}>
             <ImageIcon size={48} style={{ color: 'var(--text-muted)', marginBottom: '1rem' }} />
             <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem' }}>{t('background.empty')}</p>
             <button className="btn btn-primary" onClick={openCreateForm}>

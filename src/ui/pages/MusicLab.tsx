@@ -14,6 +14,7 @@ import { useToast } from '../contexts/ToastContext';
 import { getErrorMessage } from '../utils/errorUtils';
 import { useSpace } from '../contexts/SpaceContext';
 import { AssetSaveDialog } from '../components/AssetPicker';
+import { LabPageLayout } from '../components/LabPageLayout';
 import { AudioPreviewPlayer } from '../components/AudioPreviewPlayer';
 import { AudioUploadField } from '../components/AudioUploadField';
 import { LyricsDisplay } from '../components/LyricsDisplay';
@@ -290,65 +291,39 @@ export const MusicLab: React.FC = () => {
   ];
 
   return (
-    <div className="fade-in" style={{ padding: '1.25rem', width: '100%' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
-        <div style={{ padding: '1rem', background: 'rgba(139,92,246,0.1)', borderRadius: 'var(--radius-lg)', color: '#8b5cf6' }}>
-          <MusicIcon size={32} />
-        </div>
-        <div>
-          <h1 style={{ fontSize: '1.8rem', fontWeight: 700, margin: 0, background: 'var(--gradient-primary)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            {t('musicLab.title', '音乐实验室 (Music Lab)')}
-          </h1>
-          <p style={{ color: 'var(--text-muted)', margin: '0.5rem 0 0 0', fontSize: '0.9rem' }}>
-            {t('musicLab.desc', 'AI 作曲、歌词创作、翻唱生成，支持多模型与音频参数调节')}
-          </p>
-        </div>
-      </div>
-
-      {/* Tab Bar */}
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem', flexWrap: 'wrap' }}>
-        {tabs.map(tab => (
-          <button
-            key={tab.key}
-            className={`btn ${activeTab === tab.key ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => handleTabChange(tab.key)}
-            style={{
-              background: activeTab === tab.key ? tab.color : 'transparent',
-              border: activeTab === tab.key ? 'none' : '1px solid var(--border-color)',
-              fontSize: '0.85rem',
-            }}
-          >
-            {tab.icon} {tab.label}
-          </button>
-        ))}
-      </div>
+    <LabPageLayout
+      icon={<MusicIcon size={32} />}
+      iconBg="rgba(139,92,246,0.1)"
+      iconColor="#8b5cf6"
+      title={t('musicLab.title', '音乐实验室 (Music Lab)')}
+      subtitle={t('musicLab.desc', 'AI 作曲、歌词创作、翻唱生成，支持多模型与音频参数调节')}
+      tabs={tabs}
+      activeTab={activeTab}
+      onTabChange={(key) => handleTabChange(key as MusicLabTab)}
+    >
 
       {/* ==================== Compose Tab ==================== */}
       {activeTab === 'compose' && (
-        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div className="glass-panel slide-up lab-tab-panel">
           {/* 歌曲描述 */}
           <div>
             <label className="form-label">{t('musicLab.prompt', '歌曲描述 (Prompt)')}</label>
             <textarea
-              className="form-input"
+              className="form-input lab-textarea-compact"
               rows={3}
               placeholder={t('musicLab.promptPlaceholder', '描述你想要的音乐风格、情绪、场景，例如：轻快的电子流行曲，夏日海滩氛围...')}
               value={composePrompt}
               onChange={e => setComposePrompt(e.target.value)}
-              style={{ fontSize: '1rem', padding: '1rem' }}
               maxLength={1000}
             />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.25rem' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{composePrompt.length} / 1000</span>
-            </div>
+            <div className="lab-char-count">{composePrompt.length} / 1000</div>
           </div>
 
           {/* 歌词 */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
               <label className="form-label" style={{ marginBottom: 0 }}>{t('musicLab.lyrics', '歌词')}</label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.85rem' }}>
+              <label className="lab-checkbox-label">
                 <input
                   type="checkbox"
                   checked={isInstrumental}
@@ -359,7 +334,7 @@ export const MusicLab: React.FC = () => {
               </label>
             </div>
             <textarea
-              className="form-input"
+              className="form-input lab-textarea-compact"
               rows={6}
               placeholder={isInstrumental
                 ? t('musicLab.instrumentalHint', '已开启纯音乐模式，无需填写歌词')
@@ -367,13 +342,13 @@ export const MusicLab: React.FC = () => {
               value={isInstrumental ? '' : composeLyrics}
               onChange={e => setComposeLyrics(e.target.value)}
               disabled={isInstrumental}
-              style={{ fontSize: '0.95rem', padding: '1rem', opacity: isInstrumental ? 0.5 : 1 }}
+              style={{ opacity: isInstrumental ? 0.5 : 1 }}
             />
           </div>
 
           {/* 模型 + 歌词优化 */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem', padding: '1.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: 'var(--radius-md)' }}>
-            <div style={{ flex: 1, minWidth: '200px' }}>
+          <div className="lab-model-config">
+            <div className="lab-model-config-item" style={{ minWidth: '200px' }}>
               <label className="form-label">{t('musicLab.model', '生成模型')}</label>
               <select className="form-select" value={composeModel} onChange={e => setComposeModel(e.target.value as MusicModel)}>
                 <option value="music-2.6">music-2.6 (推荐，高质量)</option>
@@ -381,7 +356,7 @@ export const MusicLab: React.FC = () => {
               </select>
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '0.5rem' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+              <label className="lab-checkbox-label">
                 <input
                   type="checkbox"
                   checked={lyricsOptimizer}
@@ -389,18 +364,18 @@ export const MusicLab: React.FC = () => {
                   disabled={isInstrumental}
                   style={{ width: '16px', height: '16px', accentColor: '#8b5cf6' }}
                 />
-                <span style={{ fontSize: '0.9rem' }}>{t('musicLab.lyricsOptimizer', '歌词智能优化')}</span>
+                {t('musicLab.lyricsOptimizer', '歌词智能优化')}
               </label>
             </div>
           </div>
 
           {/* 高级设置 */}
           <div>
-            <button className="btn btn-secondary" style={{ fontSize: '0.8rem' }} onClick={() => setShowAdvancedCompose(!showAdvancedCompose)}>
+            <button className="advanced-toggle" onClick={() => setShowAdvancedCompose(!showAdvancedCompose)}>
               {showAdvancedCompose ? <ChevronUp size={14} /> : <ChevronDown size={14} />} {t('musicLab.advanced', '高级设置')}
             </button>
             {showAdvancedCompose && (
-              <div style={{ marginTop: '0.75rem', padding: '1rem', background: 'rgba(0,0,0,0.15)', borderRadius: 'var(--radius-md)', display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
+              <div className="advanced-content">
                 <div style={{ flex: 1, minWidth: '150px' }}>
                   <label className="form-label">{t('musicLab.sampleRate', '采样率')}</label>
                   <select className="form-select" value={sampleRate} onChange={e => setSampleRate(Number(e.target.value))}>
@@ -433,8 +408,8 @@ export const MusicLab: React.FC = () => {
 
           {/* 生成按钮 */}
           <button
-            className="btn btn-primary"
-            style={{ padding: '1rem', fontSize: '1.1rem', justifyContent: 'center', background: '#8b5cf6' }}
+            className="btn btn-primary btn-generate"
+            style={{ background: '#8b5cf6' }}
             disabled={!composePrompt.trim() || (!isInstrumental && !composeLyrics.trim()) || isComposing}
             onClick={handleCompose}
           >
@@ -444,7 +419,7 @@ export const MusicLab: React.FC = () => {
 
           {/* 生成结果 */}
           {composeResult && (
-            <div style={{ padding: '1rem', background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 'var(--radius-md)' }}>
+            <div className="lab-result-card" style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
                 <CheckCircle2 size={16} style={{ color: '#a78bfa' }} />
                 <span style={{ color: '#a78bfa', fontWeight: 600 }}>{t('musicLab.composeSuccess', '音乐生成成功')}</span>
@@ -467,21 +442,21 @@ export const MusicLab: React.FC = () => {
 
       {/* ==================== Lyrics Tab ==================== */}
       {activeTab === 'lyrics' && (
-        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div className="glass-panel slide-up lab-tab-panel">
           {/* 模式选择 */}
           <div>
             <label className="form-label">{t('musicLab.lyricsMode', '创作模式')}</label>
             <div style={{ display: 'flex', gap: '0.5rem' }}>
               <button
-                className={`btn ${lyricsMode === 'write_full_song' ? 'btn-primary' : 'btn-secondary'}`}
-                style={{ flex: 1, fontSize: '0.85rem', background: lyricsMode === 'write_full_song' ? '#3b82f6' : undefined }}
+                className={`btn btn-sm ${lyricsMode === 'write_full_song' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ flex: 1, background: lyricsMode === 'write_full_song' ? '#3b82f6' : undefined }}
                 onClick={() => setLyricsMode('write_full_song')}
               >
                 <Wand2 size={14} /> {t('musicLab.modeWriteFull', '全新创作')}
               </button>
               <button
-                className={`btn ${lyricsMode === 'edit' ? 'btn-primary' : 'btn-secondary'}`}
-                style={{ flex: 1, fontSize: '0.85rem', background: lyricsMode === 'edit' ? '#3b82f6' : undefined }}
+                className={`btn btn-sm ${lyricsMode === 'edit' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ flex: 1, background: lyricsMode === 'edit' ? '#3b82f6' : undefined }}
                 onClick={() => setLyricsMode('edit')}
               >
                 <FileText size={14} /> {t('musicLab.modeEdit', '润色修改')}
@@ -506,32 +481,30 @@ export const MusicLab: React.FC = () => {
             <div>
               <label className="form-label">{t('musicLab.lyricsPrompt', '歌曲描述')}</label>
               <textarea
-                className="form-input"
+                className="form-input lab-textarea-compact"
                 rows={4}
                 placeholder={t('musicLab.lyricsPromptPlaceholder', '描述你想要的歌曲主题、风格、情绪，例如：一首关于夏日告别的抒情流行歌...')}
                 value={lyricsPrompt}
                 onChange={e => setLyricsPrompt(e.target.value)}
-                style={{ fontSize: '1rem', padding: '1rem' }}
               />
             </div>
           ) : (
             <div>
               <label className="form-label">{t('musicLab.lyricsInput', '需要修改的歌词')}</label>
               <textarea
-                className="form-input"
+                className="form-input lab-textarea-compact"
                 rows={8}
                 placeholder={t('musicLab.lyricsInputPlaceholder', '粘贴你已有的歌词，AI 将帮你润色修改...')}
                 value={lyricsInput}
                 onChange={e => setLyricsInput(e.target.value)}
-                style={{ fontSize: '0.95rem', padding: '1rem' }}
               />
             </div>
           )}
 
           {/* 生成按钮 */}
           <button
-            className="btn btn-primary"
-            style={{ padding: '1rem', fontSize: '1.1rem', justifyContent: 'center', background: '#3b82f6' }}
+            className="btn btn-primary btn-generate"
+            style={{ background: '#3b82f6' }}
             disabled={(lyricsMode === 'write_full_song' && !lyricsPrompt.trim()) || (lyricsMode === 'edit' && !lyricsInput.trim()) || isGeneratingLyrics}
             onClick={handleGenerateLyrics}
           >
@@ -541,7 +514,7 @@ export const MusicLab: React.FC = () => {
 
           {/* 歌词结果 */}
           {lyricsResult && (
-            <div style={{ padding: '1rem', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 'var(--radius-md)' }}>
+            <div className="lab-result-card" style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)' }}>
               <div style={{ marginBottom: '0.75rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
                   <CheckCircle2 size={16} style={{ color: '#60a5fa' }} />
@@ -561,8 +534,8 @@ export const MusicLab: React.FC = () => {
               <LyricsDisplay lyrics={lyricsResult.lyrics} />
               <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <button
-                  className="btn btn-secondary"
-                  style={{ fontSize: '0.8rem', background: '#8b5cf6', color: '#fff' }}
+                  className="btn btn-sm"
+                  style={{ background: '#8b5cf6', color: '#fff' }}
                   onClick={handleUseLyricsForCompose}
                 >
                   <ArrowRight size={14} /> {t('musicLab.useForCompose', '用作作曲歌词')}
@@ -575,16 +548,12 @@ export const MusicLab: React.FC = () => {
 
       {/* ==================== Cover Tab ==================== */}
       {activeTab === 'cover' && (
-        <div className="glass-panel slide-up" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div className="glass-panel slide-up lab-tab-panel">
           {/* Step 1: 上传参考音频 */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-              <span style={{
-                width: '24px', height: '24px', borderRadius: '50%',
-                background: coverPreprocess ? '#10b981' : '#ec4899', color: '#fff',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700,
-              }}>{coverPreprocess ? '✓' : '1'}</span>
-              <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--text-color)' }}>
+              <span className="lab-step-indicator" style={{ background: coverPreprocess ? '#10b981' : '#ec4899' }}>{coverPreprocess ? '✓' : '1'}</span>
+              <h3 style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-color)' }}>
                 {t('musicLab.coverStep1', 'Step 1: 上传参考音频并预处理')}
               </h3>
             </div>
@@ -597,8 +566,8 @@ export const MusicLab: React.FC = () => {
               placeholder={t('musicLab.coverAudioPlaceholder', '上传参考音频 (MP3/WAV/FLAC, <50MB, 6s-6min)')}
             />
             <button
-              className="btn btn-primary"
-              style={{ marginTop: '0.75rem', padding: '0.75rem', fontSize: '0.95rem', justifyContent: 'center', background: '#ec4899' }}
+              className="btn btn-primary btn-sm"
+              style={{ marginTop: '0.5rem', background: '#ec4899' }}
               disabled={!coverAudio || isPreprocessing}
               onClick={handlePreprocessCover}
             >
@@ -609,7 +578,7 @@ export const MusicLab: React.FC = () => {
 
           {/* 预处理结果 */}
           {coverPreprocess && (
-            <div style={{ padding: '1rem', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 'var(--radius-md)' }}>
+            <div className="lab-result-card" style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
                 <CheckCircle2 size={16} style={{ color: '#34d399' }} />
                 <span style={{ color: '#34d399', fontWeight: 600 }}>{t('musicLab.preprocessSuccess', '预处理完成')}</span>
@@ -625,14 +594,10 @@ export const MusicLab: React.FC = () => {
 
           {/* Step 2: 生成翻唱 */}
           {coverPreprocess && (
-            <div style={{ borderTop: '1px dashed var(--border-color)', paddingTop: '1.5rem' }}>
+            <div style={{ borderTop: '1px dashed var(--border-color)', paddingTop: '1rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                <span style={{
-                  width: '24px', height: '24px', borderRadius: '50%',
-                  background: coverResult ? '#10b981' : '#8b5cf6', color: '#fff',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700,
-                }}>{coverResult ? '✓' : '2'}</span>
-                <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--text-color)' }}>
+                <span className="lab-step-indicator" style={{ background: coverResult ? '#10b981' : '#8b5cf6' }}>{coverResult ? '✓' : '2'}</span>
+                <h3 style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-color)' }}>
                   {t('musicLab.coverStep2', 'Step 2: 编辑歌词并生成翻唱')}
                 </h3>
               </div>
@@ -642,12 +607,11 @@ export const MusicLab: React.FC = () => {
                 <div>
                   <label className="form-label">{t('musicLab.coverPrompt', '翻唱风格描述')}</label>
                   <textarea
-                    className="form-input"
+                    className="form-input lab-textarea-compact"
                     rows={2}
                     placeholder={t('musicLab.coverPromptPlaceholder', '描述翻唱风格，例如：用爵士风格重新演绎，节奏放缓，加入钢琴伴奏...')}
                     value={coverPrompt}
                     onChange={e => setCoverPrompt(e.target.value)}
-                    style={{ fontSize: '0.95rem', padding: '0.75rem' }}
                   />
                 </div>
 
@@ -655,12 +619,12 @@ export const MusicLab: React.FC = () => {
                 <div>
                   <label className="form-label">{t('musicLab.coverLyrics', '歌词（可编辑预处理结果）')}</label>
                   <textarea
-                    className="form-input"
+                    className="form-input lab-textarea-compact"
                     rows={8}
                     placeholder={t('musicLab.coverLyricsPlaceholder', '歌词将自动从预处理结果填入，可按需修改...')}
                     value={coverLyrics}
                     onChange={e => setCoverLyrics(e.target.value)}
-                    style={{ fontSize: '0.9rem', padding: '0.75rem', fontFamily: 'monospace' }}
+                    style={{ fontFamily: 'monospace' }}
                   />
                 </div>
 
@@ -676,8 +640,8 @@ export const MusicLab: React.FC = () => {
                 </div>
 
                 <button
-                  className="btn btn-primary"
-                  style={{ padding: '1rem', fontSize: '1.1rem', justifyContent: 'center', background: '#8b5cf6' }}
+                  className="btn btn-primary btn-generate"
+                  style={{ background: '#8b5cf6' }}
                   disabled={!coverPrompt.trim() || !coverLyrics.trim() || isGeneratingCover}
                   onClick={handleGenerateCover}
                 >
@@ -688,7 +652,7 @@ export const MusicLab: React.FC = () => {
 
               {/* 翻唱结果 */}
               {coverResult && (
-                <div style={{ marginTop: '1rem', padding: '1rem', background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 'var(--radius-md)' }}>
+                <div className="lab-result-card" style={{ marginTop: '0.75rem', background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
                     <CheckCircle2 size={16} style={{ color: '#a78bfa' }} />
                     <span style={{ color: '#a78bfa', fontWeight: 600 }}>{t('musicLab.coverSuccess', '翻唱生成成功')}</span>
@@ -713,12 +677,11 @@ export const MusicLab: React.FC = () => {
 
       {/* ==================== 历史记录（仅 Compose Tab 显示） ==================== */}
       {activeTab === 'compose' && history.length > 0 && (
-        <div className="glass-panel slide-up" style={{ marginTop: '2rem', padding: '1.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-            <h3 style={{ margin: 0, color: 'var(--text-muted)' }}>{t('musicLab.history', '生成历史')} ({history.length})</h3>
+        <div className="glass-panel slide-up" style={{ marginTop: '0.75rem', padding: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+            <h3 style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-muted)' }}>{t('musicLab.history', '生成历史')} ({history.length})</h3>
             <button
-              className="btn btn-secondary"
-              style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
+              className="btn btn-secondary btn-xs"
               onClick={() => {
                 history.forEach(h => revokeBlobUrl(h.audioUrl));
                 setHistory([]);
@@ -727,7 +690,7 @@ export const MusicLab: React.FC = () => {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             {history.map(item => (
-              <div key={item.id} style={{ padding: '0.75rem', background: 'rgba(0,0,0,0.15)', borderRadius: 'var(--radius-md)' }}>
+              <div key={item.id} style={{ padding: '0.6rem', background: 'rgba(0,0,0,0.15)', borderRadius: 'var(--radius-md)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
                   <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {item.prompt}
@@ -745,8 +708,7 @@ export const MusicLab: React.FC = () => {
                 />
                 <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
                   <button
-                    className="btn btn-secondary"
-                    style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                    className="btn btn-secondary btn-xs"
                     onClick={() => handleSaveClick(item)}
                   >
                     <BookmarkPlus size={12} /> {t('assetLibrary.saveBtn', '保存到素材库')}
@@ -767,6 +729,6 @@ export const MusicLab: React.FC = () => {
           onCancel={() => { setShowSaveDialog(false); setSaveTarget(null); }}
         />
       )}
-    </div>
+    </LabPageLayout>
   );
 };

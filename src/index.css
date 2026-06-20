@@ -1552,6 +1552,270 @@ p {
 }
 
 /* ========================================
+   Lab Tab Panel (replaces inline styles)
+   ======================================== */
+
+.lab-tab-panel {
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Compact textarea in lab pages */
+.lab-textarea-compact {
+  font-size: 0.85rem;
+  padding: 0.6rem !important;
+}
+
+/* Upload drop zone */
+.lab-upload-zone {
+  border: 2px dashed var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.1);
+  transition: all 0.15s;
+}
+
+.lab-upload-zone:hover {
+  background: rgba(0, 0, 0, 0.15);
+  border-color: var(--text-muted);
+}
+
+.lab-upload-zone-sm {
+  padding: 0.75rem;
+}
+
+/* Tag/Emotion chip */
+.lab-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.45rem;
+  font-size: 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: rgba(0, 0, 0, 0.15);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.lab-chip:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-main);
+}
+
+/* Template chip (slightly larger) */
+.lab-template-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.75rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: rgba(0, 0, 0, 0.15);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.lab-template-chip:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-main);
+}
+
+/* Step indicator circle */
+.lab-step-indicator {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+/* Result card with colored border */
+.lab-result-card {
+  padding: 0.75rem;
+  border-radius: var(--radius-md);
+  animation: slideUp 0.3s ease-out;
+}
+
+/* Voice card in manage tab */
+.lab-voice-card {
+  padding: 0.6rem;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Char count row */
+.lab-char-count {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* Video model config row */
+.lab-model-config {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 0.75rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius-md);
+}
+
+.lab-model-config-item {
+  flex: 1;
+  min-width: 160px;
+}
+
+/* Checkbox label */
+.lab-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+/* Info hint text */
+.lab-info-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* Warning/Info banner */
+.lab-warning-banner {
+  padding: 0.6rem;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+}
+
+/* Settings section */
+.settings-section {
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.settings-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+/* Compact card grid */
+.lab-compact-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.6rem;
+}
+
+/* Voice system grid */
+.lab-voice-system-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.6rem;
+}
+
+/* Voice system card */
+.lab-voice-system-card {
+  padding: 0.6rem;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: var(--radius-md);
+}
+
+.lab-voice-system-card p {
+  margin: 0;
+}
+
+.lab-voice-card-name {
+  font-weight: 600;
+  font-size: 0.85rem;
+  margin-bottom: 0.15rem;
+}
+
+.lab-voice-card-id {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.lab-voice-card-desc {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+}
+
+.lab-voice-card-actions {
+  display: flex;
+  gap: 0.3rem;
+  margin-top: 0.4rem;
+}
+
+/* Voice custom card (clone/design) */
+.lab-voice-custom-card {
+  padding: 0.6rem;
+  border-radius: var(--radius-md);
+  margin-bottom: 0.4rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.lab-voice-custom-info {
+  flex: 1;
+}
+
+.lab-voice-custom-info p {
+  margin: 0;
+}
+
+/* Search bar with icon */
+.lab-search-bar {
+  position: relative;
+  flex: 1;
+  min-width: 200px;
+}
+
+.lab-search-bar input {
+  padding-left: 2.2rem;
+}
+
+.lab-search-bar-icon {
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+}
+
+/* Manage toolbar */
+.lab-manage-toolbar {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* ========================================
    Small Button (inline actions)
    ======================================== */
 
@@ -1609,6 +1873,34 @@ p {
 
   .form-section-item {
     min-width: 100%;
+  }
+
+  .lab-tab-panel {
+    padding: 0.5rem;
+    gap: 0.5rem;
+  }
+
+  .lab-model-config {
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.5rem;
+  }
+
+  .lab-model-config-item {
+    min-width: 100%;
+  }
+
+  .lab-manage-toolbar {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .lab-search-bar {
+    min-width: 100%;
+  }
+
+  .lab-voice-system-grid {
+    grid-template-columns: 1fr;
   }
 
   /* Dashboard */

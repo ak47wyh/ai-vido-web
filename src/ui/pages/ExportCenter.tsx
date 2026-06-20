@@ -97,14 +97,13 @@ export const ExportCenter: React.FC = () => {
         </div>
       </div>
 
-      <div className="glass-panel" style={{ padding: '1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+      <div className="glass-panel" style={{ padding: '0.6rem', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
         <Filter size={16} style={{ color: 'var(--text-muted)' }} />
         <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t('export.filter')}:</span>
         {(['all', 'today', 'week', 'month'] as FilterRange[]).map(range => (
           <button
             key={range}
-            className={filterRange === range ? 'btn btn-primary' : 'btn btn-secondary'}
-            style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem' }}
+            className={filterRange === range ? 'btn btn-primary btn-xs' : 'btn btn-secondary btn-xs'}
             onClick={() => setFilterRange(range)}
           >
             {t(`export.range.${range}`)}
@@ -121,13 +120,13 @@ export const ExportCenter: React.FC = () => {
         if (!cut) return null;
         const videoUrl = URL.createObjectURL(cut.videoBlob);
         return (
-          <div className="glass-panel" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+          <div className="glass-panel" style={{ padding: '0.75rem', marginBottom: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
               <Film size={18} />
-              <h3 style={{ margin: 0 }}>{getStoryTitle(cut.storyId)}</h3>
+              <h3 style={{ margin: 0, fontSize: '0.9rem' }}>{getStoryTitle(cut.storyId)}</h3>
               <button
-                className="btn btn-secondary"
-                style={{ marginLeft: 'auto', fontSize: '0.8rem' }}
+                className="btn btn-secondary btn-xs"
+                style={{ marginLeft: 'auto' }}
                 onClick={() => setPreviewCutId(null)}
               >
                 {t('export.closePreview')}
@@ -139,10 +138,10 @@ export const ExportCenter: React.FC = () => {
               autoPlay
               style={{ width: '100%', maxHeight: '480px', borderRadius: 'var(--radius-md)', background: '#000' }}
             />
-            <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
               {formatSize(cut.size)} · {formatDuration(cut.duration)} · {cut.hasSubtitles ? t('export.withSubs') : t('export.noSubs')} · {formatDate(cut.createdAt)}
             </div>
-            <div style={{ marginTop: '1rem' }}>
+            <div style={{ marginTop: '0.5rem' }}>
               <PostProductionPanel
                 videoBlob={cut.videoBlob}
                 videoUrl={null}
@@ -158,7 +157,7 @@ export const ExportCenter: React.FC = () => {
       })()}
 
       {filteredCuts.length === 0 ? (
-        <div className="glass-panel" style={{ padding: '3rem', textAlign: 'center' }}>
+        <div className="glass-panel" style={{ padding: '2rem', textAlign: 'center' }}>
           <FilmIcon size={48} style={{ color: 'var(--text-muted)', marginBottom: '1rem' }} />
           <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem' }}>{t('export.empty')}</p>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
@@ -166,12 +165,12 @@ export const ExportCenter: React.FC = () => {
           </p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '0.75rem' }}>
           {filteredCuts.map(cut => (
             <div
               key={cut.id}
               className="glass-panel"
-              style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
+              style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}
             >
               <div
                 style={{
@@ -196,7 +195,7 @@ export const ExportCenter: React.FC = () => {
                   <Film size={32} style={{ color: 'rgba(255,255,255,0.5)' }} />
                 )}
               </div>
-              <h4 style={{ margin: 0, fontSize: '0.95rem' }}>{getStoryTitle(cut.storyId)}</h4>
+              <h4 style={{ margin: 0, fontSize: '0.85rem' }}>{getStoryTitle(cut.storyId)}</h4>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                 {formatSize(cut.size)} · {formatDuration(cut.duration)} · {formatDate(cut.createdAt)}
               </div>
@@ -207,15 +206,15 @@ export const ExportCenter: React.FC = () => {
               )}
               <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto' }}>
                 <button
-                  className="btn btn-primary"
-                  style={{ flex: 1, fontSize: '0.8rem' }}
+                  className="btn btn-primary btn-xs"
+                  style={{ flex: 1 }}
                   onClick={() => handleDownload(cut)}
                 >
                   <Download size={14} /> {t('export.downloadBtn')}
                 </button>
                 <button
                   className="btn btn-secondary"
-                  style={{ padding: '0.4rem 0.6rem', color: '#f87171' }}
+                  style={{ padding: '0.3rem', color: '#f87171' }}
                   onClick={() => handleDelete(cut)}
                   disabled={deletingId === cut.id}
                 >

@@ -121,8 +121,8 @@ export const StorySpaceManagement: React.FC = () => {
 
       {/* Create form */}
       {isCreateOpen && (
-        <form className="glass-panel" style={{ padding: '2rem', marginBottom: '1rem' }} onSubmit={handleCreate}>
-          <h3 style={{ marginBottom: '1.5rem' }}>{t('space.createTitle')}</h3>
+        <form className="glass-panel" style={{ padding: '0.75rem', marginBottom: '0.75rem' }} onSubmit={handleCreate}>
+          <h3 style={{ marginBottom: '0.75rem' }}>{t('space.createTitle')}</h3>
           <div className="form-group">
             <label className="form-label">{t('space.nameLabel')}</label>
             <input className="form-input" value={newName} onChange={e => setNewName(e.target.value)} required placeholder={t('space.namePlaceholder')} />
@@ -140,8 +140,8 @@ export const StorySpaceManagement: React.FC = () => {
 
       {/* Edit form */}
       {editingSpace && (
-        <form className="glass-panel" style={{ padding: '2rem', marginBottom: '1rem' }} onSubmit={handleEditSave}>
-          <h3 style={{ marginBottom: '1.5rem' }}>{t('space.editTitle')}</h3>
+        <form className="glass-panel" style={{ padding: '0.75rem', marginBottom: '0.75rem' }} onSubmit={handleEditSave}>
+          <h3 style={{ marginBottom: '0.75rem' }}>{t('space.editTitle')}</h3>
           <div className="form-group">
             <label className="form-label">{t('space.nameLabel')}</label>
             <input className="form-input" value={editName} onChange={e => setEditName(e.target.value)} required placeholder={t('space.namePlaceholder')} />
@@ -159,8 +159,8 @@ export const StorySpaceManagement: React.FC = () => {
 
       {/* Copy dialog */}
       {copySourceId && (
-        <div className="glass-panel" style={{ padding: '2rem', marginBottom: '1rem' }}>
-          <h3 style={{ marginBottom: '1rem' }}>{t('space.copyToSpace')}</h3>
+        <div className="glass-panel" style={{ padding: '0.75rem', marginBottom: '0.75rem' }}>
+          <h3 style={{ marginBottom: '0.5rem' }}>{t('space.copyToSpace')}</h3>
           <div className="form-group">
             <label className="form-label">{t('space.selectTargetSpace')}</label>
             <select className="form-select" value={copyTargetId} onChange={e => setCopyTargetId(e.target.value)}>
@@ -182,30 +182,30 @@ export const StorySpaceManagement: React.FC = () => {
       )}
 
       {/* Space list */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '0.75rem' }}>
         {spaces?.map(space => (
           <div
             key={space.id}
             className="glass-panel"
             style={{
-              padding: '1.5rem',
+              padding: '0.75rem',
               position: 'relative',
               border: space.id === currentSpaceId ? '1px solid var(--primary-color)' : undefined,
             }}
           >
-            <h3 style={{ marginBottom: '0.5rem' }}>{space.name}</h3>
+            <h3 style={{ marginBottom: '0.25rem', fontSize: '0.9rem' }}>{space.name}</h3>
             {space.description && (
-              <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>{space.description}</p>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>{space.description}</p>
             )}
-            <div style={{ display: 'flex', gap: '1rem', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+            <div style={{ display: 'flex', gap: '0.75rem', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
               <span>{t('space.characterCount', { count: counts[space.id]?.characters ?? 0 })}</span>
               <span>{t('space.backgroundCount', { count: counts[space.id]?.backgrounds ?? 0 })}</span>
               <span>{t('space.storyCount', { count: counts[space.id]?.stories ?? 0 })}</span>
             </div>
-            <div style={{ position: 'absolute', top: '1rem', right: '1rem', display: 'flex', gap: '0.5rem' }}>
+            <div style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', display: 'flex', gap: '0.3rem' }}>
               <button
                 className="btn btn-secondary"
-                style={{ padding: '0.4rem', border: 'none' }}
+                style={{ padding: '0.3rem', border: 'none' }}
                 onClick={() => { setCopySourceId(space.id); setCopyTargetId(''); }}
                 title={t('space.copyAllBtn')}
               >
@@ -213,14 +213,14 @@ export const StorySpaceManagement: React.FC = () => {
               </button>
               <button
                 className="btn btn-secondary"
-                style={{ padding: '0.4rem', border: 'none' }}
+                style={{ padding: '0.3rem', border: 'none' }}
                 onClick={() => openEdit(space)}
               >
                 <Pencil size={16} />
               </button>
               <button
                 className="btn btn-secondary"
-                style={{ padding: '0.4rem', border: 'none' }}
+                style={{ padding: '0.3rem', border: 'none' }}
                 onClick={() => handleDelete(space.id)}
               >
                 <Trash2 size={16} />
@@ -230,8 +230,8 @@ export const StorySpaceManagement: React.FC = () => {
         ))}
         {spaces?.length === 0 && !isCreateOpen && (
           <div className="glass-panel" style={{
-            padding: '3rem 2rem', textAlign: 'center',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem'
+            padding: '2rem', textAlign: 'center',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem'
           }}>
             <Layers size={48} style={{ color: 'var(--text-muted)', opacity: 0.5 }} />
             <p style={{ color: 'var(--text-muted)', margin: 0 }}>{t('space.empty')}</p>

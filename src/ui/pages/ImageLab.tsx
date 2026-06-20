@@ -199,8 +199,7 @@ export const ImageLab: React.FC = () => {
     { key: 'i2i', label: t('imageLab.tabI2I', '图生图'), icon: <ImagePlus size={16} />, color: '#3b82f6' },
   ];
 
-  const currentPrompt = activeTab === 't2i' ? t2iPrompt : i2iPrompt;
-  const isI2I = activeTab === 'i2i';
+
 
   return (
     <LabPageLayout
@@ -213,10 +212,78 @@ export const ImageLab: React.FC = () => {
       activeTab={activeTab}
       onTabChange={(key) => setActiveTab(key as ImageLabTab)}
     >
-      {/* ==================== 配置面板 ==================== */}
-      <div className="glass-panel slide-up form-section" style={{ flexDirection: 'column', gap: '1.5rem' }}>
-        {/* I2I: 参考图上传 */}
-        {isI2I && (
+    <>
+      {/* ==================== T2I Tab ==================== */}
+      {activeTab === 't2i' && (
+        <div className="glass-panel slide-up lab-tab-panel">
+          <div>
+            <label className="form-label">{t('imageLab.prompt', '画面描述 (Prompt)')}</label>
+            <textarea
+              className="form-input lab-textarea-compact"
+              rows={4}
+              placeholder={t('imageLab.promptPlaceholder', '描述您想要生成的画面细节，支持中英文...')}
+              value={t2iPrompt}
+              onChange={e => setT2iPrompt(e.target.value)}
+              maxLength={1500}
+            />
+            <div className="lab-char-count">{t2iPrompt.length} / 1500</div>
+          </div>
+
+          <div className="lab-model-config">
+            <div className="lab-model-config-item" style={{ minWidth: '180px' }}>
+              <label className="form-label">{t('imageLab.model', '生成模型')}</label>
+              <select className="form-select" value={model} onChange={e => handleModelChange(e.target.value as ImageModel)}>
+                <option value="image-01">image-01 (写实/通用)</option>
+                <option value="image-01-live">image-01-live (二次元/动漫)</option>
+              </select>
+            </div>
+            <div className="lab-model-config-item" style={{ minWidth: '140px' }}>
+              <label className="form-label">{t('imageLab.aspectRatio', '图片比例')}</label>
+              <select className="form-select" value={aspectRatio} onChange={e => setAspectRatio(e.target.value as ImageAspectRatio)}>
+                <option value="16:9">16:9 (横屏视频)</option>
+                <option value="9:16">9:16 (竖屏视频)</option>
+                <option value="1:1">1:1 (正方形)</option>
+                <option value="4:3">4:3 (标准)</option>
+                <option value="3:4">3:4</option>
+                <option value="3:2">3:2</option>
+                <option value="2:3">2:3</option>
+                {model === 'image-01' && <option value="21:9">21:9 (宽屏电影)</option>}
+              </select>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            <label className="lab-checkbox-label">
+              <input
+                type="checkbox"
+                checked={promptOptimizer}
+                onChange={e => setPromptOptimizer(e.target.checked)}
+                style={{ width: '16px', height: '16px', accentColor: 'var(--primary-color)' }}
+              />
+              {t('imageLab.promptOptimizer', '开启提示词智能优化')}
+            </label>
+          </div>
+
+          <ImageAdvancedSettings
+            value={advanced}
+            onChange={setAdvanced}
+            model={model}
+          />
+
+          <button
+            className="btn btn-primary btn-generate"
+            disabled={!t2iPrompt.trim() || isGenerating}
+            onClick={() => handleGenerate(t2iPrompt, false)}
+          >
+            {isGenerating ? <RefreshCw className="spin" size={20} /> : <Sparkles size={20} />}
+            {isGenerating ? t('imageLab.generating', '正在生成...') : t('imageLab.generateBtn', '立即生成图片')}
+          </button>
+        </div>
+      )}
+
+      {/* ==================== I2I Tab ==================== */}
+      {activeTab === 'i2i' && (
+        <div className="glass-panel slide-up lab-tab-panel">
           <ImageUploadField
             label={t('imageLab.referenceImage', '参考图片 (必填)')}
             value={referenceImage}
@@ -225,79 +292,72 @@ export const ImageLab: React.FC = () => {
             bgColor="rgba(59,130,246,0.05)"
             placeholder="上传参考图片，用于图生图"
           />
-        )}
 
-        {/* Prompt 输入 */}
-        <div>
-          <label className="form-label">{t('imageLab.prompt', '画面描述 (Prompt)')}</label>
-          <textarea
-            className="form-input"
-            rows={4}
-            placeholder={t('imageLab.promptPlaceholder', '描述您想要生成的画面细节，支持中英文...')}
-            value={currentPrompt}
-            onChange={e => isI2I ? setI2iPrompt(e.target.value) : setT2iPrompt(e.target.value)}
-            style={{ fontSize: '1rem', padding: '1rem' }}
-            maxLength={1500}
-          />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.25rem' }}>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{currentPrompt.length} / 1500</span>
-          </div>
-        </div>
-
-        {/* 模型 + 比例 + Prompt优化 */}
-        <div className="form-section">
-          <div className="form-section-item">
-            <label className="form-label">{t('imageLab.model', '生成模型')}</label>
-            <select className="form-select" value={model} onChange={e => handleModelChange(e.target.value as ImageModel)}>
-              <option value="image-01">image-01 (写实/通用)</option>
-              <option value="image-01-live">image-01-live (二次元/动漫)</option>
-            </select>
+          <div>
+            <label className="form-label">{t('imageLab.prompt', '画面描述 (Prompt)')}</label>
+            <textarea
+              className="form-input lab-textarea-compact"
+              rows={4}
+              placeholder={t('imageLab.promptPlaceholder', '描述您想要生成的画面细节，支持中英文...')}
+              value={i2iPrompt}
+              onChange={e => setI2iPrompt(e.target.value)}
+              maxLength={1500}
+            />
+            <div className="lab-char-count">{i2iPrompt.length} / 1500</div>
           </div>
 
-          <div className="form-section-item">
-            <label className="form-label">{t('imageLab.aspectRatio', '图片比例')}</label>
-            <select className="form-select" value={aspectRatio} onChange={e => setAspectRatio(e.target.value as ImageAspectRatio)}>
-              <option value="16:9">16:9 (横屏视频)</option>
-              <option value="9:16">9:16 (竖屏视频)</option>
-              <option value="1:1">1:1 (正方形)</option>
-              <option value="4:3">4:3 (标准)</option>
-              <option value="3:4">3:4</option>
-              <option value="3:2">3:2</option>
-              <option value="2:3">2:3</option>
-              {model === 'image-01' && <option value="21:9">21:9 (宽屏电影)</option>}
-            </select>
+          <div className="lab-model-config">
+            <div className="lab-model-config-item" style={{ minWidth: '180px' }}>
+              <label className="form-label">{t('imageLab.model', '生成模型')}</label>
+              <select className="form-select" value={model} onChange={e => handleModelChange(e.target.value as ImageModel)}>
+                <option value="image-01">image-01 (写实/通用)</option>
+                <option value="image-01-live">image-01-live (二次元/动漫)</option>
+              </select>
+            </div>
+            <div className="lab-model-config-item" style={{ minWidth: '140px' }}>
+              <label className="form-label">{t('imageLab.aspectRatio', '图片比例')}</label>
+              <select className="form-select" value={aspectRatio} onChange={e => setAspectRatio(e.target.value as ImageAspectRatio)}>
+                <option value="16:9">16:9 (横屏视频)</option>
+                <option value="9:16">9:16 (竖屏视频)</option>
+                <option value="1:1">1:1 (正方形)</option>
+                <option value="4:3">4:3 (标准)</option>
+                <option value="3:4">3:4</option>
+                <option value="3:2">3:2</option>
+                <option value="2:3">2:3</option>
+                {model === 'image-01' && <option value="21:9">21:9 (宽屏电影)</option>}
+              </select>
+            </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '0.5rem' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            <label className="lab-checkbox-label">
               <input
                 type="checkbox"
                 checked={promptOptimizer}
                 onChange={e => setPromptOptimizer(e.target.checked)}
                 style={{ width: '16px', height: '16px', accentColor: 'var(--primary-color)' }}
               />
-              <span style={{ fontSize: '0.9rem' }}>{t('imageLab.promptOptimizer', '开启提示词智能优化')}</span>
+              {t('imageLab.promptOptimizer', '开启提示词智能优化')}
             </label>
           </div>
+
+          <ImageAdvancedSettings
+            value={advanced}
+            onChange={setAdvanced}
+            model={model}
+          />
+
+          <button
+            className="btn btn-primary btn-generate"
+            style={{ background: '#3b82f6' }}
+            disabled={!i2iPrompt.trim() || !referenceImage || isGenerating}
+            onClick={() => handleGenerate(i2iPrompt, true)}
+          >
+            {isGenerating ? <RefreshCw className="spin" size={20} /> : <ImagePlus size={20} />}
+            {isGenerating ? t('imageLab.generating', '正在生成...') : t('imageLab.generateBtn', '立即生成图片')}
+          </button>
         </div>
-
-        {/* 高级设置 */}
-        <ImageAdvancedSettings
-          value={advanced}
-          onChange={setAdvanced}
-          model={model}
-        />
-
-        {/* 生成按钮 */}
-        <button
-          className="btn btn-primary btn-generate"
-          disabled={!currentPrompt.trim() || (isI2I && !referenceImage) || isGenerating}
-          onClick={() => handleGenerate(currentPrompt, isI2I)}
-        >
-          {isGenerating ? <RefreshCw className="spin" size={20} /> : <Sparkles size={20} />}
-          {isGenerating ? t('imageLab.generating', '正在生成...') : t('imageLab.generateBtn', '立即生成图片')}
-        </button>
-      </div>
+      )}
 
       {/* ==================== 生成结果画廊 ==================== */}
       {gallery.length > 0 && (
@@ -305,8 +365,7 @@ export const ImageLab: React.FC = () => {
           <div className="result-panel-header">
             <h3 className="result-panel-title">{t('imageLab.gallery', '生成结果')} ({gallery.length})</h3>
             <button
-              className="btn btn-secondary"
-              style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
+              className="btn btn-secondary btn-xs"
               onClick={() => setGallery([])}
             >清空</button>
           </div>
@@ -328,6 +387,7 @@ export const ImageLab: React.FC = () => {
           onCancel={() => { setShowSaveDialog(false); setSaveTargetImage(null); }}
         />
       )}
+    </>
     </LabPageLayout>
   );
 };
