@@ -323,6 +323,7 @@
     "baseUrlPlaceholder": "https://api.minimaxi.com/v1",
     "saveBtn": "保存配置",
     "savedMsg": "配置已保存",
+    "saveFailed": "保存配置失败",
     "mockBadge": "模拟模式",
     "liveBadge": "真实模式",
     "mockHint": "未配置 API Key，视频生成将使用模拟响应。",

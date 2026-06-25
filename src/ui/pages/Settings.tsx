@@ -34,8 +34,15 @@ export const Settings: React.FC = () => {
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    ApiConfigStore.save(config);
-    showToast('success', t('settings.savedMsg'));
+    console.log('[Settings] 保存配置，参数:', JSON.stringify(config, null, 2));
+    try {
+      ApiConfigStore.save(config);
+      console.log('[Settings] 配置保存成功');
+      showToast('success', t('settings.savedMsg'));
+    } catch (e) {
+      console.error('[Settings] 配置保存失败:', e);
+      showToast('error', getErrorMessage(e, t('settings.saveFailed', '保存配置失败')));
+    }
   };
 
   const handleRefreshModels = async () => {
@@ -182,7 +189,7 @@ export const Settings: React.FC = () => {
             <input
               id="settings-minimax-base-url"
               className="form-input"
-              type="url"
+              type="text"
               value={config.minimaxBaseUrl}
               onChange={e => handleChange('minimaxBaseUrl', e.target.value)}
               placeholder={t('settings.baseUrlPlaceholder')}
@@ -195,7 +202,7 @@ export const Settings: React.FC = () => {
             <input
               id="settings-minimax-anthropic-base-url"
               className="form-input"
-              type="url"
+              type="text"
               value={config.minimaxAnthropicBaseUrl}
               onChange={e => handleChange('minimaxAnthropicBaseUrl', e.target.value)}
               placeholder={t('settings.anthropicBaseUrlPlaceholder')}

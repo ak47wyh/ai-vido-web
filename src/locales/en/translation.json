@@ -305,6 +305,7 @@
     "baseUrlPlaceholder": "https://api.minimaxi.com/v1",
     "saveBtn": "Save Configuration",
     "savedMsg": "Configuration saved",
+    "saveFailed": "Failed to save configuration",
     "mockBadge": "Mock Mode",
     "liveBadge": "Live Mode",
     "mockHint": "No API Key configured. Video generation will use mock responses.",

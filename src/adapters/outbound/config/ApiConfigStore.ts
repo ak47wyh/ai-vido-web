@@ -37,7 +37,13 @@ export const ApiConfigStore = {
   },
 
   save(config: ApiConfig): void {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+      console.log('[ApiConfigStore] 配置已保存:', JSON.stringify(config, null, 2));
+    } catch (e) {
+      console.error('[ApiConfigStore] 保存配置失败:', e);
+      throw e;
+    }
   },
 
   get<K extends keyof ApiConfig>(key: K): ApiConfig[K] {
