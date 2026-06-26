@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ExternalLink, RefreshCw, Cpu, Trash2, FolderOpen, Palette, CheckCircle } from 'lucide-react';
+import { ExternalLink, RefreshCw, Cpu, Trash2, FolderOpen, Palette, CheckCircle, ChevronDown, Zap } from 'lucide-react';
 import { ApiConfigStore, type ApiConfig, type PlatformId } from '../../adapters/outbound/config/ApiConfigStore';
 import { useToast } from '../contexts/ToastContext';
 import { modelManagementService, fileManagementService } from '../../dependencies';
 import type { ModelInfo, FileItem } from '../../domain/ports/OutboundPorts';
 import { getErrorMessage } from '../utils/errorUtils';
-import { PLATFORM_METADATA, getCapabilitySummary } from '../../domain/services/platformCapabilities';
+import { PLATFORM_METADATA, getCapabilitySummary, type Capability } from '../../domain/services/platformCapabilities';
 
 // Settings Components
 import { SettingsSection } from '../components/settings/SettingsSection';
@@ -52,7 +52,47 @@ async function validateCozeToken(token: string, baseUrl: string): Promise<{ ok: 
   }
 }
 
-// ===== 平台配置卡片组件 =====
+// ===== 能力标签映射 =====
+const CAPABILITY_LABELS: Record<Capability, string> = {
+  video: '视频',
+  videoFl2v: '首尾帧',
+  videoS2v: '参考生',
+  image: '图片',
+  text: '文本',
+  voice: '语音',
+  music: '音乐',
+};
+
+/** 能力小标签 */
+const CapabilityChips: React.FC<{ platform: PlatformId; accentColor: string }> = ({ platform, accentColor }) => {
+  const caps = PLATFORM_METADATA[platform]?.capabilities ?? [];
+  if (caps.length === 0) return null;
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+      {caps.map(c => (
+        <span
+          key={c}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.25rem',
+            padding: '0.1rem 0.5rem',
+            borderRadius: '9999px',
+            fontSize: '0.68rem',
+            fontWeight: 600,
+            background: `${accentColor}1a`,
+            color: accentColor,
+            border: `1px solid ${accentColor}33`,
+          }}
+        >
+          {CAPABILITY_LABELS[c]}
+        </span>
+      ))}
+    </div>
+  );
+};
+
+// ===== 平台配置卡片组件（可折叠 + 能力标签） =====
 
 interface PlatformCardProps {
   id: PlatformId;
@@ -61,6 +101,8 @@ interface PlatformCardProps {
   description: string;
   isActive: boolean;
   isConfigured: boolean;
+  expanded: boolean;
+  onToggleExpand: () => void;
   children: React.ReactNode;
   onActivate: () => void;
   onValidate: () => Promise<void>;
@@ -71,11 +113,14 @@ interface PlatformCardProps {
 }
 
 const PlatformCard: React.FC<PlatformCardProps> = ({
+  id,
   icon,
   name,
   description,
   isActive,
   isConfigured,
+  expanded,
+  onToggleExpand,
   children,
   onActivate,
   onValidate,
@@ -88,84 +133,141 @@ const PlatformCard: React.FC<PlatformCardProps> = ({
     <div
       className="glass-panel"
       style={{
-        padding: '1.25rem',
-        marginBottom: '0.75rem',
-        border: isActive ? `2px solid ${accentColor}` : '2px solid transparent',
+        padding: 0,
+        border: isActive ? `1px solid ${accentColor}` : '1px solid var(--border-color)',
+        borderLeft: `3px solid ${isActive ? accentColor : 'transparent'}`,
         transition: 'all var(--transition-normal)',
+        boxShadow: isActive ? `0 4px 16px ${accentColor}22` : 'var(--shadow-md)',
+        overflow: 'hidden',
       }}
     >
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-        <span style={{ fontSize: '1.5rem' }}>{icon}</span>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>{name}</h3>
-            {isActive && (
-              <StatusBadge status="connected" label="已激活" />
-            )}
-            {!isConfigured && !isActive && (
-              <StatusBadge status="inactive" label="未配置" />
-            )}
+      {/* ── Header（可点击折叠） ── */}
+      <div
+        onClick={onToggleExpand}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem',
+          padding: '0.85rem 1rem',
+          cursor: 'pointer',
+          transition: 'background var(--transition-fast)',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-panel-hover)'; }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+      >
+        {/* 图标方块（带品牌色底） */}
+        <div
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 'var(--radius-md)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '1.3rem',
+            background: `${accentColor}1a`,
+            border: `1px solid ${accentColor}33`,
+            flexShrink: 0,
+          }}
+        >
+          {icon}
+        </div>
+
+        {/* 名称 + 状态 */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <h3 style={{ margin: 0, fontSize: '0.92rem', fontWeight: 600, color: 'var(--text-main)' }}>{name}</h3>
+            {isActive && <StatusBadge status="connected" label="已激活" />}
+            {!isConfigured && !isActive && <StatusBadge status="inactive" label="未配置" />}
           </div>
-          <p style={{ margin: '0.25rem 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+          <p style={{ margin: '0.15rem 0 0', fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.3 }}>
             {description}
           </p>
         </div>
-      </div>
 
-      {/* Fields */}
-      <div style={{ display: 'grid', gap: '0.75rem' }}>
-        {children}
-      </div>
-
-      {/* Actions */}
-      <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-        {/* 激活按钮 */}
-        <button
-          type="button"
-          className={`btn ${isActive ? 'btn-primary' : 'btn-secondary'}`}
-          onClick={onActivate}
-          disabled={!isConfigured && !isActive}
+        {/* 折叠箭头 */}
+        <ChevronDown
+          size={18}
           style={{
-            background: isActive ? accentColor : undefined,
-            borderColor: isActive ? accentColor : undefined,
+            color: 'var(--text-muted)',
+            transition: 'transform var(--transition-fast)',
+            transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+            flexShrink: 0,
+          }}
+        />
+      </div>
+
+      {/* ── 能力标签栏（始终显示） ── */}
+      <div style={{ padding: '0 1rem 0.6rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <CapabilityChips platform={id} accentColor={accentColor} />
+      </div>
+
+      {/* ── 展开内容：配置字段 + 操作 ── */}
+      {expanded && (
+        <div
+          style={{
+            padding: '0 1rem 1rem',
+            borderTop: '1px solid var(--border-color)',
+            animation: 'fadeIn 0.2s ease-out',
           }}
         >
-          {isActive ? (
-            <>
-              <CheckCircle size={14} />
-              已激活
-            </>
-          ) : (
-            '激活此平台'
-          )}
-        </button>
+          {/* 配置字段 */}
+          <div style={{ display: 'grid', gap: '0.65rem', paddingTop: '0.85rem' }}>
+            {children}
+          </div>
 
-        {/* 验证按钮 */}
-        {isConfigured && (
-          <ValidationButton
-            onValidate={onValidate}
-            label={validateLabel}
-          />
-        )}
+          {/* 操作按钮 */}
+          <div style={{ display: 'flex', gap: '0.6rem', marginTop: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* 激活按钮 */}
+            <button
+              type="button"
+              className={`btn ${isActive ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={onActivate}
+              disabled={!isConfigured && !isActive}
+              style={{
+                background: isActive ? accentColor : undefined,
+                borderColor: isActive ? accentColor : undefined,
+                fontSize: '0.82rem',
+                padding: '0.5rem 1rem',
+              }}
+            >
+              {isActive ? (
+                <>
+                  <CheckCircle size={14} />
+                  已激活
+                </>
+              ) : (
+                <>
+                  <Zap size={14} />
+                  激活此平台
+                </>
+              )}
+            </button>
 
-        {/* 外部链接 */}
-        {externalLink && (
-          <a
-            href={externalLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
-              fontSize: '0.85rem', color: 'var(--primary-color)',
-              textDecoration: 'none', marginLeft: 'auto'
-            }}
-          >
-            <ExternalLink size={14} />
-            {externalLinkLabel}
-          </a>
-        )}
-      </div>
+            {/* 验证按钮 */}
+            {isConfigured && (
+              <ValidationButton onValidate={onValidate} label={validateLabel} />
+            )}
+
+            {/* 外部链接 */}
+            {externalLink && (
+              <a
+                href={externalLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                  fontSize: '0.78rem', color: 'var(--primary-color)',
+                  textDecoration: 'none', marginLeft: 'auto',
+                }}
+              >
+                <ExternalLink size={13} />
+                {externalLinkLabel}
+              </a>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -174,6 +276,14 @@ export const Settings: React.FC = () => {
   const { t } = useTranslation();
   const { showToast } = useToast();
   const [config, setConfig] = useState<ApiConfig>(() => ApiConfigStore.load());
+
+  // 当前展开的平台卡片（默认展开激活平台）
+  const [expandedPlatform, setExpandedPlatform] = useState<PlatformId | null>(
+    () => ApiConfigStore.load().activePlatform,
+  );
+  const toggleExpand = useCallback((platform: PlatformId) => {
+    setExpandedPlatform(prev => (prev === platform ? null : platform));
+  }, []);
 
   // 监听配置变化，自动保存
   useEffect(() => {
@@ -189,9 +299,13 @@ export const Settings: React.FC = () => {
 
   const handleActivate = useCallback((platform: PlatformId) => {
     setConfig(prev => ({ ...prev, activePlatform: platform }));
+    setExpandedPlatform(platform); // 激活后自动展开该平台
     const meta = PLATFORM_METADATA[platform];
     showToast('success', `已切换到${meta?.name ?? platform}平台`);
   }, [showToast]);
+
+  // 当前激活平台元信息
+  const activeMeta = PLATFORM_METADATA[config.activePlatform];
 
   // Model management state
   const [textModels, setTextModels] = useState<ModelInfo[]>(() => {
@@ -286,7 +400,6 @@ export const Settings: React.FC = () => {
       <div className="page-header">
         <div>
           <h1>{t('settings.title')}</h1>
-          <p>{t('settings.subtitle')}</p>
         </div>
       </div>
 
@@ -313,300 +426,376 @@ export const Settings: React.FC = () => {
           平台配置
         </h2>
 
-        {/* MiniMax */}
-        <PlatformCard
-          id="minimax"
-          icon="🎬"
-          name="MiniMax"
-          description="视频、图片、文本生成"
-          isActive={config.activePlatform === 'minimax'}
-          isConfigured={isMiniMaxConfigured}
-          onActivate={() => handleActivate('minimax')}
-          onValidate={async () => showToast('info', 'MiniMax 无需验证')}
-          validateLabel="验证"
-          externalLink="https://platform.minimaxi.com/user-center/basic-information/interface-key"
-          externalLinkLabel="获取 Token"
-          accentColor="#6366f1"
-        >
-          <FormField
-            label={t('settings.apiKeyLabel')}
-            value={config.minimaxApiKey}
-            onChange={v => handleChange('minimaxApiKey', v)}
-            type="password"
-            placeholder={t('settings.apiKeyPlaceholder')}
-            autoComplete="off"
-            showKeyIcon
-          />
-          <FormField
-            label={t('settings.groupIdLabel')}
-            value={config.minimaxGroupId}
-            onChange={v => handleChange('minimaxGroupId', v)}
-            placeholder={t('settings.groupIdPlaceholder')}
-          />
-          <FormField
-            label={t('settings.baseUrlLabel')}
-            value={config.minimaxBaseUrl}
-            onChange={v => handleChange('minimaxBaseUrl', v)}
-            placeholder={t('settings.baseUrlPlaceholder')}
-          />
-          <FormField
-            label={t('settings.anthropicBaseUrlLabel')}
-            value={config.minimaxAnthropicBaseUrl}
-            onChange={v => handleChange('minimaxAnthropicBaseUrl', v)}
-            placeholder={t('settings.anthropicBaseUrlPlaceholder')}
-            hint={t('settings.anthropicBaseUrlHint')}
-          />
-        </PlatformCard>
+        {/* ── 当前激活平台 Hero Banner ── */}
+        {activeMeta && (
+          <div
+            className="glass-panel"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '1rem',
+              padding: '1rem 1.25rem',
+              marginBottom: '0.75rem',
+              border: `1px solid ${activeMeta.accentColor}44`,
+              borderLeft: `4px solid ${activeMeta.accentColor}`,
+              background: `linear-gradient(135deg, ${activeMeta.accentColor}10, var(--bg-panel))`,
+              boxShadow: `0 4px 20px ${activeMeta.accentColor}1a`,
+            }}
+          >
+            <div
+              style={{
+                width: 52,
+                height: 52,
+                borderRadius: 'var(--radius-lg)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '1.8rem',
+                background: `${activeMeta.accentColor}1f`,
+                border: `1px solid ${activeMeta.accentColor}40`,
+                flexShrink: 0,
+              }}
+            >
+              {activeMeta.icon}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.7rem', fontWeight: 700, color: activeMeta.accentColor, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  当前激活
+                </span>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                  {activeMeta.name} · {activeMeta.brand}
+                </h3>
+              </div>
+              <p style={{ margin: '0.2rem 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                {activeMeta.description} · 能力：{getCapabilitySummary(config.activePlatform)}
+              </p>
+            </div>
+            <a
+              href={activeMeta.externalLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                fontSize: '0.78rem', color: activeMeta.accentColor,
+                textDecoration: 'none', flexShrink: 0,
+              }}
+            >
+              <ExternalLink size={14} />
+              文档
+            </a>
+          </div>
+        )}
 
-        {/* Volcano Engine */}
-        <PlatformCard
-          id="volcengine"
-          icon="🌋"
-          name="火山引擎"
-          description="方舟大模型 · 视频/图片/文本/3D 生成"
-          isActive={config.activePlatform === 'volcengine'}
-          isConfigured={isVolcConfigured}
-          onActivate={() => handleActivate('volcengine')}
-          onValidate={handleVolcValidate}
-          validateLabel={t('settings.volcValidateBtn')}
-          externalLink="https://console.volcengine.com/ark"
-          externalLinkLabel="获取 Token"
-          accentColor="#f97316"
-        >
-          <FormField
-            label={t('settings.volcArkApiKeyLabel')}
-            value={config.volcArkApiKey}
-            onChange={v => handleChange('volcArkApiKey', v)}
-            type="password"
-            placeholder={t('settings.volcArkApiKeyPlaceholder')}
-            autoComplete="off"
-            showKeyIcon
-          />
-          <FormField
-            label={t('settings.volcArkBaseUrlLabel')}
-            value={config.volcArkBaseUrl}
-            onChange={v => handleChange('volcArkBaseUrl', v)}
-            placeholder={t('settings.volcArkBaseUrlPlaceholder')}
-          />
-        </PlatformCard>
+        {/* ── 平台卡片网格（2 列） ── */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))',
+          gap: '0.75rem',
+        }}>
+          {/* MiniMax */}
+          <PlatformCard
+            id="minimax"
+            icon="🎬"
+            name="MiniMax · 海螺"
+            description="全模态 · 视频/图片/文本/语音/音乐"
+            isActive={config.activePlatform === 'minimax'}
+            isConfigured={isMiniMaxConfigured}
+            expanded={expandedPlatform === 'minimax'}
+            onToggleExpand={() => toggleExpand('minimax')}
+            onActivate={() => handleActivate('minimax')}
+            onValidate={async () => showToast('info', 'MiniMax 无需验证')}
+            validateLabel="验证"
+            externalLink="https://platform.minimaxi.com/user-center/basic-information/interface-key"
+            externalLinkLabel="获取 Token"
+            accentColor="#6366f1"
+          >
+            <FormField
+              label={t('settings.apiKeyLabel')}
+              value={config.minimaxApiKey}
+              onChange={v => handleChange('minimaxApiKey', v)}
+              type="password"
+              placeholder={t('settings.apiKeyPlaceholder')}
+              autoComplete="off"
+              showKeyIcon
+            />
+            <FormField
+              label={t('settings.baseUrlLabel')}
+              value={config.minimaxBaseUrl}
+              onChange={v => handleChange('minimaxBaseUrl', v)}
+              placeholder={t('settings.baseUrlPlaceholder')}
+            />
+            <FormField
+              label={t('settings.anthropicBaseUrlLabel')}
+              value={config.minimaxAnthropicBaseUrl}
+              onChange={v => handleChange('minimaxAnthropicBaseUrl', v)}
+              placeholder={t('settings.anthropicBaseUrlPlaceholder')}
+              hint={t('settings.anthropicBaseUrlHint')}
+            />
+          </PlatformCard>
 
-        {/* Coze */}
-        <PlatformCard
-          id="coze"
-          icon="🤖"
-          name="Coze"
-          description="Bot 应用 · 对话管理"
-          isActive={config.activePlatform === 'coze'}
-          isConfigured={isCozeConfigured}
-          onActivate={() => handleActivate('coze')}
-          onValidate={handleCozeValidate}
-          validateLabel={t('settings.cozeValidateBtn')}
-          externalLink="https://www.coze.cn"
-          externalLinkLabel="获取 Token"
-          accentColor="#8b5cf6"
-        >
-          <FormField
-            label={t('settings.cozePatTokenLabel')}
-            value={config.cozePatToken}
-            onChange={v => handleChange('cozePatToken', v)}
-            type="password"
-            placeholder={t('settings.cozePatTokenPlaceholder')}
-            autoComplete="off"
-            showKeyIcon
-          />
-          <FormField
-            label={t('settings.cozeBaseUrlLabel')}
-            value={config.cozeBaseUrl}
-            onChange={v => handleChange('cozeBaseUrl', v)}
-            placeholder={t('settings.cozeBaseUrlPlaceholder')}
-          />
-          <FormField
-            label={t('settings.cozeSpaceIdLabel')}
-            value={config.cozeSpaceId}
-            onChange={v => handleChange('cozeSpaceId', v)}
-            placeholder={t('settings.cozeSpaceIdPlaceholder')}
-          />
-        </PlatformCard>
+          {/* Volcano Engine */}
+          <PlatformCard
+            id="volcengine"
+            icon="🌋"
+            name="火山引擎 · 即梦"
+            description="Seedance · 视频/图片/文本/3D"
+            isActive={config.activePlatform === 'volcengine'}
+            isConfigured={isVolcConfigured}
+            expanded={expandedPlatform === 'volcengine'}
+            onToggleExpand={() => toggleExpand('volcengine')}
+            onActivate={() => handleActivate('volcengine')}
+            onValidate={handleVolcValidate}
+            validateLabel={t('settings.volcValidateBtn')}
+            externalLink="https://console.volcengine.com/ark"
+            externalLinkLabel="获取 Token"
+            accentColor="#f97316"
+          >
+            <FormField
+              label={t('settings.volcArkApiKeyLabel')}
+              value={config.volcArkApiKey}
+              onChange={v => handleChange('volcArkApiKey', v)}
+              type="password"
+              placeholder={t('settings.volcArkApiKeyPlaceholder')}
+              autoComplete="off"
+              showKeyIcon
+            />
+            <FormField
+              label={t('settings.volcArkBaseUrlLabel')}
+              value={config.volcArkBaseUrl}
+              onChange={v => handleChange('volcArkBaseUrl', v)}
+              placeholder={t('settings.volcArkBaseUrlPlaceholder')}
+            />
+          </PlatformCard>
 
-        {/* ===== 新增 5 个视频大模型平台 ===== */}
+          {/* Coze */}
+          <PlatformCard
+            id="coze"
+            icon="🤖"
+            name="Coze"
+            description="Bot 应用 · 对话管理"
+            isActive={config.activePlatform === 'coze'}
+            isConfigured={isCozeConfigured}
+            expanded={expandedPlatform === 'coze'}
+            onToggleExpand={() => toggleExpand('coze')}
+            onActivate={() => handleActivate('coze')}
+            onValidate={handleCozeValidate}
+            validateLabel={t('settings.cozeValidateBtn')}
+            externalLink="https://www.coze.cn"
+            externalLinkLabel="获取 Token"
+            accentColor="#8b5cf6"
+          >
+            <FormField
+              label={t('settings.cozePatTokenLabel')}
+              value={config.cozePatToken}
+              onChange={v => handleChange('cozePatToken', v)}
+              type="password"
+              placeholder={t('settings.cozePatTokenPlaceholder')}
+              autoComplete="off"
+              showKeyIcon
+            />
+            <FormField
+              label={t('settings.cozeBaseUrlLabel')}
+              value={config.cozeBaseUrl}
+              onChange={v => handleChange('cozeBaseUrl', v)}
+              placeholder={t('settings.cozeBaseUrlPlaceholder')}
+            />
+            <FormField
+              label={t('settings.cozeSpaceIdLabel')}
+              value={config.cozeSpaceId}
+              onChange={v => handleChange('cozeSpaceId', v)}
+              placeholder={t('settings.cozeSpaceIdPlaceholder')}
+            />
+          </PlatformCard>
 
-        {/* 可灵 Kling */}
-        <PlatformCard
-          id="kling"
-          icon={PLATFORM_METADATA.kling.icon}
-          name={`${PLATFORM_METADATA.kling.name} ${PLATFORM_METADATA.kling.brand}`}
-          description={`${PLATFORM_METADATA.kling.description} · 能力：${getCapabilitySummary('kling')}`}
-          isActive={config.activePlatform === 'kling'}
-          isConfigured={isKlingConfigured}
-          onActivate={() => handleActivate('kling')}
-          onValidate={async () => showToast('info', '可灵：保存配置后在视频实验室发起任务即可验证')}
-          validateLabel="验证"
-          externalLink={PLATFORM_METADATA.kling.externalLink}
-          externalLinkLabel="获取 Key"
-          accentColor={PLATFORM_METADATA.kling.accentColor}
-        >
-          <FormField
-            label="AccessKey"
-            value={config.klingAccessKey}
-            onChange={v => handleChange('klingAccessKey', v)}
-            type="password"
-            placeholder="可灵 AccessKey"
-            autoComplete="off"
-            showKeyIcon
-          />
-          <FormField
-            label="SecretKey"
-            value={config.klingSecretKey}
-            onChange={v => handleChange('klingSecretKey', v)}
-            type="password"
-            placeholder="可灵 SecretKey"
-            autoComplete="off"
-            showKeyIcon
-          />
-          <FormField
-            label="Base URL"
-            value={config.klingBaseUrl}
-            onChange={v => handleChange('klingBaseUrl', v)}
-            placeholder="https://api.klingai.com"
-          />
-        </PlatformCard>
+          {/* 可灵 Kling */}
+          <PlatformCard
+            id="kling"
+            icon={PLATFORM_METADATA.kling.icon}
+            name={`${PLATFORM_METADATA.kling.name} · ${PLATFORM_METADATA.kling.brand}`}
+            description={PLATFORM_METADATA.kling.description}
+            isActive={config.activePlatform === 'kling'}
+            isConfigured={isKlingConfigured}
+            expanded={expandedPlatform === 'kling'}
+            onToggleExpand={() => toggleExpand('kling')}
+            onActivate={() => handleActivate('kling')}
+            onValidate={async () => showToast('info', '可灵：保存配置后在视频实验室发起任务即可验证')}
+            validateLabel="验证"
+            externalLink={PLATFORM_METADATA.kling.externalLink}
+            externalLinkLabel="获取 Key"
+            accentColor={PLATFORM_METADATA.kling.accentColor}
+          >
+            <FormField
+              label="AccessKey"
+              value={config.klingAccessKey}
+              onChange={v => handleChange('klingAccessKey', v)}
+              type="password"
+              placeholder="可灵 AccessKey"
+              autoComplete="off"
+              showKeyIcon
+            />
+            <FormField
+              label="SecretKey"
+              value={config.klingSecretKey}
+              onChange={v => handleChange('klingSecretKey', v)}
+              type="password"
+              placeholder="可灵 SecretKey"
+              autoComplete="off"
+              showKeyIcon
+            />
+            <FormField
+              label="Base URL"
+              value={config.klingBaseUrl}
+              onChange={v => handleChange('klingBaseUrl', v)}
+              placeholder="https://api.klingai.com"
+            />
+          </PlatformCard>
 
-        {/* 通义万相 Wan */}
-        <PlatformCard
-          id="wan"
-          icon={PLATFORM_METADATA.wan.icon}
-          name={`${PLATFORM_METADATA.wan.name} ${PLATFORM_METADATA.wan.brand}`}
-          description={`${PLATFORM_METADATA.wan.description} · 能力：${getCapabilitySummary('wan')}`}
-          isActive={config.activePlatform === 'wan'}
-          isConfigured={isWanConfigured}
-          onActivate={() => handleActivate('wan')}
-          onValidate={async () => showToast('info', '万相：保存配置后在视频实验室发起任务即可验证')}
-          validateLabel="验证"
-          externalLink={PLATFORM_METADATA.wan.externalLink}
-          externalLinkLabel="获取 Key"
-          accentColor={PLATFORM_METADATA.wan.accentColor}
-        >
-          <FormField
-            label="API-Key"
-            value={config.wanApiKey}
-            onChange={v => handleChange('wanApiKey', v)}
-            type="password"
-            placeholder="DashScope API-Key"
-            autoComplete="off"
-            showKeyIcon
-          />
-          <FormField
-            label="Base URL"
-            value={config.wanBaseUrl}
-            onChange={v => handleChange('wanBaseUrl', v)}
-            placeholder="https://dashscope.aliyuncs.com/api/v1"
-          />
-        </PlatformCard>
+          {/* 通义万相 Wan */}
+          <PlatformCard
+            id="wan"
+            icon={PLATFORM_METADATA.wan.icon}
+            name={`${PLATFORM_METADATA.wan.name} · ${PLATFORM_METADATA.wan.brand}`}
+            description={PLATFORM_METADATA.wan.description}
+            isActive={config.activePlatform === 'wan'}
+            isConfigured={isWanConfigured}
+            expanded={expandedPlatform === 'wan'}
+            onToggleExpand={() => toggleExpand('wan')}
+            onActivate={() => handleActivate('wan')}
+            onValidate={async () => showToast('info', '万相：保存配置后在视频实验室发起任务即可验证')}
+            validateLabel="验证"
+            externalLink={PLATFORM_METADATA.wan.externalLink}
+            externalLinkLabel="获取 Key"
+            accentColor={PLATFORM_METADATA.wan.accentColor}
+          >
+            <FormField
+              label="API-Key"
+              value={config.wanApiKey}
+              onChange={v => handleChange('wanApiKey', v)}
+              type="password"
+              placeholder="DashScope API-Key"
+              autoComplete="off"
+              showKeyIcon
+            />
+            <FormField
+              label="Base URL"
+              value={config.wanBaseUrl}
+              onChange={v => handleChange('wanBaseUrl', v)}
+              placeholder="https://dashscope.aliyuncs.com/api/v1"
+            />
+          </PlatformCard>
 
-        {/* 腾讯混元 Hunyuan */}
-        <PlatformCard
-          id="hunyuan"
-          icon={PLATFORM_METADATA.hunyuan.icon}
-          name={`${PLATFORM_METADATA.hunyuan.name} ${PLATFORM_METADATA.hunyuan.brand}`}
-          description={`${PLATFORM_METADATA.hunyuan.description} · 能力：${getCapabilitySummary('hunyuan')}`}
-          isActive={config.activePlatform === 'hunyuan'}
-          isConfigured={isHunyuanConfigured}
-          onActivate={() => handleActivate('hunyuan')}
-          onValidate={async () => showToast('info', '混元：保存配置后在视频实验室发起任务即可验证')}
-          validateLabel="验证"
-          externalLink={PLATFORM_METADATA.hunyuan.externalLink}
-          externalLinkLabel="获取 Key"
-          accentColor={PLATFORM_METADATA.hunyuan.accentColor}
-        >
-          <FormField
-            label="SecretId"
-            value={config.hunyuanSecretId}
-            onChange={v => handleChange('hunyuanSecretId', v)}
-            type="password"
-            placeholder="腾讯云 SecretId"
-            autoComplete="off"
-            showKeyIcon
-          />
-          <FormField
-            label="SecretKey"
-            value={config.hunyuanSecretKey}
-            onChange={v => handleChange('hunyuanSecretKey', v)}
-            type="password"
-            placeholder="腾讯云 SecretKey"
-            autoComplete="off"
-            showKeyIcon
-          />
-          <FormField
-            label="Base URL"
-            value={config.hunyuanBaseUrl}
-            onChange={v => handleChange('hunyuanBaseUrl', v)}
-            placeholder="https://hunyuan.tencentcloudapi.com"
-          />
-        </PlatformCard>
+          {/* 腾讯混元 Hunyuan */}
+          <PlatformCard
+            id="hunyuan"
+            icon={PLATFORM_METADATA.hunyuan.icon}
+            name={`${PLATFORM_METADATA.hunyuan.name} · ${PLATFORM_METADATA.hunyuan.brand}`}
+            description={PLATFORM_METADATA.hunyuan.description}
+            isActive={config.activePlatform === 'hunyuan'}
+            isConfigured={isHunyuanConfigured}
+            expanded={expandedPlatform === 'hunyuan'}
+            onToggleExpand={() => toggleExpand('hunyuan')}
+            onActivate={() => handleActivate('hunyuan')}
+            onValidate={async () => showToast('info', '混元：保存配置后在视频实验室发起任务即可验证')}
+            validateLabel="验证"
+            externalLink={PLATFORM_METADATA.hunyuan.externalLink}
+            externalLinkLabel="获取 Key"
+            accentColor={PLATFORM_METADATA.hunyuan.accentColor}
+          >
+            <FormField
+              label="SecretId"
+              value={config.hunyuanSecretId}
+              onChange={v => handleChange('hunyuanSecretId', v)}
+              type="password"
+              placeholder="腾讯云 SecretId"
+              autoComplete="off"
+              showKeyIcon
+            />
+            <FormField
+              label="SecretKey"
+              value={config.hunyuanSecretKey}
+              onChange={v => handleChange('hunyuanSecretKey', v)}
+              type="password"
+              placeholder="腾讯云 SecretKey"
+              autoComplete="off"
+              showKeyIcon
+            />
+            <FormField
+              label="Base URL"
+              value={config.hunyuanBaseUrl}
+              onChange={v => handleChange('hunyuanBaseUrl', v)}
+              placeholder="https://hunyuan.tencentcloudapi.com"
+            />
+          </PlatformCard>
 
-        {/* 智谱 Zhipu */}
-        <PlatformCard
-          id="zhipu"
-          icon={PLATFORM_METADATA.zhipu.icon}
-          name={`${PLATFORM_METADATA.zhipu.name} ${PLATFORM_METADATA.zhipu.brand}`}
-          description={`${PLATFORM_METADATA.zhipu.description} · 能力：${getCapabilitySummary('zhipu')}`}
-          isActive={config.activePlatform === 'zhipu'}
-          isConfigured={isZhipuConfigured}
-          onActivate={() => handleActivate('zhipu')}
-          onValidate={async () => showToast('info', '智谱：保存配置后在视频实验室发起任务即可验证')}
-          validateLabel="验证"
-          externalLink={PLATFORM_METADATA.zhipu.externalLink}
-          externalLinkLabel="获取 Key"
-          accentColor={PLATFORM_METADATA.zhipu.accentColor}
-        >
-          <FormField
-            label="API-Key"
-            value={config.zhipuApiKey}
-            onChange={v => handleChange('zhipuApiKey', v)}
-            type="password"
-            placeholder="智谱 API-Key"
-            autoComplete="off"
-            showKeyIcon
-          />
-          <FormField
-            label="Base URL"
-            value={config.zhipuBaseUrl}
-            onChange={v => handleChange('zhipuBaseUrl', v)}
-            placeholder="https://open.bigmodel.cn/api/paas/v4"
-          />
-        </PlatformCard>
+          {/* 智谱 Zhipu */}
+          <PlatformCard
+            id="zhipu"
+            icon={PLATFORM_METADATA.zhipu.icon}
+            name={`${PLATFORM_METADATA.zhipu.name} · ${PLATFORM_METADATA.zhipu.brand}`}
+            description={PLATFORM_METADATA.zhipu.description}
+            isActive={config.activePlatform === 'zhipu'}
+            isConfigured={isZhipuConfigured}
+            expanded={expandedPlatform === 'zhipu'}
+            onToggleExpand={() => toggleExpand('zhipu')}
+            onActivate={() => handleActivate('zhipu')}
+            onValidate={async () => showToast('info', '智谱：保存配置后在视频实验室发起任务即可验证')}
+            validateLabel="验证"
+            externalLink={PLATFORM_METADATA.zhipu.externalLink}
+            externalLinkLabel="获取 Key"
+            accentColor={PLATFORM_METADATA.zhipu.accentColor}
+          >
+            <FormField
+              label="API-Key"
+              value={config.zhipuApiKey}
+              onChange={v => handleChange('zhipuApiKey', v)}
+              type="password"
+              placeholder="智谱 API-Key"
+              autoComplete="off"
+              showKeyIcon
+            />
+            <FormField
+              label="Base URL"
+              value={config.zhipuBaseUrl}
+              onChange={v => handleChange('zhipuBaseUrl', v)}
+              placeholder="https://open.bigmodel.cn/api/paas/v4"
+            />
+          </PlatformCard>
 
-        {/* Vidu */}
-        <PlatformCard
-          id="vidu"
-          icon={PLATFORM_METADATA.vidu.icon}
-          name={`${PLATFORM_METADATA.vidu.name} ${PLATFORM_METADATA.vidu.brand}`}
-          description={`${PLATFORM_METADATA.vidu.description} · 能力：${getCapabilitySummary('vidu')}`}
-          isActive={config.activePlatform === 'vidu'}
-          isConfigured={isViduConfigured}
-          onActivate={() => handleActivate('vidu')}
-          onValidate={async () => showToast('info', 'Vidu：保存配置后在视频实验室发起任务即可验证')}
-          validateLabel="验证"
-          externalLink={PLATFORM_METADATA.vidu.externalLink}
-          externalLinkLabel="获取 Key"
-          accentColor={PLATFORM_METADATA.vidu.accentColor}
-        >
-          <FormField
-            label="API-Key"
-            value={config.viduApiKey}
-            onChange={v => handleChange('viduApiKey', v)}
-            type="password"
-            placeholder="Vidu API-Key"
-            autoComplete="off"
-            showKeyIcon
-          />
-          <FormField
-            label="Base URL"
-            value={config.viduBaseUrl}
-            onChange={v => handleChange('viduBaseUrl', v)}
-            placeholder="https://api.vidu.cn"
-          />
-        </PlatformCard>
+          {/* Vidu */}
+          <PlatformCard
+            id="vidu"
+            icon={PLATFORM_METADATA.vidu.icon}
+            name={`${PLATFORM_METADATA.vidu.name} · ${PLATFORM_METADATA.vidu.brand}`}
+            description={PLATFORM_METADATA.vidu.description}
+            isActive={config.activePlatform === 'vidu'}
+            isConfigured={isViduConfigured}
+            expanded={expandedPlatform === 'vidu'}
+            onToggleExpand={() => toggleExpand('vidu')}
+            onActivate={() => handleActivate('vidu')}
+            onValidate={async () => showToast('info', 'Vidu：保存配置后在视频实验室发起任务即可验证')}
+            validateLabel="验证"
+            externalLink={PLATFORM_METADATA.vidu.externalLink}
+            externalLinkLabel="获取 Key"
+            accentColor={PLATFORM_METADATA.vidu.accentColor}
+          >
+            <FormField
+              label="API-Key"
+              value={config.viduApiKey}
+              onChange={v => handleChange('viduApiKey', v)}
+              type="password"
+              placeholder="Vidu API-Key"
+              autoComplete="off"
+              showKeyIcon
+            />
+            <FormField
+              label="Base URL"
+              value={config.viduBaseUrl}
+              onChange={v => handleChange('viduBaseUrl', v)}
+              placeholder="https://api.vidu.cn"
+            />
+          </PlatformCard>
+        </div>
       </div>
 
       {/* ── Available Models Section ────────────────────── */}

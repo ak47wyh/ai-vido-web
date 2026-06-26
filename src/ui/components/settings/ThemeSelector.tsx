@@ -10,7 +10,7 @@ export const ThemeSelector: React.FC = () => {
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: '1rem',
+          gap: '0.5rem',
         }}
       >
         {THEMES.map(theme => (
@@ -22,8 +22,8 @@ export const ThemeSelector: React.FC = () => {
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              gap: '0.75rem',
-              padding: '1rem',
+              gap: '0.375rem',
+              padding: '0.5rem',
               borderRadius: 'var(--radius-lg)',
               background: currentTheme === theme.id
                 ? 'var(--bg-panel-hover)'
@@ -40,58 +40,58 @@ export const ThemeSelector: React.FC = () => {
             <div
               style={{
                 width: '100%',
-                height: '60px',
+                height: '30px',
                 borderRadius: 'var(--radius-md)',
                 background: theme.previewColors.background,
                 border: `1px solid ${theme.previewColors.primary}30`,
-                padding: '0.5rem',
+                padding: '0.25rem',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '0.25rem',
+                gap: '0.125rem',
               }}
             >
               {/* 标题栏 */}
               <div
                 style={{
-                  height: '8px',
+                  height: '4px',
                   width: '60%',
                   borderRadius: '4px',
                   background: theme.previewColors.surface,
                 }}
               />
               {/* 内容行 */}
-              <div style={{ display: 'flex', gap: '0.25rem', marginTop: '0.25rem' }}>
+              <div style={{ display: 'flex', gap: '0.125rem', marginTop: '0.125rem' }}>
                 <div
                   style={{
                     flex: 1,
-                    height: '20px',
+                    height: '10px',
                     borderRadius: '4px',
                     background: theme.previewColors.surface,
                   }}
                 />
                 <div
                   style={{
-                    width: '20px',
-                    height: '20px',
+                    width: '10px',
+                    height: '10px',
                     borderRadius: '4px',
                     background: theme.previewColors.primary,
                   }}
                 />
               </div>
               {/* 底部装饰 */}
-              <div style={{ display: 'flex', gap: '0.25rem', marginTop: 'auto' }}>
+              <div style={{ display: 'flex', gap: '0.125rem', marginTop: 'auto' }}>
                 <div
                   style={{
-                    width: '16px',
-                    height: '16px',
+                    width: '8px',
+                    height: '8px',
                     borderRadius: '50%',
                     background: theme.previewColors.primary,
                   }}
                 />
                 <div
                   style={{
-                    width: '16px',
-                    height: '16px',
+                    width: '8px',
+                    height: '8px',
                     borderRadius: '50%',
                     background: theme.previewColors.secondary,
                   }}
@@ -102,7 +102,7 @@ export const ThemeSelector: React.FC = () => {
             {/* 主题名称 */}
             <span
               style={{
-                fontSize: '0.875rem',
+                fontSize: '0.75rem',
                 fontWeight: 600,
                 color: currentTheme === theme.id
                   ? 'var(--primary-color)'
@@ -116,8 +116,8 @@ export const ThemeSelector: React.FC = () => {
             {currentTheme === theme.id && (
               <div
                 style={{
-                  width: '6px',
-                  height: '6px',
+                  width: '3px',
+                  height: '3px',
                   borderRadius: '50%',
                   background: 'var(--primary-color)',
                 }}
