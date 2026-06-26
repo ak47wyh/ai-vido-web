@@ -293,6 +293,28 @@
   background: var(--primary-color);
 }
 
+/* 禁用态：能力矩阵不支持该入口 */
+.nav-item-disabled {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  opacity: 0.4;
+  font-weight: 500;
+  font-size: 0.85rem;
+  border: 1px dashed var(--border-color, rgba(255, 255, 255, 0.08));
+  cursor: not-allowed;
+  user-select: none;
+  position: relative;
+}
+
+.nav-item-disabled:hover {
+  opacity: 0.6;
+  color: var(--text-muted);
+}
+
 .nav-icon {
   display: flex;
   align-items: center;

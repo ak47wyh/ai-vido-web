@@ -1,5 +1,5 @@
-import type { IContextCachePort, ChatCompletionResult, ChatStreamChunk } from '../../../domain/ports/VolcenginePorts';
-import type { CacheCreateParams, CacheResult, CacheChatParams } from '../../../domain/entities/models';
+import type { IContextCachePort, ChatCompletionResult, ChatStreamChunk } from '../../../../domain/ports/VolcenginePorts';
+import type { CacheCreateParams, CacheResult, CacheChatParams } from '../../../../domain/entities/models';
 import type { ApiConfig } from '../../config/ApiConfigStore';
 import { VolcengineHttpClient } from './VolcengineHttpClient';
 import { withRetry } from './VolcengineErrorUtils';
@@ -8,7 +8,7 @@ import type { VolcengineChatCompletionResponse } from './VolcengineTextAdapter';
 export class VolcengineCacheAdapter implements IContextCachePort {
   private http: VolcengineHttpClient;
 
-  constructor(private config: ApiConfig) {
+  constructor(config: ApiConfig) {
     this.http = new VolcengineHttpClient(config);
   }
 

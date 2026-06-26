@@ -1,16 +1,18 @@
-import type { IBotPort } from '../../../domain/ports/VolcenginePorts';
+import type { IBotPort } from '../../../../domain/ports/VolcenginePorts';
 import type {
   BotCreateParams, BotResult, PublishResult,
   BotListFilter, BotListResult, BotDetailResult,
-} from '../../../domain/entities/models';
+} from '../../../../domain/entities/models';
 import type { ApiConfig } from '../../config/ApiConfigStore';
 import { CozeHttpClient } from './CozeHttpClient';
 
 export class CozeBotAdapter implements IBotPort {
   private http: CozeHttpClient;
+  private readonly config: ApiConfig;
 
-  constructor(private config: ApiConfig) {
+  constructor(config: ApiConfig) {
     this.http = new CozeHttpClient(config);
+    this.config = config;
   }
 
   async createBot(params: BotCreateParams): Promise<BotResult> {

@@ -1,7 +1,7 @@
 import type {
   ITextGenerationPort, TextGenerationContext, TextGenerationResult,
-  TextStreamCallbacks, TextContentBlock,
-} from '../../../domain/ports/OutboundPorts';
+  TextStreamCallbacks, TextContentBlock, TextGenerationMessage,
+} from '../../../../domain/ports/OutboundPorts';
 import type { ApiConfig } from '../../config/ApiConfigStore';
 import { VolcengineHttpClient } from './VolcengineHttpClient';
 import { withRetry } from './VolcengineErrorUtils';
@@ -18,8 +18,10 @@ import { withRetry } from './VolcengineErrorUtils';
  */
 export class VolcengineTextAdapter implements ITextGenerationPort {
   private http: VolcengineHttpClient;
+  private config: ApiConfig;
 
-  constructor(private config: ApiConfig) {
+  constructor(config: ApiConfig) {
+    this.config = config;
     this.http = new VolcengineHttpClient(config);
   }
 
@@ -104,14 +106,14 @@ export class VolcengineTextAdapter implements ITextGenerationPort {
   private buildPayload(context: TextGenerationContext): Record<string, unknown> {
     return {
       model: context.model ?? 'doubao-pro-32k',
-      messages: context.messages.map(m => ({
+      messages: context.messages.map((m: TextGenerationMessage) => ({
         role: m.role,
-        content: typeof m.content === 'string' ? m.content : m.content.map(b => b.type === 'text' ? b.text : '').join(''),
+        content: typeof m.content === 'string' ? m.content : m.content.map((b: TextContentBlock) => b.type === 'text' ? b.text : '').join(''),
       })),
       ...(context.temperature !== undefined && { temperature: context.temperature }),
       ...(context.maxTokens && { max_tokens: context.maxTokens }),
       ...(context.topP !== undefined && { top_p: context.topP }),
-      ...(context.tools && { tools: context.tools.map(t => ({
+      ...(context.tools && { tools: context.tools.map((t: { name: string; description: string; parameters: Record<string, unknown> }) => ({
         type: 'function',
         function: { name: t.name, description: t.description, parameters: t.parameters },
       })) }),

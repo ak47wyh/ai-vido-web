@@ -1,9 +1,9 @@
-import type { IThreeDGenerationPort } from '../../../domain/ports/VolcenginePorts';
+import type { IThreeDGenerationPort } from '../../../../domain/ports/VolcenginePorts';
 import type {
   ThreeDSubmitParams, ThreeDTaskResult, ThreeDTaskStatus,
   ThreeDTaskListResult, ThreeDPlatformId, ThreeDTaskStatusType, ThreeDOutputFormat,
   TaskListFilter,
-} from '../../../domain/entities/models';
+} from '../../../../domain/entities/models';
 import type { ApiConfig } from '../../config/ApiConfigStore';
 import { VolcengineHttpClient } from './VolcengineHttpClient';
 import { withRetry } from './VolcengineErrorUtils';
@@ -19,7 +19,7 @@ export class Volcengine3DAdapter implements IThreeDGenerationPort {
   private http: VolcengineHttpClient;
   private provider: ThreeDPlatformId;
 
-  constructor(private config: ApiConfig, provider: ThreeDPlatformId) {
+  constructor(config: ApiConfig, provider: ThreeDPlatformId) {
     this.http = new VolcengineHttpClient(config);
     this.provider = provider;
   }
@@ -56,7 +56,7 @@ export class Volcengine3DAdapter implements IThreeDGenerationPort {
       page_size: filters?.pageSize ?? 20,
       ...(filters?.status && { 'filter.status': filters.status }),
     });
-    return { total: result.total, items: result.items ?? [] };
+    return { total: result.total, items: (result.items ?? []) as unknown as ThreeDTaskStatus[] };
   }
 
   async cancelTask(taskId: string): Promise<void> {
@@ -93,6 +93,7 @@ export class Volcengine3DAdapter implements IThreeDGenerationPort {
       case 'volcengine-seed3d': return 'seed3d-2.0';
       case 'volcengine-yingmou': return 'yingmou-hyper3d-gen2';
       case 'volcengine-shumei': return 'shumei-hitem3d-2.0';
+      default: throw new Error(`不支持的 3D 提供商: ${this.provider}`);
     }
   }
 }

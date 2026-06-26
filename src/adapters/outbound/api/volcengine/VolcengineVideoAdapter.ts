@@ -1,6 +1,6 @@
 import type {
   IVideoGeneratorPort, VideoPromptContext, VideoTaskResult, VideoDownloadResult, VideoAgentContext, VideoAgentTaskResult,
-} from '../../../domain/ports/OutboundPorts';
+} from '../../../../domain/ports/OutboundPorts';
 import type { ApiConfig } from '../../config/ApiConfigStore';
 import { VolcengineHttpClient } from './VolcengineHttpClient';
 import { withRetry } from './VolcengineErrorUtils';
@@ -20,7 +20,7 @@ import { withRetry } from './VolcengineErrorUtils';
 export class VolcengineVideoAdapter implements IVideoGeneratorPort {
   private http: VolcengineHttpClient;
 
-  constructor(private config: ApiConfig) {
+  constructor(config: ApiConfig) {
     this.http = new VolcengineHttpClient(config);
   }
 

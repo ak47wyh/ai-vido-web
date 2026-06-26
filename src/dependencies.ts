@@ -44,7 +44,7 @@ import { CinematographyService } from './domain/services/CinematographyService';
 import { BGMRecommendationService } from './domain/services/BGMRecommendationService';
 
 // ==================== 平台路由 ====================
-import { PlatformRouter, platformRouter } from './domain/services/PlatformRouter';
+import { platformRouter } from './domain/services/PlatformRouter';
 
 // ========================================
 // 仓储实例

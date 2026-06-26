@@ -6,7 +6,7 @@
 // ===== 平台标识类型 =====
 
 /** 平台标识 —— 通用 */
-export type PlatformId = 'minimax' | 'volcengine' | 'coze';
+export type PlatformId = 'minimax' | 'volcengine' | 'coze' | 'kling' | 'wan' | 'hunyuan' | 'zhipu' | 'vidu';
 
 /** 主题标识 */
 export type ThemeId = 'dark' | 'light' | 'blue';
@@ -28,6 +28,28 @@ export interface ApiConfig {
   cozePatToken: string;
   cozeBaseUrl: string;
   cozeSpaceId: string;
+
+  // --- 可灵 Kling（快手） ---
+  klingAccessKey: string;
+  klingSecretKey: string;
+  klingBaseUrl: string;
+
+  // --- 通义万相 Wan（阿里 DashScope） ---
+  wanApiKey: string;
+  wanBaseUrl: string;
+
+  // --- 腾讯混元 Hunyuan ---
+  hunyuanSecretId: string;
+  hunyuanSecretKey: string;
+  hunyuanBaseUrl: string;
+
+  // --- 智谱 CogVideoX / GLM ---
+  zhipuApiKey: string;
+  zhipuBaseUrl: string;
+
+  // --- Vidu（生数科技） ---
+  viduApiKey: string;
+  viduBaseUrl: string;
 
   // --- 激活的平台（唯一可用）---
   activePlatform: PlatformId;
@@ -55,6 +77,28 @@ const DEFAULT_CONFIG: ApiConfig = {
   cozePatToken: '',
   cozeBaseUrl: 'https://api.coze.cn',
   cozeSpaceId: '',
+
+  // 可灵 Kling 默认值
+  klingAccessKey: '',
+  klingSecretKey: '',
+  klingBaseUrl: import.meta.env.DEV ? '/kling' : 'https://api.klingai.com',
+
+  // 通义万相 Wan 默认值
+  wanApiKey: '',
+  wanBaseUrl: import.meta.env.DEV ? '/wan' : 'https://dashscope.aliyuncs.com/api/v1',
+
+  // 腾讯混元 Hunyuan 默认值
+  hunyuanSecretId: '',
+  hunyuanSecretKey: '',
+  hunyuanBaseUrl: import.meta.env.DEV ? '/hunyuan' : 'https://hunyuan.tencentcloudapi.com',
+
+  // 智谱 Zhipu 默认值
+  zhipuApiKey: '',
+  zhipuBaseUrl: import.meta.env.DEV ? '/zhipu' : 'https://open.bigmodel.cn/api/paas/v4',
+
+  // Vidu 默认值
+  viduApiKey: '',
+  viduBaseUrl: import.meta.env.DEV ? '/vidu' : 'https://api.vidu.cn',
 
   // 默认激活 MiniMax
   activePlatform: 'minimax',
@@ -105,6 +149,11 @@ export const ApiConfigStore = {
       case 'minimax': return !!config.minimaxApiKey.trim();
       case 'volcengine': return !!config.volcArkApiKey.trim();
       case 'coze': return !!config.cozePatToken.trim();
+      case 'kling': return !!config.klingAccessKey.trim() && !!config.klingSecretKey.trim();
+      case 'wan': return !!config.wanApiKey.trim();
+      case 'hunyuan': return !!config.hunyuanSecretId.trim() && !!config.hunyuanSecretKey.trim();
+      case 'zhipu': return !!config.zhipuApiKey.trim();
+      case 'vidu': return !!config.viduApiKey.trim();
       default: return false;
     }
   },

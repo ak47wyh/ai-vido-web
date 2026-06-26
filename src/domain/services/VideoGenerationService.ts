@@ -54,6 +54,11 @@ export class VideoGenerationService {
     return this.router.resolve('video', config);
   }
 
+  /** 公开访问器（供 UI 轮询 hook 使用） */
+  get videoGeneratorPort(): IVideoGeneratorPort {
+    return this.getVideoPort();
+  }
+
   async generateVideo(
     segmentId: string,
     storyId: string,

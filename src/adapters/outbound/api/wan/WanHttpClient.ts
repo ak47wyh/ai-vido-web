@@ -1,29 +1,36 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosError } from 'axios';
 import type { ApiConfig } from '../../config/ApiConfigStore';
-import { parseVolcengineError, VolcengineApiError } from './VolcengineErrorUtils';
+import { parseWanError, WanApiError } from './WanErrorUtils';
 
-export class VolcengineHttpClient {
+/**
+ * 通义万相（DashScope）HTTP 客户端。
+ *
+ * 鉴权：HTTP Header `Authorization: Bearer <API-Key>`
+ * Base URL：https://dashscope.aliyuncs.com/api/v1
+ *
+ * 异步任务接口需附加 Header `X-DashScope-Async: enable`。
+ * 兼容 OpenAI 格式：`/compatible-mode/v1/chat/completions`。
+ */
+export class WanHttpClient {
   private client: AxiosInstance;
-  private config: ApiConfig;
+  private readonly apiKey: string;
+  private readonly baseUrl: string;
 
   constructor(config: ApiConfig) {
-    this.config = config;
+    this.apiKey = config.wanApiKey;
+    this.baseUrl = config.wanBaseUrl.replace(/\/+$/, '');
     this.client = axios.create({
-      baseURL: config.volcArkBaseUrl,
-      timeout: 120_000, // 120s（视频/3D 生成可能耗时较长）
+      baseURL: this.baseUrl,
+      timeout: 120_000,
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.volcArkApiKey}`,
+        'Authorization': `Bearer ${this.apiKey}`,
       },
     });
 
-    // 响应拦截器：统一错误处理
     this.client.interceptors.response.use(
       (response) => response,
-      (error: AxiosError) => {
-        const parsed = parseVolcengineError(error);
-        return Promise.reject(parsed);
-      },
+      (error: AxiosError) => Promise.reject(parseWanError(error)),
     );
   }
 
@@ -37,29 +44,24 @@ export class VolcengineHttpClient {
     return response.data;
   }
 
-  async delete<T>(path: string): Promise<T> {
-    const response = await this.client.delete<T>(path);
-    return response.data;
-  }
-
   /**
-   * SSE 流式请求。
-   * 使用原生 fetch + ReadableStream，返回 AsyncIterable。
+   * SSE 流式请求（OpenAI 兼容 chat/completions）。
    */
   async *stream<T>(path: string, data: unknown): AsyncIterable<T> {
-    const url = `${this.config.volcArkBaseUrl}${path}`;
+    const url = `${this.baseUrl}${path}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.config.volcArkApiKey}`,
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Accept': 'text/event-stream',
       },
-      body: JSON.stringify({ ...data as object, stream: true }),
+      body: JSON.stringify({ ...(data as object), stream: true }),
     });
 
     if (!response.ok) {
       const errorBody = await response.text();
-      throw new VolcengineApiError(response.status, `HTTP ${response.status}`, errorBody);
+      throw new WanApiError(response.status, 'STREAM_ERROR', errorBody);
     }
 
     const reader = response.body?.getReader();
@@ -74,11 +76,11 @@ export class VolcengineHttpClient {
 
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
-      buffer = lines.pop() || ''; // 保留未完成的行
+      buffer = lines.pop() || '';
 
       for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const payload = line.slice(6).trim();
+        if (line.startsWith('data:')) {
+          const payload = line.slice(5).trim();
           if (payload === '[DONE]') return;
           try {
             yield JSON.parse(payload) as T;

@@ -8,8 +8,10 @@ import type { ApiConfig } from '../../config/ApiConfigStore';
  */
 export class CozeHttpClient {
   private client: AxiosInstance;
+  private readonly config: ApiConfig;
 
-  constructor(private config: ApiConfig) {
+  constructor(config: ApiConfig) {
+    this.config = config;
     this.client = axios.create({
       baseURL: config.cozeBaseUrl,
       timeout: 60_000,
@@ -106,11 +108,16 @@ export interface CozeStreamData {
 }
 
 export class CozeApiError extends Error {
+  readonly code: number;
+  readonly rawMessage: string;
+
   constructor(
-    public readonly code: number,
-    public readonly rawMessage: string,
+    code: number,
+    rawMessage: string,
   ) {
     super(`Coze API 错误 (${code}): ${rawMessage}`);
     this.name = 'CozeApiError';
+    this.code = code;
+    this.rawMessage = rawMessage;
   }
 }

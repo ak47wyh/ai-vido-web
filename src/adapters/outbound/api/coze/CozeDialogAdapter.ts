@@ -1,15 +1,15 @@
-import type { IDialogPort } from '../../../domain/ports/VolcenginePorts';
+import type { IDialogPort } from '../../../../domain/ports/VolcenginePorts';
 import type {
   DialogChatParams, DialogChatResult, DialogStreamChunk,
   ConversationResult, MessageListResult, DialogMessage,
-} from '../../../domain/entities/models';
+} from '../../../../domain/entities/models';
 import type { ApiConfig } from '../../config/ApiConfigStore';
-import { CozeHttpClient, type CozeStreamEvent } from './CozeHttpClient';
+import { CozeHttpClient } from './CozeHttpClient';
 
 export class CozeDialogAdapter implements IDialogPort {
   private http: CozeHttpClient;
 
-  constructor(private config: ApiConfig) {
+  constructor(config: ApiConfig) {
     this.http = new CozeHttpClient(config);
   }
 
@@ -31,7 +31,7 @@ export class CozeDialogAdapter implements IDialogPort {
       user_id: params.userId,
       stream: false,
       auto_save_history: params.autoSaveHistory ?? true,
-      additional_messages: params.messages.map(m => ({
+      additional_messages: params.messages.map((m: DialogMessage) => ({
         role: m.role,
         content: m.content,
         content_type: m.contentType ?? 'text',
@@ -52,7 +52,7 @@ export class CozeDialogAdapter implements IDialogPort {
       user_id: params.userId,
       stream: true,
       auto_save_history: params.autoSaveHistory ?? true,
-      additional_messages: params.messages.map(m => ({
+      additional_messages: params.messages.map((m: DialogMessage) => ({
         role: m.role,
         content: m.content,
         content_type: m.contentType ?? 'text',

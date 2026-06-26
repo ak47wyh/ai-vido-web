@@ -1,4 +1,4 @@
-import type { IImageGeneratorPort, ImageGenerationContext, ImageGenerationResult } from '../../../domain/ports/OutboundPorts';
+import type { IImageGeneratorPort, ImageGenerationContext, ImageGenerationResult } from '../../../../domain/ports/OutboundPorts';
 import type { ApiConfig } from '../../config/ApiConfigStore';
 import { VolcengineHttpClient } from './VolcengineHttpClient';
 import { withRetry } from './VolcengineErrorUtils';
@@ -14,7 +14,7 @@ import { withRetry } from './VolcengineErrorUtils';
 export class VolcengineImageAdapter implements IImageGeneratorPort {
   private http: VolcengineHttpClient;
 
-  constructor(private config: ApiConfig) {
+  constructor(config: ApiConfig) {
     this.http = new VolcengineHttpClient(config);
   }
 

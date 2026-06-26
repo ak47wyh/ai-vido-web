@@ -29,6 +29,48 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/coze/, ''),
         secure: true,
       },
+
+      // ===== 新增 5 个视频大模型平台代理 =====
+
+      // 可灵 Kling（快手）
+      '/kling': {
+        target: 'https://api.klingai.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/kling/, ''),
+        secure: true,
+      },
+
+      // 通义万相 Wan（阿里 DashScope）
+      '/wan': {
+        target: 'https://dashscope.aliyuncs.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/wan/, '/api/v1'),
+        secure: true,
+      },
+
+      // 腾讯混元 Hunyuan
+      '/hunyuan': {
+        target: 'https://hunyuan.tencentcloudapi.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/hunyuan/, ''),
+        secure: true,
+      },
+
+      // 智谱 Zhipu（bigmodel.cn）
+      '/zhipu': {
+        target: 'https://open.bigmodel.cn',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/zhipu/, '/api/paas/v4'),
+        secure: true,
+      },
+
+      // Vidu（生数科技）
+      '/vidu': {
+        target: 'https://api.vidu.cn',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/vidu/, ''),
+        secure: true,
+      },
     },
   },
 })

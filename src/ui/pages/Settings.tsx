@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Key, ExternalLink, RefreshCw, Cpu, Trash2, FolderOpen, Zap, CheckCircle, Palette } from 'lucide-react';
+import { ExternalLink, RefreshCw, Cpu, Trash2, FolderOpen, Palette, CheckCircle } from 'lucide-react';
 import { ApiConfigStore, type ApiConfig, type PlatformId } from '../../adapters/outbound/config/ApiConfigStore';
 import { useToast } from '../contexts/ToastContext';
 import { modelManagementService, fileManagementService } from '../../dependencies';
 import type { ModelInfo, FileItem } from '../../domain/ports/OutboundPorts';
 import { getErrorMessage } from '../utils/errorUtils';
+import { PLATFORM_METADATA, getCapabilitySummary } from '../../domain/services/platformCapabilities';
 
 // Settings Components
 import { SettingsSection } from '../components/settings/SettingsSection';
@@ -70,7 +71,6 @@ interface PlatformCardProps {
 }
 
 const PlatformCard: React.FC<PlatformCardProps> = ({
-  id,
   icon,
   name,
   description,
@@ -189,7 +189,8 @@ export const Settings: React.FC = () => {
 
   const handleActivate = useCallback((platform: PlatformId) => {
     setConfig(prev => ({ ...prev, activePlatform: platform }));
-    showToast('success', `已切换到${platform === 'minimax' ? 'MiniMax' : platform === 'volcengine' ? '火山引擎' : 'Coze'}平台`);
+    const meta = PLATFORM_METADATA[platform];
+    showToast('success', `已切换到${meta?.name ?? platform}平台`);
   }, [showToast]);
 
   // Model management state
@@ -270,6 +271,11 @@ export const Settings: React.FC = () => {
   const isMiniMaxConfigured = !!config.minimaxApiKey.trim();
   const isVolcConfigured = !!config.volcArkApiKey.trim();
   const isCozeConfigured = !!config.cozePatToken.trim();
+  const isKlingConfigured = !!config.klingAccessKey.trim() && !!config.klingSecretKey.trim();
+  const isWanConfigured = !!config.wanApiKey.trim();
+  const isHunyuanConfigured = !!config.hunyuanSecretId.trim() && !!config.hunyuanSecretKey.trim();
+  const isZhipuConfigured = !!config.zhipuApiKey.trim();
+  const isViduConfigured = !!config.viduApiKey.trim();
 
   const staticVideoModels = modelManagementService.getStaticVideoModels();
   const staticImageModels = modelManagementService.getStaticImageModels();
@@ -419,6 +425,186 @@ export const Settings: React.FC = () => {
             value={config.cozeSpaceId}
             onChange={v => handleChange('cozeSpaceId', v)}
             placeholder={t('settings.cozeSpaceIdPlaceholder')}
+          />
+        </PlatformCard>
+
+        {/* ===== 新增 5 个视频大模型平台 ===== */}
+
+        {/* 可灵 Kling */}
+        <PlatformCard
+          id="kling"
+          icon={PLATFORM_METADATA.kling.icon}
+          name={`${PLATFORM_METADATA.kling.name} ${PLATFORM_METADATA.kling.brand}`}
+          description={`${PLATFORM_METADATA.kling.description} · 能力：${getCapabilitySummary('kling')}`}
+          isActive={config.activePlatform === 'kling'}
+          isConfigured={isKlingConfigured}
+          onActivate={() => handleActivate('kling')}
+          onValidate={async () => showToast('info', '可灵：保存配置后在视频实验室发起任务即可验证')}
+          validateLabel="验证"
+          externalLink={PLATFORM_METADATA.kling.externalLink}
+          externalLinkLabel="获取 Key"
+          accentColor={PLATFORM_METADATA.kling.accentColor}
+        >
+          <FormField
+            label="AccessKey"
+            value={config.klingAccessKey}
+            onChange={v => handleChange('klingAccessKey', v)}
+            type="password"
+            placeholder="可灵 AccessKey"
+            autoComplete="off"
+            showKeyIcon
+          />
+          <FormField
+            label="SecretKey"
+            value={config.klingSecretKey}
+            onChange={v => handleChange('klingSecretKey', v)}
+            type="password"
+            placeholder="可灵 SecretKey"
+            autoComplete="off"
+            showKeyIcon
+          />
+          <FormField
+            label="Base URL"
+            value={config.klingBaseUrl}
+            onChange={v => handleChange('klingBaseUrl', v)}
+            placeholder="https://api.klingai.com"
+          />
+        </PlatformCard>
+
+        {/* 通义万相 Wan */}
+        <PlatformCard
+          id="wan"
+          icon={PLATFORM_METADATA.wan.icon}
+          name={`${PLATFORM_METADATA.wan.name} ${PLATFORM_METADATA.wan.brand}`}
+          description={`${PLATFORM_METADATA.wan.description} · 能力：${getCapabilitySummary('wan')}`}
+          isActive={config.activePlatform === 'wan'}
+          isConfigured={isWanConfigured}
+          onActivate={() => handleActivate('wan')}
+          onValidate={async () => showToast('info', '万相：保存配置后在视频实验室发起任务即可验证')}
+          validateLabel="验证"
+          externalLink={PLATFORM_METADATA.wan.externalLink}
+          externalLinkLabel="获取 Key"
+          accentColor={PLATFORM_METADATA.wan.accentColor}
+        >
+          <FormField
+            label="API-Key"
+            value={config.wanApiKey}
+            onChange={v => handleChange('wanApiKey', v)}
+            type="password"
+            placeholder="DashScope API-Key"
+            autoComplete="off"
+            showKeyIcon
+          />
+          <FormField
+            label="Base URL"
+            value={config.wanBaseUrl}
+            onChange={v => handleChange('wanBaseUrl', v)}
+            placeholder="https://dashscope.aliyuncs.com/api/v1"
+          />
+        </PlatformCard>
+
+        {/* 腾讯混元 Hunyuan */}
+        <PlatformCard
+          id="hunyuan"
+          icon={PLATFORM_METADATA.hunyuan.icon}
+          name={`${PLATFORM_METADATA.hunyuan.name} ${PLATFORM_METADATA.hunyuan.brand}`}
+          description={`${PLATFORM_METADATA.hunyuan.description} · 能力：${getCapabilitySummary('hunyuan')}`}
+          isActive={config.activePlatform === 'hunyuan'}
+          isConfigured={isHunyuanConfigured}
+          onActivate={() => handleActivate('hunyuan')}
+          onValidate={async () => showToast('info', '混元：保存配置后在视频实验室发起任务即可验证')}
+          validateLabel="验证"
+          externalLink={PLATFORM_METADATA.hunyuan.externalLink}
+          externalLinkLabel="获取 Key"
+          accentColor={PLATFORM_METADATA.hunyuan.accentColor}
+        >
+          <FormField
+            label="SecretId"
+            value={config.hunyuanSecretId}
+            onChange={v => handleChange('hunyuanSecretId', v)}
+            type="password"
+            placeholder="腾讯云 SecretId"
+            autoComplete="off"
+            showKeyIcon
+          />
+          <FormField
+            label="SecretKey"
+            value={config.hunyuanSecretKey}
+            onChange={v => handleChange('hunyuanSecretKey', v)}
+            type="password"
+            placeholder="腾讯云 SecretKey"
+            autoComplete="off"
+            showKeyIcon
+          />
+          <FormField
+            label="Base URL"
+            value={config.hunyuanBaseUrl}
+            onChange={v => handleChange('hunyuanBaseUrl', v)}
+            placeholder="https://hunyuan.tencentcloudapi.com"
+          />
+        </PlatformCard>
+
+        {/* 智谱 Zhipu */}
+        <PlatformCard
+          id="zhipu"
+          icon={PLATFORM_METADATA.zhipu.icon}
+          name={`${PLATFORM_METADATA.zhipu.name} ${PLATFORM_METADATA.zhipu.brand}`}
+          description={`${PLATFORM_METADATA.zhipu.description} · 能力：${getCapabilitySummary('zhipu')}`}
+          isActive={config.activePlatform === 'zhipu'}
+          isConfigured={isZhipuConfigured}
+          onActivate={() => handleActivate('zhipu')}
+          onValidate={async () => showToast('info', '智谱：保存配置后在视频实验室发起任务即可验证')}
+          validateLabel="验证"
+          externalLink={PLATFORM_METADATA.zhipu.externalLink}
+          externalLinkLabel="获取 Key"
+          accentColor={PLATFORM_METADATA.zhipu.accentColor}
+        >
+          <FormField
+            label="API-Key"
+            value={config.zhipuApiKey}
+            onChange={v => handleChange('zhipuApiKey', v)}
+            type="password"
+            placeholder="智谱 API-Key"
+            autoComplete="off"
+            showKeyIcon
+          />
+          <FormField
+            label="Base URL"
+            value={config.zhipuBaseUrl}
+            onChange={v => handleChange('zhipuBaseUrl', v)}
+            placeholder="https://open.bigmodel.cn/api/paas/v4"
+          />
+        </PlatformCard>
+
+        {/* Vidu */}
+        <PlatformCard
+          id="vidu"
+          icon={PLATFORM_METADATA.vidu.icon}
+          name={`${PLATFORM_METADATA.vidu.name} ${PLATFORM_METADATA.vidu.brand}`}
+          description={`${PLATFORM_METADATA.vidu.description} · 能力：${getCapabilitySummary('vidu')}`}
+          isActive={config.activePlatform === 'vidu'}
+          isConfigured={isViduConfigured}
+          onActivate={() => handleActivate('vidu')}
+          onValidate={async () => showToast('info', 'Vidu：保存配置后在视频实验室发起任务即可验证')}
+          validateLabel="验证"
+          externalLink={PLATFORM_METADATA.vidu.externalLink}
+          externalLinkLabel="获取 Key"
+          accentColor={PLATFORM_METADATA.vidu.accentColor}
+        >
+          <FormField
+            label="API-Key"
+            value={config.viduApiKey}
+            onChange={v => handleChange('viduApiKey', v)}
+            type="password"
+            placeholder="Vidu API-Key"
+            autoComplete="off"
+            showKeyIcon
+          />
+          <FormField
+            label="Base URL"
+            value={config.viduBaseUrl}
+            onChange={v => handleChange('viduBaseUrl', v)}
+            placeholder="https://api.vidu.cn"
           />
         </PlatformCard>
       </div>

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
 
 export type ThemeId = 'dark' | 'light' | 'blue';

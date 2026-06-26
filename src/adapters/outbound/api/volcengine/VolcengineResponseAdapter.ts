@@ -1,7 +1,7 @@
-import type { IModelResponsePort } from '../../../domain/ports/VolcenginePorts';
+import type { IModelResponsePort } from '../../../../domain/ports/VolcenginePorts';
 import type {
   ResponseCreateParams, ResponseResult, ResponseStreamChunk, ResponseContextResult,
-} from '../../../domain/entities/models';
+} from '../../../../domain/entities/models';
 import type { ApiConfig } from '../../config/ApiConfigStore';
 import { VolcengineHttpClient } from './VolcengineHttpClient';
 import { withRetry } from './VolcengineErrorUtils';
@@ -9,7 +9,7 @@ import { withRetry } from './VolcengineErrorUtils';
 export class VolcengineResponseAdapter implements IModelResponsePort {
   private http: VolcengineHttpClient;
 
-  constructor(private config: ApiConfig) {
+  constructor(config: ApiConfig) {
     this.http = new VolcengineHttpClient(config);
   }
 
