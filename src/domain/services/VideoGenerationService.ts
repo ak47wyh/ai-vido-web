@@ -11,6 +11,8 @@ import type {
   VideoModel,
   VideoResolution
 } from '../ports/OutboundPorts';
+import type { PlatformRouter } from './PlatformRouter';
+import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
 import { getErrorMessage } from '../../ui/utils/errorUtils';
 
 export interface VideoGenerationOptions {
@@ -28,7 +30,7 @@ export class VideoGenerationService {
   segmentRepo: IStorySegmentRepository;
   characterRepo: ICharacterRepository;
   backgroundRepo: IBackgroundRepository;
-  videoGeneratorPort: IVideoGeneratorPort;
+  private router: PlatformRouter;
 
   private activePollers = new Map<string, ReturnType<typeof setInterval>>();
 
@@ -37,13 +39,19 @@ export class VideoGenerationService {
     segmentRepo: IStorySegmentRepository,
     characterRepo: ICharacterRepository,
     backgroundRepo: IBackgroundRepository,
-    videoGeneratorPort: IVideoGeneratorPort
+    router: PlatformRouter
   ) {
     this.videoTaskRepo = videoTaskRepo;
     this.segmentRepo = segmentRepo;
     this.characterRepo = characterRepo;
     this.backgroundRepo = backgroundRepo;
-    this.videoGeneratorPort = videoGeneratorPort;
+    this.router = router;
+  }
+
+  /** 获取当前配置对应的视频生成适配器 */
+  private getVideoPort(): IVideoGeneratorPort {
+    const config = ApiConfigStore.load();
+    return this.router.resolve('video', config);
   }
 
   async generateVideo(
@@ -175,7 +183,8 @@ export class VideoGenerationService {
   private async processTask(task: VideoTask, context: VideoPromptContext) {
     try {
       await this.videoTaskRepo.updateStatus(task.id, 'PROCESSING');
-      const externalTaskId = await this.videoGeneratorPort.submitVideoTask(context);
+      const videoPort = this.getVideoPort();
+      const externalTaskId = await videoPort.submitVideoTask(context);
 
       task.externalTaskId = externalTaskId;
       await this.videoTaskRepo.save(task);
@@ -199,7 +208,8 @@ export class VideoGenerationService {
     const interval = setInterval(async () => {
       try {
         retries++;
-        const result = await this.videoGeneratorPort.queryTaskStatus(externalTaskId);
+        const videoPort = this.getVideoPort();
+        const result = await videoPort.queryTaskStatus(externalTaskId);
 
         if (result.status === 'SUCCESS' || result.status === 'FAILED') {
           clearInterval(interval);

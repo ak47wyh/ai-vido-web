@@ -1,5 +1,7 @@
 import type { IImageGeneratorPort, ImageGenerationContext, ImageAspectRatio } from '../ports/OutboundPorts';
 import type { ICharacterRepository, IBackgroundRepository } from '../ports/OutboundPorts';
+import type { PlatformRouter } from './PlatformRouter';
+import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
 
 /**
  * 领域服务：图片生成
@@ -7,18 +9,24 @@ import type { ICharacterRepository, IBackgroundRepository } from '../ports/Outbo
  * - 为背景生成环境图：基于 environmentPrompt
  */
 export class ImageGenerationService {
-  imageGeneratorPort: IImageGeneratorPort;
   characterRepo: ICharacterRepository;
   backgroundRepo: IBackgroundRepository;
+  private router: PlatformRouter;
 
   constructor(
-    imageGeneratorPort: IImageGeneratorPort,
     characterRepo: ICharacterRepository,
-    backgroundRepo: IBackgroundRepository
+    backgroundRepo: IBackgroundRepository,
+    router: PlatformRouter
   ) {
-    this.imageGeneratorPort = imageGeneratorPort;
     this.characterRepo = characterRepo;
     this.backgroundRepo = backgroundRepo;
+    this.router = router;
+  }
+
+  /** 获取当前配置对应的图片生成适配器 */
+  private getImagePort(): IImageGeneratorPort {
+    const config = ApiConfigStore.load();
+    return this.router.resolve('image', config);
   }
 
   async generateCharacterImage(characterId: string, aspectRatio: string = '1:1'): Promise<string> {
@@ -40,7 +48,8 @@ export class ImageGenerationService {
         : undefined,
     };
 
-    const result = await this.imageGeneratorPort.generateImage(context);
+    const imagePort = this.getImagePort();
+    const result = await imagePort.generateImage(context);
 
     character.referenceImageUrl = result.imageDataUri || result.imageUrls?.[0] || '';
     await this.characterRepo.save(character);
@@ -61,7 +70,8 @@ export class ImageGenerationService {
       aspectRatio: aspectRatio as ImageAspectRatio,
     };
 
-    const result = await this.imageGeneratorPort.generateImage(context);
+    const imagePort = this.getImagePort();
+    const result = await imagePort.generateImage(context);
 
     background.referenceImageUrl = result.imageDataUri || result.imageUrls?.[0] || '';
     await this.backgroundRepo.save(background);

@@ -16,6 +16,7 @@ import { MusicLab } from './ui/pages/MusicLab';
 import { SpaceProvider } from './ui/contexts/SpaceContext';
 import { ToastProvider } from './ui/contexts/ToastContext';
 import { ConfirmProvider } from './ui/contexts/ConfirmContext';
+import { ThemeProvider } from './ui/contexts/ThemeContext';
 import { ErrorBoundary } from './ui/components/ErrorBoundary';
 import { videoGenerationService } from './dependencies';
 
@@ -28,11 +29,12 @@ function App() {
 
   return (
     <ErrorBoundary>
-      <BrowserRouter basename="/ai-vido-web">
-        <SpaceProvider>
-          <ToastProvider>
-            <ConfirmProvider>
-              <Routes>
+      <ThemeProvider>
+        <BrowserRouter basename="/ai-vido-web">
+          <SpaceProvider>
+            <ToastProvider>
+              <ConfirmProvider>
+                <Routes>
                 <Route path="/" element={<MainLayout />}>
                   <Route index element={<Dashboard />} />
                   <Route path="characters" element={<CharacterManagement />} />
@@ -52,6 +54,7 @@ function App() {
           </ToastProvider>
         </SpaceProvider>
       </BrowserRouter>
+      </ThemeProvider>
     </ErrorBoundary>
   );
 }

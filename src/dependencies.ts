@@ -43,6 +43,9 @@ import { AutoEditService } from './domain/services/AutoEditService';
 import { CinematographyService } from './domain/services/CinematographyService';
 import { BGMRecommendationService } from './domain/services/BGMRecommendationService';
 
+// ==================== 平台路由 ====================
+import { PlatformRouter, platformRouter } from './domain/services/PlatformRouter';
+
 // ========================================
 // 仓储实例
 // ========================================
@@ -84,18 +87,18 @@ export const storyService = new StoryService(
 );
 
 export const imageGenerationService = new ImageGenerationService(
-  imageAdapter, characterRepo, backgroundRepo
+  characterRepo, backgroundRepo, platformRouter
 );
 
-export const textGenerationService = new TextGenerationService(textAdapter);
+export const textGenerationService = new TextGenerationService(platformRouter);
 
-export const textLabService = new TextLabService(textAdapter);
+export const textLabService = new TextLabService(platformRouter);
 
 // ========================================
 // 视音频域服务（视频生成/配音/BGM/后期）
 // ========================================
 export const videoGenerationService = new VideoGenerationService(
-  videoTaskRepo, segmentRepo, characterRepo, backgroundRepo, videoAdapter
+  videoTaskRepo, segmentRepo, characterRepo, backgroundRepo, platformRouter
 );
 
 export const videoLabService = new VideoLabService(videoAdapter);
@@ -134,7 +137,8 @@ export const modelManagementService = new ModelManagementService(modelAdapter);
 export const fileManagementService = new FileManagementService(fileAdapter);
 
 // ========================================
-// ==================== AI 增强服务（Agent / 自动剪辑 / 摄影指导 / BGM推荐） ====================
+// AI 增强服务
+// ========================================
 export const agentService = new AgentService(textAdapter);
 export const autoEditService = new AutoEditService(ffmpegAdapter);
 export const cinematographyService = new CinematographyService(textAdapter);

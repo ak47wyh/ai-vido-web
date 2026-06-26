@@ -176,3 +176,227 @@ export interface SavedPrompt {
   sourceType: SavedPromptSource;
   createdAt: number;
 }
+
+// ==========================================
+// 3D 生成相关
+// ==========================================
+
+export type ThreeDPlatformId = 'volcengine-seed3d' | 'volcengine-yingmou' | 'volcengine-shumei';
+export type ThreeDTaskStatusType = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+export type ThreeDOutputFormat = 'glb' | 'gltf' | 'fbx' | 'obj';
+
+export interface ThreeDSubmitParams {
+  /** 文本提示（影眸支持英文文本→3D） */
+  prompt?: string;
+  /** 输入图片 URL 列表（单图或多图） */
+  imageUrls?: string[];
+  /** 模型端点 ID（由 PlatformRouter 根据 platform3d 配置注入） */
+  modelEndpointId?: string;
+  /** Seed3D 特有：是否启用两步生成 */
+  coarseToFine?: boolean;
+  /** Seed3D 特有：是否输出完整 PBR 贴图 */
+  pbrOutput?: boolean;
+}
+
+export interface ThreeDTaskResult {
+  taskId: string;
+  status: ThreeDTaskStatusType;
+  platform: ThreeDPlatformId;
+}
+
+export interface ThreeDTaskStatus {
+  taskId: string;
+  status: ThreeDTaskStatusType;
+  /** 生成成功时的模型文件 URL */
+  modelUrl?: string;
+  /** 生成成功时的预览图 URL */
+  previewImageUrl?: string;
+  /** 输出格式 */
+  format?: ThreeDOutputFormat;
+  /** 错误信息 */
+  error?: { code: string; message: string };
+  createdAt?: number;
+  completedAt?: number;
+}
+
+export interface ThreeDTaskListResult {
+  total: number;
+  items: ThreeDTaskStatus[];
+}
+
+// ==========================================
+// 上下文缓存相关
+// ==========================================
+
+export interface CacheCreateParams {
+  /** 模型端点 ID */
+  model: string;
+  /** 待缓存的消息数组 */
+  messages: CacheMessage[];
+  /** 缓存有效期（秒），最大 604800（7 天） */
+  ttl?: number;
+}
+
+export interface CacheMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+export interface CacheResult {
+  cacheId: string;
+  model: string;
+  createdAt: number;
+  expiresAt: number;
+}
+
+export interface CacheChatParams {
+  model: string;
+  cacheId: string;
+  messages: CacheMessage[];
+  stream?: boolean;
+}
+
+// ==========================================
+// Bot 应用相关
+// ==========================================
+
+export interface BotCreateParams {
+  name: string;
+  description?: string;
+  systemPrompt?: string;
+  pluginIds?: string[];
+}
+
+export interface BotResult {
+  botId: string;
+  name: string;
+}
+
+export interface PublishResult {
+  botId: string;
+  version: string;
+}
+
+export interface BotListFilter {
+  pageIndex?: number;
+  pageSize?: number;
+}
+
+export interface BotListResult {
+  bots: BotDetailResult[];
+  total: number;
+}
+
+export interface BotDetailResult {
+  botId: string;
+  name: string;
+  description?: string;
+  publishedVersion?: string;
+}
+
+// ==========================================
+// 对话相关
+// ==========================================
+
+export interface DialogChatParams {
+  botId: string;
+  userId: string;
+  conversationId?: string;
+  messages: DialogMessage[];
+  autoSaveHistory?: boolean;
+}
+
+export interface DialogMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  contentType?: 'text' | 'object_string';
+}
+
+export interface DialogChatResult {
+  chatId: string;
+  conversationId: string;
+  status: 'created' | 'in_progress' | 'completed' | 'failed';
+  answer?: string;
+  usage?: { tokenCount: number };
+}
+
+export interface DialogStreamChunk {
+  event: 'CONVERSATION_MESSAGE_DELTA' | 'CONVERSATION_CHAT_COMPLETED' | string;
+  data: string;
+  chatId?: string;
+  conversationId?: string;
+}
+
+export interface ConversationResult {
+  conversationId: string;
+}
+
+export interface MessageListResult {
+  messages: DialogMessage[];
+}
+
+// ==========================================
+// 模型响应相关
+// ==========================================
+
+export interface ResponseCreateParams {
+  model: string;
+  input: string | ResponseInputMessage[];
+  stream?: boolean;
+  previousResponseId?: string;
+  caching?: { type: 'enabled' };
+  store?: boolean;
+  thinking?: { type: 'enabled'; budgetTokens: number };
+  temperature?: number;
+  expireAt?: number;
+}
+
+export interface ResponseInputMessage {
+  role: 'user' | 'system' | 'developer';
+  content: string;
+}
+
+export interface ResponseResult {
+  id: string;
+  model: string;
+  output: ResponseOutputItem[];
+  status: string;
+  usage?: TokenUsageInfo;
+  createdAt: number;
+  expireAt?: number;
+}
+
+export interface ResponseOutputItem {
+  type: string;
+  role?: string;
+  content?: string;
+  status?: string;
+}
+
+export interface ResponseStreamChunk {
+  type: string;
+  delta?: string;
+  output?: ResponseOutputItem;
+  usage?: TokenUsageInfo;
+}
+
+export interface ResponseContextResult {
+  responseId: string;
+  context: string;
+}
+
+export interface TokenUsageInfo {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
+
+// ==========================================
+// 通用
+// ==========================================
+
+export interface TaskListFilter {
+  pageNum?: number;
+  pageSize?: number;
+  status?: string;
+}

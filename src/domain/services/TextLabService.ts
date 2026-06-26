@@ -5,6 +5,8 @@ import type {
   TextStreamCallbacks,
   TextGenerationResult,
 } from '../ports/OutboundPorts';
+import type { PlatformRouter } from './PlatformRouter';
+import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
 
 /**
  * 场景润色类型
@@ -119,14 +121,20 @@ const STYLE_MODIFIERS: Record<RefineStyle, string> = {
 };
 
 /**
- * 独立文本实验室服务，仅注入 ITextGenerationPort。
+ * 独立文本实验室服务，通过 PlatformRouter 动态解析 ITextGenerationPort。
  * 负责场景润色和流式对话。
  */
 export class TextLabService {
-  private textPort: ITextGenerationPort;
+  private router: PlatformRouter;
 
-  constructor(textPort: ITextGenerationPort) {
-    this.textPort = textPort;
+  constructor(router: PlatformRouter) {
+    this.router = router;
+  }
+
+  /** 获取当前配置对应的文本生成适配器 */
+  private getTextPort(): ITextGenerationPort {
+    const config = ApiConfigStore.load();
+    return this.router.resolve('text', config);
   }
 
   /**
@@ -140,8 +148,9 @@ export class TextLabService {
   ): Promise<TextGenerationResult> {
     const config = SCENE_PROMPTS[scene];
     const systemContent = config.system + STYLE_MODIFIERS[style];
+    const textPort = this.getTextPort();
 
-    return this.textPort.chatCompletion({
+    return textPort.chatCompletion({
       model: model || config.defaultModel,
       messages: [
         { role: 'system', content: systemContent, cache_control: { type: 'ephemeral' } },
@@ -165,8 +174,9 @@ export class TextLabService {
   ): AbortController {
     const config = SCENE_PROMPTS[scene];
     const systemContent = config.system + STYLE_MODIFIERS[style];
+    const textPort = this.getTextPort();
 
-    return this.textPort.chatCompletionStream({
+    return textPort.chatCompletionStream({
       model: model || config.defaultModel,
       messages: [
         { role: 'system', content: systemContent, cache_control: { type: 'ephemeral' } },
@@ -194,8 +204,9 @@ export class TextLabService {
     },
   ): AbortController {
     const model = options?.model || 'MiniMax-M3';
+    const textPort = this.getTextPort();
 
-    return this.textPort.chatCompletionStream({
+    return textPort.chatCompletionStream({
       model,
       messages,
       maxTokens: options?.maxTokens ?? 4096,
@@ -217,7 +228,8 @@ export class TextLabService {
       maxTokens?: number;
     },
   ): Promise<TextGenerationResult> {
-    return this.textPort.chatCompletion({
+    const textPort = this.getTextPort();
+    return textPort.chatCompletion({
       model: options?.model || 'MiniMax-M3',
       messages,
       maxTokens: options?.maxTokens ?? 4096,
