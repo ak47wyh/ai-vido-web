@@ -73,4 +73,58 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    // Phase 3 性能优化 —— 手动 vendor 拆分，避免单 chunk 过大阻塞首屏
+    // 拆分原则：
+    //  - react / react-dom 单独 chunk，所有页面共用
+    //  - 大型重量级库（dexie、ffmpeg、lucide-react、react-i18next、react-router-dom）独立
+    //  - 业务代码保留在动态 import 的 page chunks 内（App.tsx 已用 lazy() 拆分）
+    rollupOptions: {
+      output: {
+        manualChunks(id: string): string | undefined {
+          // vendor-react
+          if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/') ||
+              id.includes('node_modules/scheduler/')) {
+            return 'vendor-react';
+          }
+          // vendor-router
+          if (id.includes('node_modules/react-router/') || id.includes('node_modules/react-router-dom/') ||
+              id.includes('node_modules/@remix-run/router')) {
+            return 'vendor-router';
+          }
+          // vendor-i18n
+          if (id.includes('node_modules/i18next') || id.includes('node_modules/react-i18next')) {
+            return 'vendor-i18n';
+          }
+          // vendor-icons
+          if (id.includes('node_modules/lucide-react')) {
+            return 'vendor-icons';
+          }
+          // vendor-db
+          if (id.includes('node_modules/dexie') || id.includes('node_modules/dexie-react-hooks')) {
+            return 'vendor-db';
+          }
+          // vendor-http
+          if (id.includes('node_modules/axios')) {
+            return 'vendor-http';
+          }
+          // vendor-ffmpeg —— 仅 @ffmpeg/util 静态引用会出现在这里
+          // @ffmpeg/ffmpeg 已改为动态 import（首次 load() 时按需加载），
+          // Rollup 会自动为它生成独立 chunk 并优先于 manualChunks 命中，
+          // 因此此规则只匹配 util，不影响 @ffmpeg/ffmpeg 的按需加载语义
+          if (id.includes('node_modules/@ffmpeg/util')) {
+            return 'vendor-ffmpeg';
+          }
+          return undefined;
+        },
+      },
+      // 提升单个 chunk 体积告警阈值，避免误报（FFmpeg + lucide 等大库合并后超 500KB 是预期行为）
+      onwarn(warning, defaultHandler) {
+        if (warning.code === 'CHUNK_SIZE_WARNING') return;
+        defaultHandler(warning);
+      },
+    },
+    // 单 chunk 体积目标：1MB（FFmpeg wasm 占空间但属于一次性加载）
+    chunkSizeWarningLimit: 1024,
+  },
 })

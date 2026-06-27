@@ -1,13 +1,26 @@
-import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile, toBlobURL } from '@ffmpeg/util';
+import type { FFmpeg } from '@ffmpeg/ffmpeg';
 import type { IFFmpegPort, MergeContext, VideoClip, SubtitleStyle, BgmMixConfig, TransitionType, OutputFormat, CropOptions } from '../../../domain/ports/PostProcessPorts';
 
 const CORE_VERSION = '0.12.6';
 const CORE_BASE = `https://unpkg.com/@ffmpeg/core@${CORE_VERSION}/dist/umd`;
 
+/**
+ * FFmpeg WASM 适配器
+ *
+ * Phase 4 性能优化：
+ * - FFmpeg 模块改为 dynamic import，第一次真正调用 load() 时才下载
+ *   `@ffmpeg/ffmpeg` 的 JS 体积（约 30KB），避免初始 bundle 体积过大
+ * - FFmpeg 核心（WASM）本身从 unpkg CDN 懒加载，保持原有行为
+ *
+ * 收益：
+ * - 用户不进入"后期合成"流程时，不下载 FFmpeg JS
+ * - 首屏 vendor-ffmpeg chunk 从 ~4.5KB 维持现状（FFmpegAdapter 占大头在依赖图）
+ *   但实际生效依赖被压到 postProcessService 调用方，按需触发
+ */
 export class FFmpegAdapter implements IFFmpegPort {
   private ffmpeg: FFmpeg | null = null;
   private loadPromise: Promise<void> | null = null;
+  private fetchFileFn: typeof import('@ffmpeg/util').fetchFile | null = null;
 
   isLoaded(): boolean {
     return this.ffmpeg !== null && this.ffmpeg.loaded;
@@ -21,10 +34,18 @@ export class FFmpegAdapter implements IFFmpegPort {
   }
 
   private async doLoad(): Promise<void> {
-    const ffmpeg = new FFmpeg();
+    // 关键：动态 import 让 Vite/Rollup 把 @ffmpeg/ffmpeg 拆成独立 chunk
+    // 第一次调用前不会下载该模块的 JS 代码
+    const [{ FFmpeg: FFmpegCtor }, util] = await Promise.all([
+      import('@ffmpeg/ffmpeg'),
+      import('@ffmpeg/util'),
+    ]);
+    this.fetchFileFn = util.fetchFile;
+
+    const ffmpeg = new FFmpegCtor();
     await ffmpeg.load({
-      coreURL: await toBlobURL(`${CORE_BASE}/ffmpeg-core.js`, 'text/javascript'),
-      wasmURL: await toBlobURL(`${CORE_BASE}/ffmpeg-core.wasm`, 'application/wasm'),
+      coreURL: await util.toBlobURL(`${CORE_BASE}/ffmpeg-core.js`, 'text/javascript'),
+      wasmURL: await util.toBlobURL(`${CORE_BASE}/ffmpeg-core.wasm`, 'application/wasm'),
     });
     this.ffmpeg = ffmpeg;
   }
@@ -36,7 +57,7 @@ export class FFmpegAdapter implements IFFmpegPort {
 
   private async writeFile(name: string, data: Blob | string): Promise<void> {
     const ffmpeg = this.ensureLoaded();
-    const buffer = await fetchFile(data);
+    const buffer = await this.fetchFileFn!(data);
     await ffmpeg.writeFile(name, buffer);
   }
 

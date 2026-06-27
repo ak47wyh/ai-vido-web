@@ -15,7 +15,7 @@ const DEFAULT_PX_PER_SECOND = 60;
 const MIN_PX_PER_SECOND = 20;
 const MAX_PX_PER_SECOND = 240;
 
-export const TimelineEditor: React.FC<TimelineEditorProps> = ({
+export const TimelineEditor: React.FC<TimelineEditorProps> = React.memo(({
   timeline,
   onChange,
   onPlay,
@@ -317,7 +317,9 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
       </div>
     </div>
   );
-};
+});
+
+TimelineEditor.displayName = 'TimelineEditor';
 
 interface ClipViewProps {
   clip: TimelineClip;

@@ -16,7 +16,7 @@ interface Props {
   entry: LogEntry;
 }
 
-export const LogEntryRow: React.FC<Props> = ({ entry }) => {
+export const LogEntryRow: React.FC<Props> = React.memo(({ entry }) => {
   const [expanded, setExpanded] = useState(false);
 
   const handleCopy = (e: React.MouseEvent) => {
@@ -72,7 +72,9 @@ export const LogEntryRow: React.FC<Props> = ({ entry }) => {
       )}
     </div>
   );
-};
+});
+
+LogEntryRow.displayName = 'LogEntryRow';
 
 function formatTime(ts: number): string {
   const d = new Date(ts);
