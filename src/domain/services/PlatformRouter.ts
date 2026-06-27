@@ -1,6 +1,7 @@
 import type { ApiConfig, PlatformId } from '../../adapters/outbound/config/ApiConfigStore';
 import type { IVideoGeneratorPort, IImageGeneratorPort, ITextGenerationPort, IVoicePort, IMusicPort } from '../ports/OutboundPorts';
 import type { IThreeDGenerationPort, IContextCachePort, IBotPort, IDialogPort, IModelResponsePort } from '../ports/VolcenginePorts';
+import type { IApiConfigStore, IPlatformCapabilitiesPort, PlatformCapability } from '../ports/PlatformPorts';
 
 // 导入适配器 —— 已有平台
 import { MiniMaxVideoAdapter } from '../../adapters/outbound/api/MiniMaxVideoAdapter';
@@ -33,8 +34,9 @@ import { ZhipuTextAdapter } from '../../adapters/outbound/api/zhipu/ZhipuTextAda
 import { ZhipuVoiceAdapter } from '../../adapters/outbound/api/zhipu/ZhipuVoiceAdapter';
 import { ViduVideoAdapter } from '../../adapters/outbound/api/vidu/ViduVideoAdapter';
 
-import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
-import { hasCapability } from './platformCapabilities';
+import { apiConfigStoreAdapter } from '../../adapters/outbound/config/ApiConfigStoreAdapter';
+import { platformCapabilitiesAdapter } from '../../adapters/outbound/infrastructure/PlatformCapabilitiesAdapter';
+import { UnsupportedCapabilityError } from '../errors/UnsupportedCapabilityError';
 
 // 适配器实例缓存
 let _videoAdapter: IVideoGeneratorPort | null = null;
@@ -51,13 +53,26 @@ let _responseAdapter: IModelResponsePort | null = null;
 /**
  * 平台路由器
  *
- * 根据 ApiConfig.activePlatform 返回对应平台的适配器实例。
+ * 依赖反转（v2.0）：
+ * - 通过 IApiConfigStore 获取配置
+ * - 通过 IPlatformCapabilitiesPort 查询能力
+ * - 订阅 onPlatformChange 事件，自动 reset 缓存
+ *
  * 切换平台时调用 reset() 清空缓存，下次 resolve 重新创建适配器。
  *
- * 能力降级：当激活平台不支持某能力时，resolve 对应方法返回 null（或抛错），
- * 调用方/服务层可据此降级。
+ * 能力降级：当激活平台不支持某能力时，resolve 对应方法抛出 UnsupportedCapabilityError。
  */
 export class PlatformRouter {
+  constructor(
+    private configStore: IApiConfigStore = apiConfigStoreAdapter,
+    private capabilities: IPlatformCapabilitiesPort = platformCapabilitiesAdapter
+  ) {
+    // 订阅平台切换 → 自动清空缓存
+    this.configStore.onPlatformChange(() => {
+      this.reset();
+    });
+  }
+
   /**
    * 通用能力路由（向后兼容入口）
    * 根据能力字符串分发到具体的 resolve 方法。
@@ -78,10 +93,17 @@ export class PlatformRouter {
     }
   }
 
+  private ensureCap(platform: PlatformId, cap: PlatformCapability): void {
+    if (!this.capabilities.hasCapability(platform, cap)) {
+      throw new UnsupportedCapabilityError(platform, cap as 'video' | 'image' | 'text' | 'voice' | 'music');
+    }
+  }
+
   /**
    * 获取视频生成适配器
    */
   resolveVideo(config: ApiConfig): IVideoGeneratorPort {
+    this.ensureCap(config.activePlatform, 'video');
     if (_videoAdapter && this.isMatchingPlatform(_videoAdapter, config.activePlatform)) {
       return _videoAdapter;
     }
@@ -114,9 +136,9 @@ export class PlatformRouter {
 
   /**
    * 获取图片生成适配器
-   * 不支持图片的平台（hunyuan / vidu）回退到 MiniMax 以保证 Mock 兼容。
    */
   resolveImage(config: ApiConfig): IImageGeneratorPort {
+    this.ensureCap(config.activePlatform, 'image');
     if (_imageAdapter && this.isMatchingPlatform(_imageAdapter, config.activePlatform)) {
       return _imageAdapter;
     }
@@ -133,9 +155,6 @@ export class PlatformRouter {
       case 'zhipu':
         _imageAdapter = new ZhipuImageAdapter(config);
         break;
-      // hunyuan / vidu 不支持图片生成 → 回退 MiniMax（Mock 模式）
-      case 'hunyuan':
-      case 'vidu':
       case 'minimax':
       default:
         _imageAdapter = new MiniMaxImageAdapter();
@@ -146,9 +165,9 @@ export class PlatformRouter {
 
   /**
    * 获取文本生成适配器
-   * 不支持文本的平台（kling / vidu）回退到 MiniMax 以保证 Mock 兼容。
    */
   resolveText(config: ApiConfig): ITextGenerationPort {
+    this.ensureCap(config.activePlatform, 'text');
     if (_textAdapter && this.isMatchingPlatform(_textAdapter, config.activePlatform)) {
       return _textAdapter;
     }
@@ -165,9 +184,6 @@ export class PlatformRouter {
       case 'zhipu':
         _textAdapter = new ZhipuTextAdapter(config);
         break;
-      // kling / vidu 不支持文本生成 → 回退 MiniMax（Mock 模式）
-      case 'kling':
-      case 'vidu':
       case 'minimax':
       default:
         _textAdapter = new MiniMaxTextAdapter();
@@ -178,9 +194,9 @@ export class PlatformRouter {
 
   /**
    * 获取语音合成适配器
-   * 不支持语音的平台（kling / vidu）回退到 MiniMax 以保证 Mock 兼容。
    */
   resolveVoice(config: ApiConfig): IVoicePort {
+    this.ensureCap(config.activePlatform, 'voice');
     if (_voiceAdapter && this.isMatchingPlatform(_voiceAdapter, config.activePlatform)) {
       return _voiceAdapter;
     }
@@ -194,10 +210,6 @@ export class PlatformRouter {
       case 'zhipu':
         _voiceAdapter = new ZhipuVoiceAdapter(config);
         break;
-      // kling / vidu / volcengine 不支持语音 → 回退 MiniMax
-      case 'kling':
-      case 'vidu':
-      case 'volcengine':
       case 'minimax':
       default:
         _voiceAdapter = new MiniMaxVoiceAdapter();
@@ -208,14 +220,12 @@ export class PlatformRouter {
 
   /**
    * 获取音乐生成适配器
-   * 仅 MiniMax 支持音乐生成，其余平台回退到 MiniMaxMusicAdapter（Mock 模式）。
-   * UI 层应通过 hasCapability(platform, 'music') 判断是否展示入口。
    */
   resolveMusic(config: ApiConfig): IMusicPort {
+    this.ensureCap(config.activePlatform, 'music');
     if (_musicAdapter && this.isMatchingPlatform(_musicAdapter, config.activePlatform)) {
       return _musicAdapter;
     }
-    // 所有平台均回退 MiniMaxMusicAdapter（仅 minimax 真实可用，其余为 Mock）
     _musicAdapter = new MiniMaxMusicAdapter();
     return _musicAdapter;
   }
@@ -267,7 +277,6 @@ export class PlatformRouter {
 
   /**
    * 检查适配器是否匹配指定平台
-   * 通过适配器类名前缀判断（MiniMax* / Volcengine* / Kling* / Wan* / Hunyuan* / Zhipu* / Vidu* / Coze*）
    */
   private isMatchingPlatform(adapter: { constructor: { name: string } }, platform: PlatformId): boolean {
     const adapterName = adapter.constructor.name;
@@ -286,15 +295,14 @@ export class PlatformRouter {
 
   /**
    * 判断当前激活平台是否具备指定能力
-   * 用于 UI 层入口可用性判断。
    */
-  hasCapability(capability: 'video' | 'videoFl2v' | 'videoS2v' | 'image' | 'text' | 'voice' | 'music'): boolean {
-    return hasCapability(this.getActivePlatform(), capability);
+  hasCapability(capability: PlatformCapability): boolean {
+    return this.capabilities.hasCapability(this.getActivePlatform(), capability);
   }
 
   /** 获取当前激活平台 */
   getActivePlatform(): PlatformId {
-    return ApiConfigStore.getActivePlatform();
+    return this.configStore.getActivePlatform();
   }
 
   /**
@@ -315,5 +323,5 @@ export class PlatformRouter {
   }
 }
 
-// 导出单例
+// 导出单例（使用默认 adapter 装配）
 export const platformRouter = new PlatformRouter();

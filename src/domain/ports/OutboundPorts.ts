@@ -57,14 +57,9 @@ export interface IFinalCutRepository {
 }
 
 // --- Video Generation ---
-
-export type VideoModel =
-  | 'MiniMax-Hailuo-2.3' | 'MiniMax-Hailuo-2.3-Fast' | 'MiniMax-Hailuo-02'
-  | 'T2V-01-Director' | 'T2V-01'
-  | 'I2V-01-Director' | 'I2V-01-live' | 'I2V-01'
-  | 'S2V-01';
-export type VideoResolution = '512P' | '720P' | '768P' | '1080P';
-export type VideoGenerationMode = 't2v' | 'i2v' | 'fl2v' | 's2v';
+// 类型统一定义在 entities/models.ts，此处 re-export 保持向后兼容
+export type { VideoModel, VideoResolution, VideoGenerationMode } from '../entities/models';
+import type { VideoModel, VideoResolution, VideoGenerationMode } from '../entities/models';
 
 export interface VideoSubjectReference {
   type: string;

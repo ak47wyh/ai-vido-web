@@ -1,4 +1,6 @@
 import type { ITextGenerationPort } from '../ports/OutboundPorts';
+import type { PlatformRouter } from './PlatformRouter';
+import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
 
 export type BGMCategory =
   | 'cinematic-epic'    // 史诗/电影感
@@ -42,15 +44,20 @@ const CATEGORY_DESCRIPTIONS: Record<BGMCategory, { emotion: string; tempo: strin
 };
 
 export class BGMRecommendationService {
-  private textPort: ITextGenerationPort;
-  constructor(textPort: ITextGenerationPort) { this.textPort = textPort; }
+  private router: PlatformRouter;
+  constructor(router: PlatformRouter) { this.router = router; }
+
+  /** 获取当前配置对应的文本生成适配器 */
+  private getTextPort(): ITextGenerationPort {
+    return this.router.resolveText(ApiConfigStore.load());
+  }
 
   /**
    * Analyze video segment content and recommend the best BGM style.
    * Returns a structured recommendation with category, prompt, and metadata.
    */
   async recommend(segmentContent: string, characterNames: string[] = []): Promise<BGMRecommendation> {
-    const result = await this.textPort.chatCompletion({
+    const result = await this.getTextPort().chatCompletion({
       model: 'MiniMax-M2.5',
       messages: [
         {
@@ -99,7 +106,7 @@ export class BGMRecommendationService {
 
 段落列表：\n${segments.map((s, i) => `[${i}] ${s}`).join('\n')}`;
 
-    const result = await this.textPort.chatCompletion({
+    const result = await this.getTextPort().chatCompletion({
       model: 'MiniMax-M2.5',
       messages: [
         { role: 'system', content: '你是专业影视配乐师，擅长为连续故事段落推荐有情绪连贯性的背景音乐。只输出 JSON 数组。' },

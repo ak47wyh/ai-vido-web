@@ -1,15 +1,22 @@
 import type { IMusicPort, IStorySegmentRepository, MusicGenerationContext, MusicModel, LyricsGenerationContext, LyricsGenerationResult, CoverPreprocessResult } from '../ports/OutboundPorts';
+import type { PlatformRouter } from './PlatformRouter';
+import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
 
 export class MusicService {
-  musicPort: IMusicPort;
+  private router: PlatformRouter;
   segmentRepo: IStorySegmentRepository;
 
   constructor(
-    musicPort: IMusicPort,
+    router: PlatformRouter,
     segmentRepo: IStorySegmentRepository
   ) {
-    this.musicPort = musicPort;
+    this.router = router;
     this.segmentRepo = segmentRepo;
+  }
+
+  /** 获取当前配置对应的音乐生成适配器 */
+  private getMusicPort(): IMusicPort {
+    return this.router.resolveMusic(ApiConfigStore.load());
   }
 
   /**
@@ -41,7 +48,7 @@ export class MusicService {
       },
     };
 
-    const result = await this.musicPort.generateMusic(context);
+    const result = await this.getMusicPort().generateMusic(context);
 
     if (!result.audioUrl) {
       throw new Error('Music generation completed but no audio URL returned');
@@ -92,7 +99,7 @@ export class MusicService {
       },
     };
 
-    const result = await this.musicPort.generateMusic(context);
+    const result = await this.getMusicPort().generateMusic(context);
 
     if (!result.audioUrl) {
       throw new Error('Cover music generation completed but no audio URL returned');
@@ -119,14 +126,14 @@ export class MusicService {
       prompt,
     };
 
-    return this.musicPort.generateLyrics(context);
+    return this.getMusicPort().generateLyrics(context);
   }
 
   /**
    * Preprocess a reference audio for cover song generation.
    */
   async preprocessCover(audioUrl: string): Promise<CoverPreprocessResult> {
-    return this.musicPort.preprocessCover(audioUrl);
+    return this.getMusicPort().preprocessCover(audioUrl);
   }
 
   /**

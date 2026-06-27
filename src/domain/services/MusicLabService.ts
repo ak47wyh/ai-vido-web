@@ -6,6 +6,8 @@ import type {
   LyricsGenerationResult,
   CoverPreprocessResult,
 } from '../ports/OutboundPorts';
+import type { PlatformRouter } from './PlatformRouter';
+import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
 
 export interface ResolvedMusicResult {
   audioUrl: string;
@@ -21,10 +23,15 @@ export interface ResolvedMusicResult {
  * 负责 hex → Blob URL 转换，UI 层直接拿到可播放的 URL。
  */
 export class MusicLabService {
-  private musicPort: IMusicPort;
+  private router: PlatformRouter;
 
-  constructor(musicPort: IMusicPort) {
-    this.musicPort = musicPort;
+  constructor(router: PlatformRouter) {
+    this.router = router;
+  }
+
+  /** 获取当前配置对应的音乐生成适配器 */
+  private getMusicPort(): IMusicPort {
+    return this.router.resolveMusic(ApiConfigStore.load());
   }
 
   /**
@@ -33,7 +40,7 @@ export class MusicLabService {
    */
   async generateMusic(context: MusicGenerationContext): Promise<ResolvedMusicResult> {
     // 使用 hex 格式请求，Service 层负责转 Blob URL
-    const result: MusicGenerationResult = await this.musicPort.generateMusic({
+    const result: MusicGenerationResult = await this.getMusicPort().generateMusic({
       ...context,
       outputFormat: 'hex',
     });
@@ -52,12 +59,12 @@ export class MusicLabService {
 
   /** 歌词生成 */
   async generateLyrics(context: LyricsGenerationContext): Promise<LyricsGenerationResult> {
-    return this.musicPort.generateLyrics(context);
+    return this.getMusicPort().generateLyrics(context);
   }
 
   /** 翻唱前处理 */
   async preprocessCover(audioUrl: string): Promise<CoverPreprocessResult> {
-    return this.musicPort.preprocessCover(audioUrl);
+    return this.getMusicPort().preprocessCover(audioUrl);
   }
 
   /**

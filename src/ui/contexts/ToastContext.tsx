@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { toastEventBus, type ToastBridgeEvent } from '../../adapters/outbound/ui/ReactNotificationAdapter';
 
 type ToastType = 'success' | 'error' | 'info' | 'warning';
 
@@ -10,10 +11,12 @@ interface Toast {
 
 interface ToastContextType {
   showToast: (type: ToastType, message: string) => void;
+  removeToast: (id: string) => void;
 }
 
 const ToastContext = createContext<ToastContextType>({
   showToast: () => {},
+  removeToast: () => {},
 });
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -35,6 +38,20 @@ export const ToastProvider: React.FC<React.PropsWithChildren> = ({ children }) =
   const removeToast = useCallback((id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
+
+  // 订阅 reactNotificationAdapter 发出的事件桥
+  useEffect(() => {
+    const unsubscribe = toastEventBus.subscribe((event: ToastBridgeEvent) => {
+      // 处理 dismiss 事件（ReactNotificationAdapter 内部约定）
+      if (event.message.startsWith('__dismiss__:')) {
+        const id = event.message.split(':')[1];
+        removeToast(id);
+        return;
+      }
+      showToast(event.type, event.message);
+    });
+    return unsubscribe;
+  }, [showToast, removeToast]);
 
   const getToastStyle = (type: ToastType): React.CSSProperties => {
     const base: React.CSSProperties = {
@@ -72,7 +89,7 @@ export const ToastProvider: React.FC<React.PropsWithChildren> = ({ children }) =
   };
 
   return (
-    <ToastContext.Provider value={{ showToast }}>
+    <ToastContext.Provider value={{ showToast, removeToast }}>
       {children}
       {/* Toast container */}
       <div style={{

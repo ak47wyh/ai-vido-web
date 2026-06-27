@@ -130,7 +130,7 @@ export const PLATFORM_METADATA: Record<PlatformId, PlatformMeta> = {
     description: 'CogVideoX/GLM · 视频/图片/文本/语音',
     externalLink: 'https://docs.bigmodel.cn/',
     capabilities: ['video', 'videoS2v', 'image', 'text', 'voice'],
-    videoModels: ['cogvideox-2', 'cogvideox-flash', 'vidu2-image', 'vidu2-start-end', 'vidu2-reference'],
+    videoModels: ['cogvideox-2', 'cogvideox-flash'],
     imageModel: 'cogview-3-plus',
     textModel: 'glm-4-plus',
   },

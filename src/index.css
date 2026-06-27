@@ -409,6 +409,19 @@ p {
   border: none;
 }
 
+/* 禁用态：能力矩阵不支持该模式 */
+.lab-tab-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-style: dashed;
+}
+
+.lab-tab-disabled:hover {
+  background: transparent;
+  border-color: var(--border-color);
+  opacity: 0.4;
+}
+
 .lab-content {
   display: flex;
   flex-direction: column;

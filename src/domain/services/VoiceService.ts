@@ -1,6 +1,8 @@
 import type { IVoicePort, T2AAsyncContext, T2AAsyncStatus, T2ASyncContext, T2ASyncResult, T2AStreamCallbacks, T2AStreamHandle, VoiceDesignResult, VoiceType, VoiceListResult } from '../ports/OutboundPorts';
 import type { ICharacterRepository } from '../ports/OutboundPorts';
 import type { StorySegment } from '../entities/models';
+import type { PlatformRouter } from './PlatformRouter';
+import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
 
 /** Max text length for synchronous T2A (short text = instant response) */
 const SYNC_T2A_MAX_LENGTH = 500;
@@ -15,15 +17,20 @@ export interface CloneVoiceOptions {
 }
 
 export class VoiceService {
-  voicePort: IVoicePort;
+  private router: PlatformRouter;
   characterRepo: ICharacterRepository;
 
   constructor(
-    voicePort: IVoicePort,
+    router: PlatformRouter,
     characterRepo: ICharacterRepository
   ) {
-    this.voicePort = voicePort;
+    this.router = router;
     this.characterRepo = characterRepo;
+  }
+
+  /** 获取当前配置对应的语音合成适配器 */
+  private getVoicePort(): IVoicePort {
+    return this.router.resolveVoice(ApiConfigStore.load());
   }
 
   /**
@@ -67,15 +74,15 @@ export class VoiceService {
     promptText?: string,
     options?: CloneVoiceOptions
   ): Promise<string> {
-    const { fileId } = await this.voicePort.uploadFile(audioFile, 'voice_clone');
+    const { fileId } = await this.getVoicePort().uploadFile(audioFile, 'voice_clone');
 
     let promptAudioFileId: string | undefined;
     if (promptAudioFile) {
-      const result = await this.voicePort.uploadFile(promptAudioFile, 'prompt_audio');
+      const result = await this.getVoicePort().uploadFile(promptAudioFile, 'prompt_audio');
       promptAudioFileId = result.fileId;
     }
 
-    const cloneResult = await this.voicePort.cloneVoice({
+    const cloneResult = await this.getVoicePort().cloneVoice({
       fileId,
       voiceId: customVoiceId,
       text,
@@ -146,7 +153,7 @@ export class VoiceService {
       ...options,
     };
 
-    return this.voicePort.synthesizeSpeechSync(context);
+    return this.getVoicePort().synthesizeSpeechSync(context);
   }
 
   /**
@@ -171,7 +178,7 @@ export class VoiceService {
       languageBoost: options?.languageBoost || 'auto',
       ...options,
     };
-    return this.voicePort.synthesizeSpeechStream(context, callbacks);
+    return this.getVoicePort().synthesizeSpeechStream(context, callbacks);
   }
 
   /**
@@ -192,7 +199,7 @@ export class VoiceService {
       ...options,
     };
 
-    const result = await this.voicePort.createT2ATask(context);
+    const result = await this.getVoicePort().createT2ATask(context);
     return result.taskId;
   }
 
@@ -214,19 +221,19 @@ export class VoiceService {
       ...options,
     };
 
-    const result = await this.voicePort.createT2ATask(context);
+    const result = await this.getVoicePort().createT2ATask(context);
     return result.taskId;
   }
 
   async queryNarrationStatus(taskId: string): Promise<T2AAsyncStatus> {
-    return this.voicePort.queryT2ATask(taskId);
+    return this.getVoicePort().queryT2ATask(taskId);
   }
 
   /**
    * Design a new voice using text description.
    */
   async designVoice(prompt: string, previewText: string, voiceId?: string, aigcWatermark?: boolean): Promise<VoiceDesignResult> {
-    return this.voicePort.designVoice(prompt, previewText, voiceId, aigcWatermark);
+    return this.getVoicePort().designVoice(prompt, previewText, voiceId, aigcWatermark);
   }
 
   /**
@@ -237,7 +244,7 @@ export class VoiceService {
     if (!character) throw new Error('Character not found');
 
     const voiceId = `design_${Date.now()}`;
-    const result = await this.voicePort.designVoice(prompt, previewText, voiceId);
+    const result = await this.getVoicePort().designVoice(prompt, previewText, voiceId);
 
     character.voiceId = result.voiceId;
     await this.characterRepo.save(character);
@@ -272,7 +279,7 @@ export class VoiceService {
       return this.hexToBlobUrl(result.audioHex);
     }
     if (result.audioUrl) {
-      return this.voicePort.fetchAudioAsBlobUrl(result.audioUrl);
+      return this.getVoicePort().fetchAudioAsBlobUrl(result.audioUrl);
     }
     throw new Error('未返回音频数据');
   }
@@ -282,7 +289,7 @@ export class VoiceService {
    */
   async downloadAudio(audioUrl: string, filename: string): Promise<void> {
     // 先获取 Blob URL（带认证）
-    const blobUrl = await this.voicePort.fetchAudioAsBlobUrl(audioUrl);
+    const blobUrl = await this.getVoicePort().fetchAudioAsBlobUrl(audioUrl);
     try {
       const link = document.createElement('a');
       link.href = blobUrl;
@@ -310,7 +317,7 @@ export class VoiceService {
    * Get available voices from the API.
    */
   async getAvailableVoices(voiceType: VoiceType): Promise<VoiceListResult> {
-    return this.voicePort.getAvailableVoices(voiceType);
+    return this.getVoicePort().getAvailableVoices(voiceType);
   }
 
   /**
@@ -326,7 +333,7 @@ export class VoiceService {
    * Also unbinds it from any character currently using it.
    */
   async deleteVoice(voiceType: 'voice_cloning' | 'voice_generation', voiceId: string): Promise<void> {
-    await this.voicePort.deleteVoice(voiceType, voiceId);
+    await this.getVoicePort().deleteVoice(voiceType, voiceId);
 
     // Unbind from any character using this voice
     const allCharacters = await this.characterRepo.findAll();

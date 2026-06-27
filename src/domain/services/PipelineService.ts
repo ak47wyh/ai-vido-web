@@ -7,17 +7,17 @@ import type {
   ICharacterRepository,
   IBackgroundRepository,
   IFinalCutRepository,
-  ITextGenerationPort,
   IImageGeneratorPort,
   IVideoGeneratorPort,
   IVoicePort,
-  IMusicPort,
   VideoGenerationMode,
   VideoModel,
   VideoResolution
 } from '../ports/OutboundPorts';
 import type { PostProcessService } from './PostProcessService';
 import type { SubtitleService } from './SubtitleService';
+import type { PlatformRouter } from './PlatformRouter';
+import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
 
 export type { PipelineTask, PipelineStatus, PipelineStep };
 
@@ -41,11 +41,7 @@ interface PipelineDeps {
   backgroundRepo: IBackgroundRepository;
   videoTaskRepo: IVideoTaskRepository;
   finalCutRepo: IFinalCutRepository;
-  textPort: ITextGenerationPort;
-  imagePort: IImageGeneratorPort;
-  videoPort: IVideoGeneratorPort;
-  voicePort: IVoicePort;
-  musicPort: IMusicPort;
+  router: PlatformRouter;
   postProcess: PostProcessService;
   subtitle: SubtitleService;
 }
@@ -60,6 +56,21 @@ export class PipelineService {
 
   private deps: PipelineDeps;
   constructor(deps: PipelineDeps) { this.deps = deps; }
+
+  /** 获取当前配置对应的图片生成适配器 */
+  private getImagePort(): IImageGeneratorPort {
+    return this.deps.router.resolveImage(ApiConfigStore.load());
+  }
+
+  /** 获取当前配置对应的视频生成适配器 */
+  private getVideoPort(): IVideoGeneratorPort {
+    return this.deps.router.resolveVideo(ApiConfigStore.load());
+  }
+
+  /** 获取当前配置对应的语音合成适配器 */
+  private getVoicePort(): IVoicePort {
+    return this.deps.router.resolveVoice(ApiConfigStore.load());
+  }
 
   subscribe(taskId: string, callback: (task: PipelineTask) => void): () => void {
     if (!this.subscribers.has(taskId)) this.subscribers.set(taskId, new Set());
@@ -249,7 +260,7 @@ export class PipelineService {
         // 为缺少首帧图的分镜生成图片
         if (!seg.firstFrameImage && seg.content) {
           try {
-            const imgResult = await this.deps.imagePort.generateImage({
+            const imgResult = await this.getImagePort().generateImage({
               prompt: seg.content.slice(0, 500),
               aspectRatio: '16:9',
               model: 'image-01-live',
@@ -277,7 +288,7 @@ export class PipelineService {
           const character = await this.findCharacterForSegment(seg);
           if (character?.voiceId) {
             try {
-              const result = await this.deps.voicePort.synthesizeSpeechSync({
+              const result = await this.getVoicePort().synthesizeSpeechSync({
                 model: 'speech-2.8-turbo',
                 text: seg.content,
                 voiceId: character.voiceId,
@@ -318,7 +329,7 @@ export class PipelineService {
       for (let i = 0; i < segments.length; i++) {
         const seg = segments[i];
         try {
-          const externalTaskId = await this.deps.videoPort.submitVideoTask({
+          const externalTaskId = await this.getVideoPort().submitVideoTask({
             mode: options.videoMode || 't2v',
             model: options.videoModel,
             prompt: seg.content,
@@ -503,7 +514,7 @@ export class PipelineService {
               continue;
             }
             if (!vt.externalTaskId) continue;
-            const status = await this.deps.videoPort.queryTaskStatus(vt.externalTaskId);
+            const status = await this.getVideoPort().queryTaskStatus(vt.externalTaskId);
             if (status.status === 'SUCCESS') {
               vt.status = 'SUCCESS';
               vt.videoUrl = status.videoUrl;

@@ -308,15 +308,19 @@ export const Settings: React.FC = () => {
   const activeMeta = PLATFORM_METADATA[config.activePlatform];
 
   // Model management state
-  const [textModels, setTextModels] = useState<ModelInfo[]>(() => {
-    const cached = modelManagementService.getCachedModels();
-    return cached?.models ?? [];
-  });
+  const [textModels, setTextModels] = useState<ModelInfo[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
-  const [cachedAt, setCachedAt] = useState<string | null>(() => {
-    const cached = modelManagementService.getCachedModels();
-    return cached ? new Date(cached.cachedAt).toLocaleString() : null;
-  });
+  const [cachedAt, setCachedAt] = useState<string | null>(null);
+
+  // 初始化时读取缓存
+  useEffect(() => {
+    modelManagementService.getCachedModels().then(cached => {
+      if (cached) {
+        setTextModels(cached.models);
+        setCachedAt(new Date(cached.cachedAt).toLocaleString());
+      }
+    });
+  }, []);
 
   // File management state
   const [files, setFiles] = useState<FileItem[]>([]);
@@ -328,7 +332,7 @@ export const Settings: React.FC = () => {
     try {
       const models = await modelManagementService.refreshModels();
       setTextModels(models);
-      const cached = modelManagementService.getCachedModels();
+      const cached = await modelManagementService.getCachedModels();
       setCachedAt(cached ? new Date(cached.cachedAt).toLocaleString() : null);
       showToast('success', t('models.refreshSuccess'));
     } catch (e) {

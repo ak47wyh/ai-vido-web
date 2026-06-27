@@ -126,7 +126,19 @@ export const ApiConfigStore = {
   save(config: ApiConfig): void {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-      console.log('[ApiConfigStore] 配置已保存:', JSON.stringify(config, null, 2));
+      // 脱敏日志：仅输出激活平台与各平台配置状态，不输出 Key 内容
+      const summary = {
+        activePlatform: config.activePlatform,
+        minimax: !!config.minimaxApiKey.trim(),
+        volcengine: !!config.volcArkApiKey.trim(),
+        coze: !!config.cozePatToken.trim(),
+        kling: !!config.klingAccessKey.trim() && !!config.klingSecretKey.trim(),
+        wan: !!config.wanApiKey.trim(),
+        hunyuan: !!config.hunyuanSecretId.trim() && !!config.hunyuanSecretKey.trim(),
+        zhipu: !!config.zhipuApiKey.trim(),
+        vidu: !!config.viduApiKey.trim(),
+      };
+      console.log('[ApiConfigStore] 配置已保存:', summary);
     } catch (e) {
       console.error('[ApiConfigStore] 保存配置失败:', e);
       throw e;
