@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { Character, Background, Story, StorySegment, StorySpace, VideoTask, PipelineTask, FinalCut, SavedImage, SavedVoice, SavedPrompt } from '../../../domain/entities/models';
+import type { Character, Background, Story, StorySegment, StorySpace, VideoTask, PipelineTask, FinalCut, SavedImage, SavedVoice, SavedPrompt, GeneratedFile } from '../../../domain/entities/models';
 import type { SpaceSnapshot, Timeline } from '../../../domain/ports/PersistencePorts';
 
 export class AiVideoDatabase extends Dexie {
@@ -16,6 +16,7 @@ export class AiVideoDatabase extends Dexie {
   savedPrompts!: Table<SavedPrompt, string>;
   snapshots!: Table<SpaceSnapshot, string>;
   timelines!: Table<Timeline, string>;
+  generatedFiles!: Table<GeneratedFile, string>;
 
   constructor() {
     super('AiVideoDatabase');
@@ -130,6 +131,23 @@ export class AiVideoDatabase extends Dexie {
       savedPrompts: 'id, spaceId, name, category, createdAt',
       snapshots: 'id, spaceId, createdAt',
       timelines: 'id, storyId, createdAt, updatedAt'
+    });
+    // Version 10: Add GeneratedFile table (文件存储 OPFS 统一文件管理)
+    this.version(10).stores({
+      storySpaces: 'id, name, createdAt',
+      characters: 'id, spaceId, name, createdAt',
+      backgrounds: 'id, spaceId, name, createdAt',
+      stories: 'id, spaceId, status, createdAt',
+      segments: 'id, storyId, sequenceOrder',
+      videoTasks: 'id, segmentId, status, createdAt',
+      pipelineTasks: 'id, storyId, status, createdAt',
+      finalCuts: 'id, storyId, pipelineTaskId, createdAt',
+      savedImages: 'id, spaceId, name, sourceType, createdAt',
+      savedVoices: 'id, spaceId, name, sourceType, createdAt',
+      savedPrompts: 'id, spaceId, name, category, createdAt',
+      snapshots: 'id, spaceId, createdAt',
+      timelines: 'id, storyId, createdAt, updatedAt',
+      generatedFiles: 'id, spaceId, fileType, sourceEntityType, sourceEntityId, storagePath, createdAt, lastAccessedAt'
     });
   }
 }

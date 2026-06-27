@@ -400,3 +400,37 @@ export interface TaskListFilter {
   pageSize?: number;
   status?: string;
 }
+
+// ==========================================
+// 文件存储 (v10) — OPFS 统一文件管理
+// ==========================================
+
+export type GeneratedFileType = 'image' | 'audio' | 'video' | 'other';
+
+export interface GeneratedFile {
+  id: string;
+  /** 所属工作空间 */
+  spaceId: string;
+  /** 文件分类 */
+  fileType: GeneratedFileType;
+  /** MIME 类型, e.g. 'image/png', 'audio/mpeg', 'video/mp4' */
+  mimeType: string;
+  /** 可读文件名 */
+  fileName: string;
+  /** 文件大小（字节） */
+  fileSize: number;
+  /** OPFS 相对路径, e.g. 'images/abc123.png' */
+  storagePath: string;
+  /** 来源 URL（若从远程下载） */
+  originalUrl?: string;
+  /** 来源平台: 'minimax' | 'volcengine' | ... */
+  sourcePlatform?: string;
+  /** 关联实体 ID（segmentId, characterId 等） */
+  sourceEntityId?: string;
+  /** 关联实体类型: 'video_task' | 'saved_image' | ... */
+  sourceEntityType?: string;
+  tags: string[];
+  /** 最近访问时间（LRU 淘汰用） */
+  lastAccessedAt: number;
+  createdAt: number;
+}

@@ -54,6 +54,13 @@ import { defaultEventBus } from './adapters/outbound/infrastructure/MemoryEventB
 import { defaultMetrics } from './adapters/outbound/infrastructure/NoopMetricsAdapter';
 import { defaultResilience } from './adapters/outbound/infrastructure/DefaultResilienceAdapter';
 
+
+// ==================== 文件存储层（OPFS / IndexedDB） ====================
+import { createFileStorageAdapter } from './adapters/outbound/storage/FileStorageAdapterFactory';
+import { GeneratedFileRepository } from './adapters/outbound/repositories/GeneratedFileRepository';
+import type { IFileStoragePort } from './domain/ports/FileStoragePorts';
+import { migrateOfflineCache, needsMigration } from './adapters/outbound/storage/OfflineCacheMigration';
+
 // ========================================
 // 仓储实例
 // ========================================
@@ -66,6 +73,38 @@ export const videoTaskRepo = new VideoTaskRepositoryAdapter();
 export const finalCutRepo = new FinalCutRepositoryAdapter();
 export const snapshotRepo = new SnapshotRepositoryAdapter();
 export const timelineRepo = new TimelineRepositoryAdapter();
+
+// ========================================
+// 文件存储层（OPFS / IndexedDB）
+// 需要异步初始化，在应用入口调用 await initializeFileStorage()
+// ========================================
+let _fileStorageAdapter: IFileStoragePort | null = null;
+
+/**
+ * 异步初始化文件存储。必须在应用启动时调用。
+ * 同时执行旧 OfflineCache 数据迁移。
+ */
+export async function initializeFileStorage(): Promise<IFileStoragePort> {
+  if (_fileStorageAdapter) return _fileStorageAdapter;
+  _fileStorageAdapter = await createFileStorageAdapter();
+
+  // 执行旧数据迁移（首次启动时）
+  if (needsMigration()) {
+    await migrateOfflineCache(_fileStorageAdapter, generatedFileRepo);
+  }
+
+  return _fileStorageAdapter;
+}
+
+/** 获取已初始化的文件存储端口（同步） */
+export function getFileStorage(): IFileStoragePort {
+  if (!_fileStorageAdapter) {
+    throw new Error('[DI] FileStorage not initialized. Call await initializeFileStorage() first.');
+  }
+  return _fileStorageAdapter;
+}
+
+export const generatedFileRepo = new GeneratedFileRepository();
 
 // ========================================
 // 横切关注点（基础设施）
@@ -173,8 +212,13 @@ export const savedImageRepo = new SavedImageRepository();
 export const savedVoiceRepo = new SavedVoiceRepository();
 export const savedPromptRepo = new SavedPromptRepository();
 
+// AssetLibraryService 使用延迟获取模式（lazy accessor），
+// 允许在模块加载时构造，但实际调用方法时才获取 fileStorage。
+// 确保在调用 assetLibraryService 的方法前已执行 await initializeFileStorage()。
 export const assetLibraryService = new AssetLibraryService(
-  savedImageRepo, savedVoiceRepo, savedPromptRepo
+  savedImageRepo, savedVoiceRepo, savedPromptRepo,
+  getFileStorage,        // 传入函数引用，延迟获取
+  () => generatedFileRepo,  // 传入函数引用，延迟获取
 );
 
 // ==================== 快照服务（v2.0：使用 ISnapshotRepository） ====================
@@ -206,6 +250,23 @@ export const subtitlePort: import('./domain/ports/DomainServicePorts').ISubtitle
 // ========================================
 import { reactNotificationAdapter } from './adapters/outbound/ui/ReactNotificationAdapter';
 import { reactConfirmAdapter } from './adapters/outbound/ui/ReactConfirmAdapter';
+import { reactThemeAdapter } from './adapters/outbound/ui/ReactThemeAdapter';
+import { i18nextTranslationAdapter } from './adapters/outbound/ui/I18nextTranslationAdapter';
+import { browserNetworkStatusAdapter } from './adapters/outbound/infrastructure/BrowserNetworkStatusAdapter';
 
 export const notifier: import('./domain/ports/CrossCuttingPorts').INotificationPort = reactNotificationAdapter;
 export const confirmer: import('./domain/ports/CrossCuttingPorts').IConfirmPort = reactConfirmAdapter;
+export const themePort: import('./domain/ports/UiPorts').IThemePort = reactThemeAdapter;
+export const translationPort: import('./domain/ports/UiPorts').ITranslationPort = i18nextTranslationAdapter;
+export const networkPort: import('./domain/ports/UiPorts').INetworkStatusPort = browserNetworkStatusAdapter;
+
+// ========================================
+// 业务编排 Port 适配器（IAutoEditPort / IAssetExportPort）
+// ========================================
+import { AutoEditPortAdapter } from './adapters/outbound/services/AutoEditPortAdapter';
+import { AssetExportAdapter } from './adapters/outbound/services/AssetExportAdapter';
+
+export const autoEditPort: import('./domain/ports/DomainServicePorts').IAutoEditPort = new AutoEditPortAdapter(autoEditService);
+export const assetExportPort: import('./domain/ports/DomainServicePorts').IAssetExportPort = new AssetExportAdapter(
+  spaceRepo, characterRepo, backgroundRepo, storyRepo, segmentRepo, videoTaskRepo, finalCutRepo
+);

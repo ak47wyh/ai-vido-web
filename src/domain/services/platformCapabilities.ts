@@ -142,8 +142,9 @@ export const PLATFORM_METADATA: Record<PlatformId, PlatformMeta> = {
     accentColor: '#f59e0b',
     description: '生数科技 · 仅视频 · 参考生/首尾帧',
     externalLink: 'https://docs.vidu.cn',
-    capabilities: ['video', 'videoFl2v', 'videoS2v'],
+    capabilities: ['video', 'videoFl2v', 'videoS2v', 'image'],
     videoModels: ['viduq1', 'vidu-1', 'vidu-2'],
+    imageModel: 'viduq1',
   },
 };
 

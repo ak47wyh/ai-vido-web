@@ -12,6 +12,7 @@ import { MiniMaxMusicAdapter } from '../../adapters/outbound/api/MiniMaxMusicAda
 import { VolcengineVideoAdapter } from '../../adapters/outbound/api/volcengine/VolcengineVideoAdapter';
 import { VolcengineImageAdapter } from '../../adapters/outbound/api/volcengine/VolcengineImageAdapter';
 import { VolcengineTextAdapter } from '../../adapters/outbound/api/volcengine/VolcengineTextAdapter';
+import { VolcengineVoiceAdapter } from '../../adapters/outbound/api/volcengine/VolcengineVoiceAdapter';
 import { Volcengine3DAdapter } from '../../adapters/outbound/api/volcengine/Volcengine3DAdapter';
 import { VolcengineCacheAdapter } from '../../adapters/outbound/api/volcengine/VolcengineCacheAdapter';
 import { VolcengineResponseAdapter } from '../../adapters/outbound/api/volcengine/VolcengineResponseAdapter';
@@ -26,6 +27,7 @@ import { WanImageAdapter } from '../../adapters/outbound/api/wan/WanImageAdapter
 import { WanTextAdapter } from '../../adapters/outbound/api/wan/WanTextAdapter';
 import { WanVoiceAdapter } from '../../adapters/outbound/api/wan/WanVoiceAdapter';
 import { HunyuanVideoAdapter } from '../../adapters/outbound/api/hunyuan/HunyuanVideoAdapter';
+import { HunyuanImageAdapter } from '../../adapters/outbound/api/hunyuan/HunyuanImageAdapter';
 import { HunyuanTextAdapter } from '../../adapters/outbound/api/hunyuan/HunyuanTextAdapter';
 import { HunyuanVoiceAdapter } from '../../adapters/outbound/api/hunyuan/HunyuanVoiceAdapter';
 import { ZhipuVideoAdapter } from '../../adapters/outbound/api/zhipu/ZhipuVideoAdapter';
@@ -33,6 +35,7 @@ import { ZhipuImageAdapter } from '../../adapters/outbound/api/zhipu/ZhipuImageA
 import { ZhipuTextAdapter } from '../../adapters/outbound/api/zhipu/ZhipuTextAdapter';
 import { ZhipuVoiceAdapter } from '../../adapters/outbound/api/zhipu/ZhipuVoiceAdapter';
 import { ViduVideoAdapter } from '../../adapters/outbound/api/vidu/ViduVideoAdapter';
+import { ViduImageAdapter } from '../../adapters/outbound/api/vidu/ViduImageAdapter';
 
 import { apiConfigStoreAdapter } from '../../adapters/outbound/config/ApiConfigStoreAdapter';
 import { platformCapabilitiesAdapter } from '../../adapters/outbound/infrastructure/PlatformCapabilitiesAdapter';
@@ -57,26 +60,17 @@ let _responseAdapter: IModelResponsePort | null = null;
  * - 通过 IApiConfigStore 获取配置
  * - 通过 IPlatformCapabilitiesPort 查询能力
  * - 订阅 onPlatformChange 事件，自动 reset 缓存
- *
- * 切换平台时调用 reset() 清空缓存，下次 resolve 重新创建适配器。
- *
- * 能力降级：当激活平台不支持某能力时，resolve 对应方法抛出 UnsupportedCapabilityError。
  */
 export class PlatformRouter {
   constructor(
     private configStore: IApiConfigStore = apiConfigStoreAdapter,
     private capabilities: IPlatformCapabilitiesPort = platformCapabilitiesAdapter
   ) {
-    // 订阅平台切换 → 自动清空缓存
     this.configStore.onPlatformChange(() => {
       this.reset();
     });
   }
 
-  /**
-   * 通用能力路由（向后兼容入口）
-   * 根据能力字符串分发到具体的 resolve 方法。
-   */
   resolve(capability: 'video', config: ApiConfig): IVideoGeneratorPort;
   resolve(capability: 'image', config: ApiConfig): IImageGeneratorPort;
   resolve(capability: 'text', config: ApiConfig): ITextGenerationPort;
@@ -99,9 +93,6 @@ export class PlatformRouter {
     }
   }
 
-  /**
-   * 获取视频生成适配器
-   */
   resolveVideo(config: ApiConfig): IVideoGeneratorPort {
     this.ensureCap(config.activePlatform, 'video');
     if (_videoAdapter && this.isMatchingPlatform(_videoAdapter, config.activePlatform)) {
@@ -134,9 +125,6 @@ export class PlatformRouter {
     return _videoAdapter;
   }
 
-  /**
-   * 获取图片生成适配器
-   */
   resolveImage(config: ApiConfig): IImageGeneratorPort {
     this.ensureCap(config.activePlatform, 'image');
     if (_imageAdapter && this.isMatchingPlatform(_imageAdapter, config.activePlatform)) {
@@ -152,8 +140,14 @@ export class PlatformRouter {
       case 'wan':
         _imageAdapter = new WanImageAdapter(config);
         break;
+      case 'hunyuan':
+        _imageAdapter = new HunyuanImageAdapter(config);
+        break;
       case 'zhipu':
         _imageAdapter = new ZhipuImageAdapter(config);
+        break;
+      case 'vidu':
+        _imageAdapter = new ViduImageAdapter(config);
         break;
       case 'minimax':
       default:
@@ -163,9 +157,6 @@ export class PlatformRouter {
     return _imageAdapter;
   }
 
-  /**
-   * 获取文本生成适配器
-   */
   resolveText(config: ApiConfig): ITextGenerationPort {
     this.ensureCap(config.activePlatform, 'text');
     if (_textAdapter && this.isMatchingPlatform(_textAdapter, config.activePlatform)) {
@@ -192,15 +183,15 @@ export class PlatformRouter {
     return _textAdapter;
   }
 
-  /**
-   * 获取语音合成适配器
-   */
   resolveVoice(config: ApiConfig): IVoicePort {
     this.ensureCap(config.activePlatform, 'voice');
     if (_voiceAdapter && this.isMatchingPlatform(_voiceAdapter, config.activePlatform)) {
       return _voiceAdapter;
     }
     switch (config.activePlatform) {
+      case 'volcengine':
+        _voiceAdapter = new VolcengineVoiceAdapter(config);
+        break;
       case 'wan':
         _voiceAdapter = new WanVoiceAdapter(config);
         break;
@@ -218,9 +209,6 @@ export class PlatformRouter {
     return _voiceAdapter;
   }
 
-  /**
-   * 获取音乐生成适配器
-   */
   resolveMusic(config: ApiConfig): IMusicPort {
     this.ensureCap(config.activePlatform, 'music');
     if (_musicAdapter && this.isMatchingPlatform(_musicAdapter, config.activePlatform)) {
@@ -230,54 +218,36 @@ export class PlatformRouter {
     return _musicAdapter;
   }
 
-  /**
-   * 获取 3D 生成适配器（仅 volcengine）
-   */
   resolve3D(config: ApiConfig): IThreeDGenerationPort {
     if (_threeDAdapter) return _threeDAdapter;
     _threeDAdapter = new Volcengine3DAdapter(config, 'volcengine-seed3d');
     return _threeDAdapter;
   }
 
-  /**
-   * 获取缓存适配器（仅 volcengine）
-   */
   resolveCache(config: ApiConfig): IContextCachePort {
     if (_cacheAdapter) return _cacheAdapter;
     _cacheAdapter = new VolcengineCacheAdapter(config);
     return _cacheAdapter;
   }
 
-  /**
-   * 获取 Bot 适配器（仅 coze）
-   */
   resolveBot(config: ApiConfig): IBotPort {
     if (_botAdapter) return _botAdapter;
     _botAdapter = new CozeBotAdapter(config);
     return _botAdapter;
   }
 
-  /**
-   * 获取对话适配器（仅 coze）
-   */
   resolveDialog(config: ApiConfig): IDialogPort {
     if (_dialogAdapter) return _dialogAdapter;
     _dialogAdapter = new CozeDialogAdapter(config);
     return _dialogAdapter;
   }
 
-  /**
-   * 获取响应适配器（仅 volcengine）
-   */
   resolveResponse(config: ApiConfig): IModelResponsePort {
     if (_responseAdapter) return _responseAdapter;
     _responseAdapter = new VolcengineResponseAdapter(config);
     return _responseAdapter;
   }
 
-  /**
-   * 检查适配器是否匹配指定平台
-   */
   private isMatchingPlatform(adapter: { constructor: { name: string } }, platform: PlatformId): boolean {
     const adapterName = adapter.constructor.name;
     const platformPrefix: Record<PlatformId, string> = {
@@ -293,22 +263,14 @@ export class PlatformRouter {
     return adapterName.startsWith(platformPrefix[platform]);
   }
 
-  /**
-   * 判断当前激活平台是否具备指定能力
-   */
   hasCapability(capability: PlatformCapability): boolean {
     return this.capabilities.hasCapability(this.getActivePlatform(), capability);
   }
 
-  /** 获取当前激活平台 */
   getActivePlatform(): PlatformId {
     return this.configStore.getActivePlatform();
   }
 
-  /**
-   * 重置所有缓存的适配器实例
-   * 当平台切换时调用
-   */
   reset(): void {
     _videoAdapter = null;
     _imageAdapter = null;
@@ -323,5 +285,4 @@ export class PlatformRouter {
   }
 }
 
-// 导出单例（使用默认 adapter 装配）
 export const platformRouter = new PlatformRouter();
