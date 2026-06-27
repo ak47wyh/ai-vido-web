@@ -15,6 +15,13 @@ import { WanHttpClient } from './WanHttpClient';
  *   Response: output.audio（base64 编码）
  */
 export class WanVoiceAdapter implements IVoicePort {
+  readonly voiceCapabilities: import('../../../../domain/ports/OutboundPorts').VoiceCapabilities = {
+    supportsClone: false,
+    supportsDesign: false,
+    supportsDelete: false,
+    supportsStream: false,
+  };
+
   private http: WanHttpClient;
   private config: ApiConfig;
 

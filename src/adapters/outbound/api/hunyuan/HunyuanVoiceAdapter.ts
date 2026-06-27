@@ -18,6 +18,13 @@ import { withRetry } from './HunyuanErrorUtils';
  * 声音克隆/设计/异步 T2A 等高级能力混元不支持，抛 NotImplementedError。
  */
 export class HunyuanVoiceAdapter implements IVoicePort {
+  readonly voiceCapabilities: import('../../../../domain/ports/OutboundPorts').VoiceCapabilities = {
+    supportsClone: false,
+    supportsDesign: false,
+    supportsDelete: false,
+    supportsStream: false,
+  };
+
   private http: HunyuanHttpClient;
   private config: ApiConfig;
 

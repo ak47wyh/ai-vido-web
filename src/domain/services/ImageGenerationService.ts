@@ -3,6 +3,7 @@ import type { ICharacterRepository, IBackgroundRepository } from '../ports/Outbo
 import type { IFileStoragePort } from '../ports/FileStoragePorts';
 import type { PlatformRouter } from './PlatformRouter';
 import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
+import { defaultLogger } from '../../adapters/outbound/infrastructure/ConsoleLoggerAdapter';
 
 /**
  * 领域服务：图片生成
@@ -14,6 +15,7 @@ export class ImageGenerationService {
   characterRepo: ICharacterRepository;
   backgroundRepo: IBackgroundRepository;
   private router: PlatformRouter;
+  private logger = defaultLogger;
   private getFileStorage: () => IFileStoragePort;
 
   constructor(
@@ -126,7 +128,7 @@ export class ImageGenerationService {
       const url = await this.getFileStorage().getObjectUrl(storagePath);
       return { url, storagePath };
     } catch (e) {
-      console.warn(`[ImageGenerationService] Failed to persist image to OPFS, fallback to source URL:`, e);
+      this.logger.warn('Failed to persist image to OPFS, fallback to source URL', e instanceof Error ? e : new Error(String(e)));
       return { url: source };
     }
   }

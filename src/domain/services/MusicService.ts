@@ -2,9 +2,11 @@ import type { IMusicPort, IStorySegmentRepository, MusicGenerationContext, Music
 import type { IFileStoragePort } from '../ports/FileStoragePorts';
 import type { PlatformRouter } from './PlatformRouter';
 import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
+import { defaultLogger } from '../../adapters/outbound/infrastructure/ConsoleLoggerAdapter';
 
 export class MusicService {
   private router: PlatformRouter;
+  private logger = defaultLogger;
   segmentRepo: IStorySegmentRepository;
   private getFileStorage: () => IFileStoragePort;
 
@@ -171,7 +173,7 @@ export class MusicService {
           segment.bgmStoragePath = storagePath;
         }
       } catch (e) {
-        console.warn(`[MusicService] Failed to cache BGM for segment ${segmentId}:`, e);
+        this.logger.warn(`Failed to cache BGM for segment ${segmentId}`, e instanceof Error ? e : new Error(String(e)));
       }
     }
 

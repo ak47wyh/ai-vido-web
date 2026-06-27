@@ -4,6 +4,7 @@ import type { IFileStoragePort } from '../ports/FileStoragePorts';
 import type { StorySegment } from '../entities/models';
 import type { PlatformRouter } from './PlatformRouter';
 import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
+import { defaultLogger } from '../../adapters/outbound/infrastructure/ConsoleLoggerAdapter';
 
 /** Max text length for synchronous T2A (short text = instant response) */
 const SYNC_T2A_MAX_LENGTH = 500;
@@ -19,6 +20,7 @@ export interface CloneVoiceOptions {
 
 export class VoiceService {
   private router: PlatformRouter;
+  private logger = defaultLogger;
   characterRepo: ICharacterRepository;
   segmentRepo: IStorySegmentRepository;
   private getFileStorage: () => IFileStoragePort;

@@ -368,6 +368,12 @@ export interface T2AStreamHandle {
 }
 
 export interface IVoicePort {
+  /**
+   * 该平台支持的能力子集。调用方应在使用相关方法前检查，
+   * 不支持的能力直接抛 CapabilityNotSupportedError 而不是抛 NotImplementedError。
+   */
+  readonly voiceCapabilities: VoiceCapabilities;
+
   uploadFile(file: File, purpose: 'voice_clone' | 'prompt_audio' | 't2a_async_input'): Promise<FileUploadResult>;
   cloneVoice(context: VoiceCloneContext): Promise<VoiceCloneResult>;
   createT2ATask(context: T2AAsyncContext): Promise<T2AAsyncResult>;
@@ -381,6 +387,30 @@ export interface IVoicePort {
   deleteVoice(voiceType: 'voice_cloning' | 'voice_generation', voiceId: string): Promise<void>;
   /** WebSocket 流式合成 — 边生成边推送音频块。返回 handle 用于中止 */
   synthesizeSpeechStream(context: T2ASyncContext, callbacks: T2AStreamCallbacks): T2AStreamHandle;
+}
+
+/**
+ * IVoicePort 子能力声明（接口隔离原则）。
+ * 调用方（如 VoiceService）应在使用某方法前检查 supportsClone / supportsDesign。
+ * 不支持的能力由适配器内部抛 CapabilityNotSupportedError 而非返回 undefined。
+ */
+export interface VoiceCapabilities {
+  /** 是否支持声音克隆（上传样本 → 复刻音色） */
+  supportsClone: boolean;
+  /** 是否支持声音设计（文本描述 → 生成音色） */
+  supportsDesign: boolean;
+  /** 是否支持删除已创建的音色 */
+  supportsDelete: boolean;
+  /** 是否支持流式 WebSocket 合成 */
+  supportsStream: boolean;
+}
+
+/** 抛出当 VoiceCapabilities 不支持某方法时 */
+export class CapabilityNotSupportedError extends Error {
+  constructor(public platform: string, public capability: keyof VoiceCapabilities) {
+    super(`Voice capability "${capability}" is not supported by platform "${platform}"`);
+    this.name = 'CapabilityNotSupportedError';
+  }
 }
 
 // --- Music Generation ---

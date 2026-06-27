@@ -15,6 +15,7 @@ import type { IFileStoragePort } from '../ports/FileStoragePorts';
 import type { PlatformRouter } from './PlatformRouter';
 import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
 import { getErrorMessage } from '../../ui/utils/errorUtils';
+import { defaultLogger } from '../../adapters/outbound/infrastructure/ConsoleLoggerAdapter';
 
 export interface VideoGenerationOptions {
   mode?: VideoGenerationMode;
@@ -32,6 +33,7 @@ export class VideoGenerationService {
   characterRepo: ICharacterRepository;
   backgroundRepo: IBackgroundRepository;
   private router: PlatformRouter;
+  private logger = defaultLogger;
   private getFileStorage: () => IFileStoragePort;
 
   private activePollers = new Map<string, ReturnType<typeof setInterval>>();
@@ -162,7 +164,9 @@ export class VideoGenerationService {
       background,
     };
 
-    this.processTask(task, context).catch(console.error);
+    this.processTask(task, context).catch(err => 
+      this.logger.error('processTask failed', err instanceof Error ? err : new Error(String(err)))
+    );
 
     return task;
   }
@@ -272,14 +276,14 @@ export class VideoGenerationService {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const blob = await res.blob();
         if (blob.size > 200 * 1024 * 1024) {
-          console.warn(`[VideoGenerationService] Video too large (${blob.size} bytes), skip caching`);
+          this.logger.warn(`Video too large (${blob.size} bytes), skip caching`, { service: 'VideoGenerationService' });
           return;
         }
         await this.getFileStorage().storeBlob(storagePath, blob);
         task.videoStoragePath = storagePath;
         await this.videoTaskRepo.save(task);
       } catch (e) {
-        console.warn(`[VideoGenerationService] Failed to cache video ${task.id}:`, e);
+        this.logger.warn(`Failed to cache video ${task.id}`, e instanceof Error ? e : new Error(String(e)));
       }
     })();
   }

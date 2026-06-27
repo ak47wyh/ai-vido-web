@@ -9,6 +9,7 @@ import type {
 import type { IFileStoragePort } from '../ports/FileStoragePorts';
 import type { PlatformRouter } from './PlatformRouter';
 import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
+import { defaultLogger } from '../../adapters/outbound/infrastructure/ConsoleLoggerAdapter';
 
 export interface ResolvedMusicResult {
   audioUrl: string;
@@ -28,6 +29,7 @@ export interface ResolvedMusicResult {
  */
 export class MusicLabService {
   private router: PlatformRouter;
+  private logger = defaultLogger;
   private getFileStorage: () => IFileStoragePort;
 
   constructor(
@@ -60,7 +62,7 @@ export class MusicLabService {
     try {
       await this.getFileStorage().storeBlob(storagePath, audioBlob);
     } catch (e) {
-      console.warn('[MusicLabService] Failed to persist music to OPFS, falling back to in-memory Blob URL:', e);
+      this.logger.warn('Failed to persist music to OPFS, falling back to in-memory Blob URL', e instanceof Error ? e : new Error(String(e)));
       const audioUrl = URL.createObjectURL(audioBlob);
       return this.buildResult(audioUrl, undefined, result);
     }

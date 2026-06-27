@@ -28,6 +28,13 @@ import { withRetry } from './VolcengineErrorUtils';
  * 未实现的方法统一抛 NotImplementedError，调用方应通过 UI 入口判断能力可用性。
  */
 export class VolcengineVoiceAdapter implements IVoicePort {
+  readonly voiceCapabilities: import('../../../../domain/ports/OutboundPorts').VoiceCapabilities = {
+    supportsClone: false,
+    supportsDesign: false,
+    supportsDelete: false,
+    supportsStream: false,
+  };
+
   private http: VolcengineHttpClient;
   private config: ApiConfig;
 

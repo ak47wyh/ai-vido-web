@@ -19,6 +19,12 @@ import { getMiniMaxErrorMessage } from './MiniMaxErrorUtils';
 import axios from 'axios';
 
 export class MiniMaxVoiceAdapter implements IVoicePort {
+  readonly voiceCapabilities: import('../../../domain/ports/OutboundPorts').VoiceCapabilities = {
+    supportsClone: true,
+    supportsDesign: true,
+    supportsDelete: true,
+    supportsStream: true,
+  };
 
   async uploadFile(file: File, purpose: 'voice_clone' | 'prompt_audio' | 't2a_async_input'): Promise<FileUploadResult> {
     const config = ApiConfigStore.load();

@@ -178,6 +178,8 @@ export const pipelineService = new PipelineService({
   router: platformRouter,
   postProcess: postProcessService, subtitle: subtitleService,
   fileStorage: getFileStorage,
+  logger,
+  eventBus,
 });
 
 // ========================================

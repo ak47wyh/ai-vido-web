@@ -16,6 +16,13 @@ import type { ApiConfig } from '../../config/ApiConfigStore';
  * Response: 音频二进制流（默认 mp3）
  */
 export class ZhipuVoiceAdapter implements IVoicePort {
+  readonly voiceCapabilities: import('../../../../domain/ports/OutboundPorts').VoiceCapabilities = {
+    supportsClone: false,
+    supportsDesign: false,
+    supportsDelete: false,
+    supportsStream: false,
+  };
+
   private config: ApiConfig;
 
   constructor(config: ApiConfig) {
