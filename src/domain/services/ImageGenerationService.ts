@@ -1,5 +1,6 @@
 import type { IImageGeneratorPort, ImageGenerationContext, ImageAspectRatio } from '../ports/OutboundPorts';
 import type { ICharacterRepository, IBackgroundRepository } from '../ports/OutboundPorts';
+import type { IFileStoragePort } from '../ports/FileStoragePorts';
 import type { PlatformRouter } from './PlatformRouter';
 import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
 
@@ -7,20 +8,24 @@ import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
  * 领域服务：图片生成
  * - 为角色生成形象图：基于 appearancePrompt + personalityPrompt，可选参考图（图生图）
  * - 为背景生成环境图：基于 environmentPrompt
+ * - Phase 2-C：生成结果统一存储到 OPFS，避免外部 URL 过期 + data:URI 体积大
  */
 export class ImageGenerationService {
   characterRepo: ICharacterRepository;
   backgroundRepo: IBackgroundRepository;
   private router: PlatformRouter;
+  private getFileStorage: () => IFileStoragePort;
 
   constructor(
     characterRepo: ICharacterRepository,
     backgroundRepo: IBackgroundRepository,
-    router: PlatformRouter
+    router: PlatformRouter,
+    fileStorage: IFileStoragePort | (() => IFileStoragePort),
   ) {
     this.characterRepo = characterRepo;
     this.backgroundRepo = backgroundRepo;
     this.router = router;
+    this.getFileStorage = typeof fileStorage === 'function' ? fileStorage : () => fileStorage;
   }
 
   /** 获取当前配置对应的图片生成适配器 */
@@ -51,10 +56,15 @@ export class ImageGenerationService {
     const imagePort = this.getImagePort();
     const result = await imagePort.generateImage(context);
 
-    character.referenceImageUrl = result.imageDataUri || result.imageUrls?.[0] || '';
+    const reference = await this.persistImage(
+      `images/char_${characterId}.png`,
+      result.imageDataUri || result.imageUrls?.[0] || '',
+    );
+    character.referenceImageUrl = reference.url;
+    character.referenceImageStoragePath = reference.storagePath;
     await this.characterRepo.save(character);
 
-    return result.imageDataUri || result.imageUrls?.[0] || '';
+    return reference.url;
   }
 
   async generateBackgroundImage(backgroundId: string, aspectRatio: string = '16:9'): Promise<string> {
@@ -73,9 +83,51 @@ export class ImageGenerationService {
     const imagePort = this.getImagePort();
     const result = await imagePort.generateImage(context);
 
-    background.referenceImageUrl = result.imageDataUri || result.imageUrls?.[0] || '';
+    const reference = await this.persistImage(
+      `images/bg_${backgroundId}.png`,
+      result.imageDataUri || result.imageUrls?.[0] || '',
+    );
+    background.referenceImageUrl = reference.url;
+    background.referenceImageStoragePath = reference.storagePath;
     await this.backgroundRepo.save(background);
 
-    return result.imageDataUri || result.imageUrls?.[0] || '';
+    return reference.url;
+  }
+
+  /**
+   * 从已持久化的存储路径恢复参考图 Object URL。
+   */
+  async getReferenceImageUrl(entity: { referenceImageUrl?: string; referenceImageStoragePath?: string }): Promise<string | null> {
+    if (entity.referenceImageStoragePath) {
+      const fileStorage = this.getFileStorage();
+      const exists = await fileStorage.blobExists(entity.referenceImageStoragePath);
+      if (exists) {
+        return fileStorage.getObjectUrl(entity.referenceImageStoragePath);
+      }
+    }
+    return entity.referenceImageUrl || null;
+  }
+
+  /**
+   * 通用图片持久化：dataURI / 外部 URL → Blob → OPFS（Phase 2-C）。
+   * 失败时回退到原始 URL/dataURI，不抛出错误以保证 UI 不被中断。
+   */
+  private async persistImage(storagePath: string, source: string): Promise<{ url: string; storagePath?: string }> {
+    if (!source) return { url: '' };
+
+    try {
+      const blob = source.startsWith('data:')
+        ? await (await fetch(source)).blob()
+        : await (await fetch(source)).blob();
+
+      if (!blob || blob.size === 0) return { url: source };
+
+      await this.getFileStorage().storeBlob(storagePath, blob);
+      const url = await this.getFileStorage().getObjectUrl(storagePath);
+      return { url, storagePath };
+    } catch (e) {
+      console.warn(`[ImageGenerationService] Failed to persist image to OPFS, fallback to source URL:`, e);
+      return { url: source };
+    }
   }
 }

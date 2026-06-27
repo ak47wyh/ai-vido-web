@@ -144,7 +144,7 @@ export const storyService = new StoryService(
 );
 
 export const imageGenerationService = new ImageGenerationService(
-  characterRepo, backgroundRepo, platformRouter
+  characterRepo, backgroundRepo, platformRouter, getFileStorage
 );
 
 export const textGenerationService = new TextGenerationService(platformRouter);
@@ -155,16 +155,16 @@ export const textLabService = new TextLabService(platformRouter);
 // 视音频域服务（视频生成/配音/BGM/后期）
 // ========================================
 export const videoGenerationService = new VideoGenerationService(
-  videoTaskRepo, segmentRepo, characterRepo, backgroundRepo, platformRouter
+  videoTaskRepo, segmentRepo, characterRepo, backgroundRepo, platformRouter, getFileStorage
 );
 
 export const videoLabService = new VideoLabService(platformRouter);
 
-export const voiceService = new VoiceService(platformRouter, characterRepo);
+export const voiceService = new VoiceService(platformRouter, characterRepo, segmentRepo, getFileStorage);
 
-export const musicService = new MusicService(platformRouter, segmentRepo);
+export const musicService = new MusicService(platformRouter, segmentRepo, getFileStorage);
 
-export const musicLabService = new MusicLabService(platformRouter);
+export const musicLabService = new MusicLabService(platformRouter, getFileStorage);
 
 export const postProcessService = new PostProcessService(ffmpegAdapter, whisperAdapter);
 
@@ -177,6 +177,7 @@ export const pipelineService = new PipelineService({
   storyRepo, segmentRepo, characterRepo, backgroundRepo, videoTaskRepo, finalCutRepo,
   router: platformRouter,
   postProcess: postProcessService, subtitle: subtitleService,
+  fileStorage: getFileStorage,
 });
 
 // ========================================

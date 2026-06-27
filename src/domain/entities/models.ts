@@ -15,6 +15,8 @@ export interface Character {
   referenceImageUrl?: string;
   voiceId?: string;
   createdAt: number;
+  /** 参考图 OPFS 存储路径（Phase 2-C 持久化，referenceImageUrl 过期/体积大时优化） */
+  referenceImageStoragePath?: string;
 }
 
 export interface Background {
@@ -24,6 +26,8 @@ export interface Background {
   environmentPrompt: string;
   referenceImageUrl?: string;
   createdAt: number;
+  /** 参考图 OPFS 存储路径（Phase 2-C 持久化） */
+  referenceImageStoragePath?: string;
 }
 
 export type StoryStatus = 'DRAFT' | 'SPLIT';
@@ -50,6 +54,10 @@ export interface StorySegment {
   bgmIsInstrumental?: boolean;
   actionContent?: string;
   firstFrameImage?: string;
+  /** 旁白音频的 OPFS 存储路径（Phase 2-A 持久化） */
+  narrationAudioStoragePath?: string;
+  /** BGM 音频的 OPFS 存储路径（Phase 2-B 持久化，bgmAudioUrl 过期时降级） */
+  bgmStoragePath?: string;
 }
 
 export type VideoTaskStatus = 'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAILED';
@@ -78,6 +86,8 @@ export interface VideoTask {
   promptOptimizer?: boolean;
   firstFrameImage?: string;
   lastFrameImage?: string;
+  /** 生成视频的 OPFS 存储路径（Phase 2-B 持久化，videoUrl 过期时降级） */
+  videoStoragePath?: string;
 }
 
 // --- Final Cut & Pipeline (v7) ---
@@ -127,6 +137,10 @@ export interface FinalCut {
   hasSubtitles: boolean;
   srtContent?: string;
   createdAt: number;
+  /** 缩略图 OPFS 存储路径（Phase 2-C 持久化，thumbnailUrl 失效时降级） */
+  thumbnailStoragePath?: string;
+  /** 最终成片 OPFS 存储路径（Phase 2-C 持久化，videoBlob 庞大时可消除 Dexie 压力） */
+  videoStoragePath?: string;
 }
 
 // --- Asset Library (v8) ---

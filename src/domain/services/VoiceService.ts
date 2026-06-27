@@ -1,5 +1,6 @@
 import type { IVoicePort, T2AAsyncContext, T2AAsyncStatus, T2ASyncContext, T2ASyncResult, T2AStreamCallbacks, T2AStreamHandle, VoiceDesignResult, VoiceType, VoiceListResult } from '../ports/OutboundPorts';
-import type { ICharacterRepository } from '../ports/OutboundPorts';
+import type { ICharacterRepository, IStorySegmentRepository } from '../ports/OutboundPorts';
+import type { IFileStoragePort } from '../ports/FileStoragePorts';
 import type { StorySegment } from '../entities/models';
 import type { PlatformRouter } from './PlatformRouter';
 import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
@@ -19,13 +20,19 @@ export interface CloneVoiceOptions {
 export class VoiceService {
   private router: PlatformRouter;
   characterRepo: ICharacterRepository;
+  segmentRepo: IStorySegmentRepository;
+  private getFileStorage: () => IFileStoragePort;
 
   constructor(
     router: PlatformRouter,
-    characterRepo: ICharacterRepository
+    characterRepo: ICharacterRepository,
+    segmentRepo: IStorySegmentRepository,
+    fileStorage: IFileStoragePort | (() => IFileStoragePort),
   ) {
     this.router = router;
     this.characterRepo = characterRepo;
+    this.segmentRepo = segmentRepo;
+    this.getFileStorage = typeof fileStorage === 'function' ? fileStorage : () => fileStorage;
   }
 
   /** 获取当前配置对应的语音合成适配器 */
@@ -270,7 +277,7 @@ export class VoiceService {
   }
 
   /**
-   * 将 T2ASyncResult 解析为可播放的 Blob URL
+   * 将 T2ASyncResult 解析为可播放的 Blob URL（不持久化，仅临时播放）
    * - 如果返回的是 hex 编码，直接转 Blob URL
    * - 如果返回的是 URL，通过 fetchAudioAsBlobUrl 带 auth 下载后转 Blob URL
    */
@@ -282,6 +289,94 @@ export class VoiceService {
       return this.getVoicePort().fetchAudioAsBlobUrl(result.audioUrl);
     }
     throw new Error('未返回音频数据');
+  }
+
+  /**
+   * 为分镜生成旁白并持久化到 OPFS（Phase 2-A）。
+   *
+   * 数据流：
+   *   1. 同步合成音频
+   *   2. hex/URL → Blob
+   *   3. 写入 OPFS：audio/narration_{segmentId}.mp3
+   *   4. 写入 segment.narrationAudioStoragePath
+   *   5. segmentRepo.save 持久化元数据
+   *   6. 返回 Object URL 供当前会话播放
+   *
+   * 刷新后组件可从 segment.narrationAudioStoragePath 通过 getNarrationAudioUrl() 恢复。
+   */
+  async generateAndPersistNarration(segmentId: string, text: string, voiceId: string): Promise<string> {
+    const segment = await this.segmentRepo.findById(segmentId);
+    if (!segment) throw new Error('Segment not found');
+
+    const result = await this.synthesizeSync(text, voiceId);
+    const blob = await this.resultToAudioBlob(result);
+
+    const storagePath = `audio/narration_${segmentId}.mp3`;
+    await this.getFileStorage().storeBlob(storagePath, blob);
+
+    segment.narrationAudioStoragePath = storagePath;
+    await this.segmentRepo.save(segment);
+
+    return this.getFileStorage().getObjectUrl(storagePath);
+  }
+
+  /**
+   * 异步版：创建长文异步任务，轮询完成后持久化（Phase 2-A）。
+   */
+  async generateAndPersistNarrationAsync(
+    segmentId: string,
+    text: string,
+    voiceId: string,
+    onProgress?: (status: T2AAsyncStatus) => void,
+  ): Promise<string> {
+    const segment = await this.segmentRepo.findById(segmentId);
+    if (!segment) throw new Error('Segment not found');
+
+    if (text.length <= SYNC_T2A_MAX_LENGTH) {
+      return this.generateAndPersistNarration(segmentId, text, voiceId);
+    }
+
+    const taskId = await this.createAsyncTask(text, voiceId);
+
+    let status: T2AAsyncStatus;
+    do {
+      await new Promise(r => setTimeout(r, 3000));
+      status = await this.queryNarrationStatus(taskId);
+      onProgress?.(status);
+    } while (status.status === 'processing');
+
+    if (status.status !== 'success' || !status.audioUrl) {
+      throw new Error(status.errorMessage || '异步 T2A 任务失败');
+    }
+
+    const audioBlobUrl = await this.getVoicePort().fetchAudioAsBlobUrl(status.audioUrl);
+    let blob: Blob;
+    try {
+      const blobRes = await fetch(audioBlobUrl);
+      blob = await blobRes.blob();
+    } finally {
+      this.getFileStorage().revokeObjectUrl(audioBlobUrl);
+    }
+
+    const storagePath = `audio/narration_${segmentId}.mp3`;
+    await this.getFileStorage().storeBlob(storagePath, blob);
+
+    segment.narrationAudioStoragePath = storagePath;
+    await this.segmentRepo.save(segment);
+
+    return this.getFileStorage().getObjectUrl(storagePath);
+  }
+
+  /**
+   * 从已持久化的分镜恢复旁白 Object URL。
+   * 若 segment 未持久化或文件已失效，返回 null。
+   */
+  async getNarrationAudioUrl(segment: StorySegment): Promise<string | null> {
+    if (!segment.narrationAudioStoragePath) return null;
+    const fileStorage = this.getFileStorage();
+    const exists = await fileStorage.blobExists(segment.narrationAudioStoragePath);
+    if (!exists) return null;
+    return fileStorage.getObjectUrl(segment.narrationAudioStoragePath);
   }
 
   /**
@@ -303,14 +398,35 @@ export class VoiceService {
     }
   }
 
-  /** hex 编码音频转 Blob URL */
-  private hexToBlobUrl(hex: string, format = 'mp3'): string {
+  /** hex 编码音频转 Blob */
+  private hexToAudioBlob(hex: string, format = 'mp3'): Blob {
     const bytes = new Uint8Array(hex.length / 2);
     for (let i = 0; i < hex.length; i += 2) {
       bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
     }
-    const blob = new Blob([bytes], { type: `audio/${format}` });
-    return URL.createObjectURL(blob);
+    return new Blob([bytes], { type: `audio/${format}` });
+  }
+
+  /** hex 编码音频转 Blob URL */
+  private hexToBlobUrl(hex: string, format = 'mp3'): string {
+    return URL.createObjectURL(this.hexToAudioBlob(hex, format));
+  }
+
+  /** T2ASyncResult → 音频 Blob */
+  private async resultToAudioBlob(result: T2ASyncResult): Promise<Blob> {
+    if (result.audioHex) {
+      return this.hexToAudioBlob(result.audioHex);
+    }
+    if (result.audioUrl) {
+      const blobUrl = await this.getVoicePort().fetchAudioAsBlobUrl(result.audioUrl);
+      try {
+        const res = await fetch(blobUrl);
+        return await res.blob();
+      } finally {
+        this.getFileStorage().revokeObjectUrl(blobUrl);
+      }
+    }
+    throw new Error('未返回音频数据');
   }
 
   /**

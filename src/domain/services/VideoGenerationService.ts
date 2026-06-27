@@ -11,6 +11,7 @@ import type {
   VideoModel,
   VideoResolution
 } from '../ports/OutboundPorts';
+import type { IFileStoragePort } from '../ports/FileStoragePorts';
 import type { PlatformRouter } from './PlatformRouter';
 import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
 import { getErrorMessage } from '../../ui/utils/errorUtils';
@@ -31,6 +32,7 @@ export class VideoGenerationService {
   characterRepo: ICharacterRepository;
   backgroundRepo: IBackgroundRepository;
   private router: PlatformRouter;
+  private getFileStorage: () => IFileStoragePort;
 
   private activePollers = new Map<string, ReturnType<typeof setInterval>>();
 
@@ -39,13 +41,15 @@ export class VideoGenerationService {
     segmentRepo: IStorySegmentRepository,
     characterRepo: ICharacterRepository,
     backgroundRepo: IBackgroundRepository,
-    router: PlatformRouter
+    router: PlatformRouter,
+    fileStorage: IFileStoragePort | (() => IFileStoragePort),
   ) {
     this.videoTaskRepo = videoTaskRepo;
     this.segmentRepo = segmentRepo;
     this.characterRepo = characterRepo;
     this.backgroundRepo = backgroundRepo;
     this.router = router;
+    this.getFileStorage = typeof fileStorage === 'function' ? fileStorage : () => fileStorage;
   }
 
   /** 获取当前配置对应的视频生成适配器 */
@@ -175,6 +179,13 @@ export class VideoGenerationService {
         this.pollTaskStatus(task.id, task.externalTaskId);
       }
     }
+    // 刷新后回填已完成但未缓存的视频（Phase 2-B）
+    const successTasks = await this.videoTaskRepo.findByStatuses(['SUCCESS']);
+    for (const task of successTasks) {
+      if (task.videoUrl && !task.videoStoragePath) {
+        this.cacheVideoInBackground(task);
+      }
+    }
   }
 
   /** Cancel all active polling intervals (call on app teardown) */
@@ -220,6 +231,15 @@ export class VideoGenerationService {
           clearInterval(interval);
           this.activePollers.delete(taskId);
           await this.videoTaskRepo.updateStatus(taskId, result.status, result.videoUrl, result.errorMessage);
+          // Phase 2-B：视频成功后异步缓存到 OPFS，避免外部 URL 过期失效
+          if (result.status === 'SUCCESS' && result.videoUrl) {
+            // updateStatus 已设置 url，重新通过 statuses 查找该任务构造 VideoTask 用于缓存
+            const candidates = await this.videoTaskRepo.findByStatuses(['SUCCESS']);
+            const fresh = candidates.find(t => t.id === taskId);
+            if (fresh && !fresh.videoStoragePath) {
+              this.cacheVideoInBackground(fresh);
+            }
+          }
         } else if (retries >= maxRetries) {
           clearInterval(interval);
           this.activePollers.delete(taskId);
@@ -234,5 +254,48 @@ export class VideoGenerationService {
     }, pollInterval);
 
     this.activePollers.set(taskId, interval);
+  }
+
+  /**
+   * 后台缓存视频到 OPFS（Phase 2-B）。
+   * - 不阻塞 UI，失败时保留 videoUrl 降级显示
+   * - 文件大小超过 200MB 时跳过，避免占用过多 OPFS 配额
+   */
+  private cacheVideoInBackground(task: VideoTask): void {
+    if (!task.videoUrl || task.videoStoragePath) return;
+
+    const storagePath = `video/${task.id}.mp4`;
+
+    (async () => {
+      try {
+        const res = await fetch(task.videoUrl!);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        if (blob.size > 200 * 1024 * 1024) {
+          console.warn(`[VideoGenerationService] Video too large (${blob.size} bytes), skip caching`);
+          return;
+        }
+        await this.getFileStorage().storeBlob(storagePath, blob);
+        task.videoStoragePath = storagePath;
+        await this.videoTaskRepo.save(task);
+      } catch (e) {
+        console.warn(`[VideoGenerationService] Failed to cache video ${task.id}:`, e);
+      }
+    })();
+  }
+
+  /**
+   * 优先从本地缓存读取视频 Blob URL，否则降级到外部 URL。
+   * UI 层播放视频时调用。
+   */
+  async getVideoPlaybackUrl(task: VideoTask): Promise<string> {
+    if (task.videoStoragePath) {
+      const fileStorage = this.getFileStorage();
+      const exists = await fileStorage.blobExists(task.videoStoragePath);
+      if (exists) {
+        return fileStorage.getObjectUrl(task.videoStoragePath);
+      }
+    }
+    return task.videoUrl || '';
   }
 }

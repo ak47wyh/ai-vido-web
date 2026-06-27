@@ -62,10 +62,14 @@ let _responseAdapter: IModelResponsePort | null = null;
  * - 订阅 onPlatformChange 事件，自动 reset 缓存
  */
 export class PlatformRouter {
+  private configStore: IApiConfigStore;
+  private capabilities: IPlatformCapabilitiesPort;
   constructor(
-    private configStore: IApiConfigStore = apiConfigStoreAdapter,
-    private capabilities: IPlatformCapabilitiesPort = platformCapabilitiesAdapter
+    configStore: IApiConfigStore = apiConfigStoreAdapter,
+    capabilities: IPlatformCapabilitiesPort = platformCapabilitiesAdapter
   ) {
+    this.configStore = configStore;
+    this.capabilities = capabilities;
     this.configStore.onPlatformChange(() => {
       this.reset();
     });

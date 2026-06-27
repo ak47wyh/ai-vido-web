@@ -1,17 +1,21 @@
 import type { IMusicPort, IStorySegmentRepository, MusicGenerationContext, MusicModel, LyricsGenerationContext, LyricsGenerationResult, CoverPreprocessResult } from '../ports/OutboundPorts';
+import type { IFileStoragePort } from '../ports/FileStoragePorts';
 import type { PlatformRouter } from './PlatformRouter';
 import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
 
 export class MusicService {
   private router: PlatformRouter;
   segmentRepo: IStorySegmentRepository;
+  private getFileStorage: () => IFileStoragePort;
 
   constructor(
     router: PlatformRouter,
-    segmentRepo: IStorySegmentRepository
+    segmentRepo: IStorySegmentRepository,
+    fileStorage: IFileStoragePort | (() => IFileStoragePort),
   ) {
     this.router = router;
     this.segmentRepo = segmentRepo;
+    this.getFileStorage = typeof fileStorage === 'function' ? fileStorage : () => fileStorage;
   }
 
   /** 获取当前配置对应的音乐生成适配器 */
@@ -138,6 +142,8 @@ export class MusicService {
 
   /**
    * Bind a BGM audio URL to a segment.
+   * 同时尝试下载音频 Blob 持久化到 OPFS（Phase 2-B），
+   * 失败时保留 bgmAudioUrl 降级显示。
    */
   async bindBGMToSegment(
     segmentId: string,
@@ -154,7 +160,37 @@ export class MusicService {
     segment.bgmLyrics = lyrics;
     segment.bgmIsInstrumental = isInstrumental;
 
+    // Phase 2-B：尝试下载音频并持久化到 OPFS
+    if (!audioUrl.startsWith('mock://')) {
+      try {
+        const res = await fetch(audioUrl);
+        if (res.ok) {
+          const blob = await res.blob();
+          const storagePath = `audio/bgm_${segmentId}.mp3`;
+          await this.getFileStorage().storeBlob(storagePath, blob);
+          segment.bgmStoragePath = storagePath;
+        }
+      } catch (e) {
+        console.warn(`[MusicService] Failed to cache BGM for segment ${segmentId}:`, e);
+      }
+    }
+
     await this.segmentRepo.save(segment);
+  }
+
+  /**
+   * 优先从本地缓存读取 BGM Blob URL，否则降级到外部 URL。
+   * UI 层播放 BGM 时调用。
+   */
+  async getBGMPlaybackUrl(segment: { bgmAudioUrl?: string; bgmStoragePath?: string }): Promise<string | null> {
+    if (segment.bgmStoragePath) {
+      const fileStorage = this.getFileStorage();
+      const exists = await fileStorage.blobExists(segment.bgmStoragePath);
+      if (exists) {
+        return fileStorage.getObjectUrl(segment.bgmStoragePath);
+      }
+    }
+    return segment.bgmAudioUrl || null;
   }
 
   /**

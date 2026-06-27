@@ -6,11 +6,14 @@ import type {
   LyricsGenerationResult,
   CoverPreprocessResult,
 } from '../ports/OutboundPorts';
+import type { IFileStoragePort } from '../ports/FileStoragePorts';
 import type { PlatformRouter } from './PlatformRouter';
 import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
 
 export interface ResolvedMusicResult {
   audioUrl: string;
+  /** OPFS 存储路径（Phase 2-A 持久化），刷新后可用 restoreFromStorage() 恢复 */
+  storagePath?: string;
   duration: number;
   sampleRate: number;
   bitrate: number;
@@ -19,14 +22,20 @@ export interface ResolvedMusicResult {
 }
 
 /**
- * 独立音乐实验室服务，仅注入 IMusicPort。
- * 负责 hex → Blob URL 转换，UI 层直接拿到可播放的 URL。
+ * 独立音乐实验室服务，仅注入 IMusicPort + IFileStoragePort。
+ * 负责 hex → Blob URL 转换，并将生成的音频持久化到 OPFS（Phase 2-A），
+ * 避免页面刷新后音乐丢失。
  */
 export class MusicLabService {
   private router: PlatformRouter;
+  private getFileStorage: () => IFileStoragePort;
 
-  constructor(router: PlatformRouter) {
+  constructor(
+    router: PlatformRouter,
+    fileStorage: IFileStoragePort | (() => IFileStoragePort),
+  ) {
     this.router = router;
+    this.getFileStorage = typeof fileStorage === 'function' ? fileStorage : () => fileStorage;
   }
 
   /** 获取当前配置对应的音乐生成适配器 */
@@ -35,26 +44,29 @@ export class MusicLabService {
   }
 
   /**
-   * 生成音乐 — 返回可播放的 Blob URL
-   * 内部处理 hex → Blob URL 转换
+   * 生成音乐 — 返回可播放的 Blob URL 与 OPFS 存储路径。
+   * 数据流：hex/URL → Blob → OPFS(audio/music_{id}.mp3) → Object URL
    */
   async generateMusic(context: MusicGenerationContext): Promise<ResolvedMusicResult> {
-    // 使用 hex 格式请求，Service 层负责转 Blob URL
     const result: MusicGenerationResult = await this.getMusicPort().generateMusic({
       ...context,
       outputFormat: 'hex',
     });
 
-    const audioUrl = await this.resolveAudioUrl(result);
+    const audioBlob = await this.resultToAudioBlob(result);
+    const id = `music_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const storagePath = `audio/${id}.mp3`;
 
-    return {
-      audioUrl,
-      duration: result.duration || 0,
-      sampleRate: result.sampleRate || 44100,
-      bitrate: result.bitrate || 256000,
-      channel: result.channel || 2,
-      size: result.size || 0,
-    };
+    try {
+      await this.getFileStorage().storeBlob(storagePath, audioBlob);
+    } catch (e) {
+      console.warn('[MusicLabService] Failed to persist music to OPFS, falling back to in-memory Blob URL:', e);
+      const audioUrl = URL.createObjectURL(audioBlob);
+      return this.buildResult(audioUrl, undefined, result);
+    }
+
+    const audioUrl = await this.getFileStorage().getObjectUrl(storagePath);
+    return this.buildResult(audioUrl, storagePath, result);
   }
 
   /** 歌词生成 */
@@ -98,33 +110,58 @@ export class MusicLabService {
   }
 
   /**
-   * 将 MusicGenerationResult 解析为可播放的 Blob URL
-   * - audioHex: hex 编码 → Blob URL
-   * - audioUrl: 直接返回（Mock 模式或 URL 格式）
+   * 从已持久化的存储路径恢复 Object URL。
+   * UI 层在页面挂载时调用，恢复刷新前生成的音乐。
    */
-  private async resolveAudioUrl(result: MusicGenerationResult): Promise<string> {
-    // hex 优先
+  async restoreFromStorage(storagePath: string): Promise<string | null> {
+    const fileStorage = this.getFileStorage();
+    const exists = await fileStorage.blobExists(storagePath);
+    if (!exists) return null;
+    return fileStorage.getObjectUrl(storagePath);
+  }
+
+  /** 删除已持久化的音乐文件 */
+  async deleteFromStorage(storagePath: string): Promise<void> {
+    await this.getFileStorage().deleteBlob(storagePath);
+  }
+
+  // ===== Private helpers =====
+
+  private buildResult(audioUrl: string, storagePath: string | undefined, result: MusicGenerationResult): ResolvedMusicResult {
+    return {
+      audioUrl,
+      storagePath,
+      duration: result.duration || 0,
+      sampleRate: result.sampleRate || 44100,
+      bitrate: result.bitrate || 256000,
+      channel: result.channel || 2,
+      size: result.size || 0,
+    };
+  }
+
+  /** MusicGenerationResult → 音频 Blob */
+  private async resultToAudioBlob(result: MusicGenerationResult): Promise<Blob> {
     if (result.audioHex) {
-      return this.hexToBlobUrl(result.audioHex);
+      return this.hexToAudioBlob(result.audioHex);
     }
-    // URL 格式
     if (result.audioUrl) {
-      // Mock URL 直接返回
+      // Mock 模式：构造占位 Blob
       if (result.audioUrl.startsWith('mock://')) {
-        return result.audioUrl;
+        return new Blob([new Uint8Array(1024)], { type: 'audio/mpeg' });
       }
-      return result.audioUrl;
+      const res = await fetch(result.audioUrl);
+      if (!res.ok) throw new Error(`Failed to fetch music: ${res.status}`);
+      return await res.blob();
     }
     throw new Error('音频生成失败：未返回音频数据');
   }
 
-  /** hex 编码音频转 Blob URL */
-  private hexToBlobUrl(hex: string): string {
+  /** hex 编码音频转 Blob */
+  private hexToAudioBlob(hex: string): Blob {
     const bytes = new Uint8Array(hex.length / 2);
     for (let i = 0; i < bytes.length; i++) {
       bytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
     }
-    const blob = new Blob([bytes], { type: 'audio/mpeg' });
-    return URL.createObjectURL(blob);
+    return new Blob([bytes], { type: 'audio/mpeg' });
   }
 }

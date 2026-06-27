@@ -14,6 +14,7 @@ import type {
   VideoModel,
   VideoResolution
 } from '../ports/OutboundPorts';
+import type { IFileStoragePort } from '../ports/FileStoragePorts';
 import type { PostProcessService } from './PostProcessService';
 import type { SubtitleService } from './SubtitleService';
 import type { PlatformRouter } from './PlatformRouter';
@@ -44,6 +45,7 @@ interface PipelineDeps {
   router: PlatformRouter;
   postProcess: PostProcessService;
   subtitle: SubtitleService;
+  fileStorage: IFileStoragePort | (() => IFileStoragePort);
 }
 
 const POLL_INTERVAL_MS = 5000;
@@ -55,7 +57,14 @@ export class PipelineService {
   private videoPollers: Map<string, ReturnType<typeof setInterval>> = new Map();
 
   private deps: PipelineDeps;
-  constructor(deps: PipelineDeps) { this.deps = deps; }
+  private getFileStorage: () => IFileStoragePort;
+
+  constructor(deps: PipelineDeps) {
+    this.deps = deps;
+    this.getFileStorage = typeof deps.fileStorage === 'function'
+      ? deps.fileStorage
+      : () => deps.fileStorage as IFileStoragePort;
+  }
 
   /** 获取当前配置对应的图片生成适配器 */
   private getImagePort(): IImageGeneratorPort {
@@ -457,21 +466,34 @@ export class PipelineService {
     const finalVideoBlob = await this.deps.postProcess.concatClips(mergedClips);
 
     onProgress?.(90, '正在生成最终成片...');
-    
+
+    const finalCutId = uuidv4();
+
     // Attempt to generate a thumbnail from the first clip
     let thumbnailUrl = '';
+    let thumbnailStoragePath: string | undefined;
     try {
       const firstFrameBlob = await this.deps.postProcess.extractFrame(finalVideoBlob, 0);
-      thumbnailUrl = URL.createObjectURL(firstFrameBlob);
+      // Phase 2-C：缩略图持久化到 OPFS，避免内存 Blob URL 刷新后失效
+      const storagePath = `images/thumb_${finalCutId}.jpg`;
+      try {
+        await this.getFileStorage().storeBlob(storagePath, firstFrameBlob);
+        thumbnailStoragePath = storagePath;
+        thumbnailUrl = await this.getFileStorage().getObjectUrl(storagePath);
+      } catch (cacheErr) {
+        console.warn('[Pipeline] failed to persist thumbnail, falling back to in-memory Blob URL:', cacheErr);
+        thumbnailUrl = URL.createObjectURL(firstFrameBlob);
+      }
     } catch (e) {
       console.warn('[Pipeline] failed to extract thumbnail:', e);
     }
 
     const finalCut: FinalCut = {
-      id: uuidv4(),
+      id: finalCutId,
       storyId,
       videoBlob: finalVideoBlob,
       thumbnailUrl,
+      thumbnailStoragePath,
       duration: segments.length * 6 * 1000, // approximation
       size: finalVideoBlob.size,
       hasSubtitles: false,
@@ -483,6 +505,21 @@ export class PipelineService {
     
     onProgress?.(100, '合成完成！');
     return finalCut;
+  }
+
+  /**
+   * 公开 API：从已持久化的 FinalCut 恢复缩略图 Object URL（Phase 2-C）。
+   * UI 层在挂载时调用，刷新后可继续显示缩略图。
+   */
+  async getThumbnailUrl(finalCut: FinalCut): Promise<string | null> {
+    if (finalCut.thumbnailStoragePath) {
+      const fileStorage = this.getFileStorage();
+      const exists = await fileStorage.blobExists(finalCut.thumbnailStoragePath);
+      if (exists) {
+        return fileStorage.getObjectUrl(finalCut.thumbnailStoragePath);
+      }
+    }
+    return finalCut.thumbnailUrl || null;
   }
 
   private async findCharacterForSegment(segment: StorySegment): Promise<Character | null> {
