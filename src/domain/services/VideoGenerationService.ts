@@ -12,10 +12,10 @@ import type {
   VideoResolution
 } from '../ports/OutboundPorts';
 import type { IFileStoragePort } from '../ports/FileStoragePorts';
+import type { IApiConfigStore } from '../ports/PlatformPorts';
+import type { ILoggerPort } from '../ports/CrossCuttingPorts';
 import type { PlatformRouter } from './PlatformRouter';
-import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
 import { getErrorMessage } from '../../ui/utils/errorUtils';
-import { defaultLogger } from '../../adapters/outbound/infrastructure/ConsoleLoggerAdapter';
 
 export interface VideoGenerationOptions {
   mode?: VideoGenerationMode;
@@ -27,13 +27,19 @@ export interface VideoGenerationOptions {
   lastFrameImage?: string;
 }
 
+/**
+ * VideoGenerationService
+ * - Phase 2 反转：依赖注入 IApiConfigStore + ILoggerPort，移除对
+ *   ApiConfigStore 单例和 defaultLogger 的硬编码引用。
+ */
 export class VideoGenerationService {
   videoTaskRepo: IVideoTaskRepository;
   segmentRepo: IStorySegmentRepository;
   characterRepo: ICharacterRepository;
   backgroundRepo: IBackgroundRepository;
   private router: PlatformRouter;
-  private logger = defaultLogger;
+  private configStore: IApiConfigStore;
+  private logger: ILoggerPort;
   private getFileStorage: () => IFileStoragePort;
 
   private activePollers = new Map<string, ReturnType<typeof setInterval>>();
@@ -45,6 +51,8 @@ export class VideoGenerationService {
     backgroundRepo: IBackgroundRepository,
     router: PlatformRouter,
     fileStorage: IFileStoragePort | (() => IFileStoragePort),
+    configStore: IApiConfigStore,
+    logger: ILoggerPort,
   ) {
     this.videoTaskRepo = videoTaskRepo;
     this.segmentRepo = segmentRepo;
@@ -52,11 +60,13 @@ export class VideoGenerationService {
     this.backgroundRepo = backgroundRepo;
     this.router = router;
     this.getFileStorage = typeof fileStorage === 'function' ? fileStorage : () => fileStorage;
+    this.configStore = configStore;
+    this.logger = logger;
   }
 
   /** 获取当前配置对应的视频生成适配器 */
   private getVideoPort(): IVideoGeneratorPort {
-    const config = ApiConfigStore.load();
+    const config = this.configStore.load();
     return this.router.resolve('video', config);
   }
 

@@ -1,28 +1,33 @@
 import type { IMusicPort, IStorySegmentRepository, MusicGenerationContext, MusicModel, LyricsGenerationContext, LyricsGenerationResult, CoverPreprocessResult } from '../ports/OutboundPorts';
 import type { IFileStoragePort } from '../ports/FileStoragePorts';
+import type { IApiConfigStore } from '../ports/PlatformPorts';
+import type { ILoggerPort } from '../ports/CrossCuttingPorts';
 import type { PlatformRouter } from './PlatformRouter';
-import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
-import { defaultLogger } from '../../adapters/outbound/infrastructure/ConsoleLoggerAdapter';
 
 export class MusicService {
   private router: PlatformRouter;
-  private logger = defaultLogger;
+  private configStore: IApiConfigStore;
+  private logger: ILoggerPort;
   segmentRepo: IStorySegmentRepository;
   private getFileStorage: () => IFileStoragePort;
 
   constructor(
     router: PlatformRouter,
+    configStore: IApiConfigStore,
     segmentRepo: IStorySegmentRepository,
     fileStorage: IFileStoragePort | (() => IFileStoragePort),
+    logger: ILoggerPort,
   ) {
     this.router = router;
+    this.configStore = configStore;
     this.segmentRepo = segmentRepo;
     this.getFileStorage = typeof fileStorage === 'function' ? fileStorage : () => fileStorage;
+    this.logger = logger;
   }
 
   /** 获取当前配置对应的音乐生成适配器 */
   private getMusicPort(): IMusicPort {
-    return this.router.resolveMusic(ApiConfigStore.load());
+    return this.router.resolveMusic(this.configStore.load());
   }
 
   /**
@@ -173,7 +178,13 @@ export class MusicService {
           segment.bgmStoragePath = storagePath;
         }
       } catch (e) {
-        this.logger.warn(`Failed to cache BGM for segment ${segmentId}`, e instanceof Error ? e : new Error(String(e)));
+        const err = e instanceof Error ? e : new Error(String(e));
+        this.logger.warn(`Failed to cache BGM for segment ${segmentId}`, {
+          service: 'MusicService',
+          method: 'generateBGM',
+          segmentId,
+          error: err.message,
+        });
       }
     }
 

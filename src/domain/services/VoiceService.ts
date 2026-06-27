@@ -1,10 +1,10 @@
 import type { IVoicePort, T2AAsyncContext, T2AAsyncStatus, T2ASyncContext, T2ASyncResult, T2AStreamCallbacks, T2AStreamHandle, VoiceDesignResult, VoiceType, VoiceListResult } from '../ports/OutboundPorts';
 import type { ICharacterRepository, IStorySegmentRepository } from '../ports/OutboundPorts';
 import type { IFileStoragePort } from '../ports/FileStoragePorts';
+import type { IApiConfigStore } from '../ports/PlatformPorts';
+import type { ILoggerPort } from '../ports/CrossCuttingPorts';
 import type { StorySegment } from '../entities/models';
 import type { PlatformRouter } from './PlatformRouter';
-import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
-import { defaultLogger } from '../../adapters/outbound/infrastructure/ConsoleLoggerAdapter';
 
 /** Max text length for synchronous T2A (short text = instant response) */
 const SYNC_T2A_MAX_LENGTH = 500;
@@ -18,9 +18,15 @@ export interface CloneVoiceOptions {
   aigcWatermark?: boolean;
 }
 
+/**
+ * VoiceService
+ * - Phase 2 反转：依赖注入 IApiConfigStore + ILoggerPort，移除对
+ *   ApiConfigStore 单例和 defaultLogger 的硬编码引用。
+ */
 export class VoiceService {
   private router: PlatformRouter;
-  private logger = defaultLogger;
+  private configStore: IApiConfigStore;
+  private logger: ILoggerPort;
   characterRepo: ICharacterRepository;
   segmentRepo: IStorySegmentRepository;
   private getFileStorage: () => IFileStoragePort;
@@ -30,16 +36,20 @@ export class VoiceService {
     characterRepo: ICharacterRepository,
     segmentRepo: IStorySegmentRepository,
     fileStorage: IFileStoragePort | (() => IFileStoragePort),
+    configStore: IApiConfigStore,
+    logger: ILoggerPort,
   ) {
     this.router = router;
     this.characterRepo = characterRepo;
     this.segmentRepo = segmentRepo;
     this.getFileStorage = typeof fileStorage === 'function' ? fileStorage : () => fileStorage;
+    this.configStore = configStore;
+    this.logger = logger;
   }
 
   /** 获取当前配置对应的语音合成适配器 */
   private getVoicePort(): IVoicePort {
-    return this.router.resolveVoice(ApiConfigStore.load());
+    return this.router.resolveVoice(this.configStore.load());
   }
 
   /**

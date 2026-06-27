@@ -1,4 +1,6 @@
 import type { IFileStoragePort } from '../../../domain/ports/FileStoragePorts';
+import type { ILoggerPort } from '../../../domain/ports/CrossCuttingPorts';
+import { ConsoleLoggerAdapter } from '../infrastructure/ConsoleLoggerAdapter';
 import { OPFSFileStorageAdapter } from './OPFSFileStorageAdapter';
 import { IndexedDBFileStorageAdapter } from './IndexedDBFileStorageAdapter';
 
@@ -27,19 +29,31 @@ async function isOPFSAvailable(): Promise<boolean> {
  *
  * 使用示例：
  * ```ts
- * const fileStorage = await createFileStorageAdapter();
+ * const fileStorage = await createFileStorageAdapter(logger);
  * await fileStorage.initialize();
  * ```
+ *
+ * @param logger 可选 logger；缺省时使用独立 ConsoleLoggerAdapter（避免循环依赖）
  */
-export async function createFileStorageAdapter(): Promise<IFileStoragePort> {
+export async function createFileStorageAdapter(
+  logger?: ILoggerPort,
+): Promise<IFileStoragePort> {
+  const log = logger ?? new ConsoleLoggerAdapter({ service: 'fileStorage' });
+
   if (await isOPFSAvailable()) {
     const adapter = new OPFSFileStorageAdapter();
     await adapter.initialize();
-    console.log('[FileStorage] Using OPFS (Origin Private File System)');
+    log.info('[FileStorage] Using OPFS (Origin Private File System)', {
+      service: 'fileStorage',
+      storageType: 'opfs',
+    });
     return adapter;
   }
 
-  console.warn('[FileStorage] OPFS not available, falling back to IndexedDB');
+  log.warn('[FileStorage] OPFS not available, falling back to IndexedDB', {
+    service: 'fileStorage',
+    storageType: 'indexeddb',
+  });
   const adapter = new IndexedDBFileStorageAdapter();
   await adapter.initialize();
   return adapter;

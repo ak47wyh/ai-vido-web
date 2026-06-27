@@ -48,7 +48,7 @@ export const ToastProvider: React.FC<React.PropsWithChildren> = ({ children }) =
         removeToast(id);
         return;
       }
-      showToast(event.type, event.message);
+      showToast(event.type === 'warn' ? 'warning' : event.type, event.message);
     });
     return unsubscribe;
   }, [showToast, removeToast]);

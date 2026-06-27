@@ -31,6 +31,11 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
   const [dragStartX, setDragStartX] = useState(0);
   const [dragStartTime, setDragStartTime] = useState(0);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  // 持有 currentTimeMs 的最新值，供 rAF tick 读取（避免 effect 依赖该值导致重建）
+  const currentTimeMsRef = useRef(currentTimeMs);
+  useEffect(() => {
+    currentTimeMsRef.current = currentTimeMs;
+  }, [currentTimeMs]);
 
   const totalWidth = Math.max(timeline.duration, 5000) / 1000 * pxPerSecond;
 
@@ -64,21 +69,27 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
 
   useEffect(() => {
     if (!isPlaying) return;
-    const startTime = Date.now();
-    const initialCurrentTime = currentTimeMs;
-    const interval = setInterval(() => {
-      const elapsed = Date.now() - startTime;
-      const newTime = initialCurrentTime + elapsed;
-      if (newTime >= timeline.duration) {
-        setIsPlaying(false);
+    // 用 ref 持有 currentTimeMs 最新值，避免被列入依赖数组导致 effect 反复重建
+    let rafId: number;
+    let lastFrameTime = performance.now();
+    const tick = (now: number) => {
+      const delta = now - lastFrameTime;
+      lastFrameTime = now;
+      const next = currentTimeMsRef.current + delta;
+      if (next >= timeline.duration) {
+        currentTimeMsRef.current = timeline.duration;
         setCurrentTimeMs(timeline.duration);
+        setIsPlaying(false);
         onPause?.();
-      } else {
-        setCurrentTimeMs(newTime);
+        return;
       }
-    }, 50);
-    return () => clearInterval(interval);
-  }, [isPlaying, timeline.duration, onPause, currentTimeMs]);
+      currentTimeMsRef.current = next;
+      setCurrentTimeMs(next);
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, [isPlaying, timeline.duration, onPause]);
 
   const updateClipStartTime = (clipId: string, newStartTime: number) => {
     const newTracks = timeline.tracks.map(track => ({

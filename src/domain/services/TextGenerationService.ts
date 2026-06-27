@@ -1,18 +1,27 @@
 import type { ITextGenerationPort, RefineResult } from '../ports/OutboundPorts';
+import type { IApiConfigStore } from '../ports/PlatformPorts';
+import type { ILoggerPort } from '../ports/CrossCuttingPorts';
 import type { PlatformRouter } from './PlatformRouter';
-import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
 import { recordTextGenUsage } from '../../utils/cacheMonitor';
 
 export class TextGenerationService {
   private router: PlatformRouter;
+  private configStore: IApiConfigStore;
+  private logger: ILoggerPort;
 
-  constructor(router: PlatformRouter) {
+  constructor(
+    router: PlatformRouter,
+    configStore: IApiConfigStore,
+    logger: ILoggerPort,
+  ) {
     this.router = router;
+    this.configStore = configStore;
+    this.logger = logger;
   }
 
   /** 获取当前配置对应的文本生成适配器 */
   private getTextPort(): ITextGenerationPort {
-    const config = ApiConfigStore.load();
+    const config = this.configStore.load();
     return this.router.resolve('text', config);
   }
 

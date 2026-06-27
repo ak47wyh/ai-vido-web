@@ -6,10 +6,14 @@
  */
 
 import type { INetworkStatusPort, NetworkStatus } from '../../../domain/ports/UiPorts';
+import type { ILoggerPort } from '../../../domain/ports/CrossCuttingPorts';
+import { ConsoleLoggerAdapter } from './ConsoleLoggerAdapter';
 
 type NetworkListener = (status: NetworkStatus) => void;
 
 class NetworkEventBus {
+  constructor(private logger: ILoggerPort) {}
+
   private listeners = new Set<NetworkListener>();
 
   subscribe(listener: NetworkListener): () => void {
@@ -19,14 +23,23 @@ class NetworkEventBus {
 
   emit(status: NetworkStatus): void {
     this.listeners.forEach(l => {
-      try { l(status); } catch (e) {
-        console.error('[NetworkEventBus] listener error', e);
+      try {
+        l(status);
+      } catch (err) {
+        this.logger.error('[NetworkEventBus] listener error', err, {
+          service: 'BrowserNetworkStatusAdapter',
+          status,
+        });
       }
     });
   }
 }
 
-export const networkEventBus = new NetworkEventBus();
+export function createNetworkEventBus(logger?: ILoggerPort): NetworkEventBus {
+  return new NetworkEventBus(logger ?? new ConsoleLoggerAdapter({ service: 'BrowserNetworkStatusAdapter' }));
+}
+
+export const networkEventBus: NetworkEventBus = createNetworkEventBus();
 
 interface NetworkConnectionInfo {
   effectiveType?: string;
@@ -43,8 +56,10 @@ interface NavigatorWithConnection extends Navigator {
 
 class BrowserNetworkStatusAdapter implements INetworkStatusPort {
   private currentStatus: NetworkStatus = 'online';
+  private logger: ILoggerPort;
 
-  constructor() {
+  constructor(logger?: ILoggerPort) {
+    this.logger = logger ?? new ConsoleLoggerAdapter({ service: 'BrowserNetworkStatusAdapter' });
     if (typeof window === 'undefined') return;
 
     // 初始状态
@@ -84,9 +99,18 @@ class BrowserNetworkStatusAdapter implements INetworkStatusPort {
 
   private updateStatus(status: NetworkStatus): void {
     if (this.currentStatus === status) return;
+    this.logger.info('[BrowserNetworkStatusAdapter] status changed', {
+      service: 'BrowserNetworkStatusAdapter',
+      from: this.currentStatus,
+      to: status,
+    });
     this.currentStatus = status;
     networkEventBus.emit(status);
   }
+}
+
+export function createBrowserNetworkStatusAdapter(logger?: ILoggerPort): INetworkStatusPort {
+  return new BrowserNetworkStatusAdapter(logger);
 }
 
 export const browserNetworkStatusAdapter: INetworkStatusPort = new BrowserNetworkStatusAdapter();

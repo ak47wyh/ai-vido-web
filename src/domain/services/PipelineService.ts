@@ -15,12 +15,11 @@ import type {
   VideoResolution
 } from '../ports/OutboundPorts';
 import type { IFileStoragePort } from '../ports/FileStoragePorts';
+import type { IApiConfigStore } from '../ports/PlatformPorts';
 import type { ILoggerPort, IEventBus } from '../ports/CrossCuttingPorts';
 import type { PostProcessService } from './PostProcessService';
 import type { SubtitleService } from './SubtitleService';
 import type { PlatformRouter } from './PlatformRouter';
-import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
-import { defaultLogger } from '../../adapters/outbound/infrastructure/ConsoleLoggerAdapter';
 
 export type { PipelineTask, PipelineStatus, PipelineStep };
 
@@ -48,8 +47,10 @@ interface PipelineDeps {
   postProcess: PostProcessService;
   subtitle: SubtitleService;
   fileStorage: IFileStoragePort | (() => IFileStoragePort);
-  logger?: ILoggerPort;
+  logger: ILoggerPort;
   eventBus?: IEventBus;
+  /** Phase 2 反转：注入 IApiConfigStore，替代 ApiConfigStore 单例 */
+  configStore: IApiConfigStore;
 }
 
 const POLL_INTERVAL_MS = 5000;
@@ -76,7 +77,7 @@ export class PipelineService {
 
   constructor(deps: PipelineDeps) {
     this.deps = deps;
-    this.logger = deps.logger ?? defaultLogger;
+    this.logger = deps.logger;
     this.eventBus = deps.eventBus;
     this.getFileStorage = typeof deps.fileStorage === 'function'
       ? deps.fileStorage
@@ -92,15 +93,15 @@ export class PipelineService {
   }
 
   private getImagePort(): IImageGeneratorPort {
-    return this.deps.router.resolveImage(ApiConfigStore.load());
+    return this.deps.router.resolveImage(this.deps.configStore.load());
   }
 
   private getVideoPort(): IVideoGeneratorPort {
-    return this.deps.router.resolveVideo(ApiConfigStore.load());
+    return this.deps.router.resolveVideo(this.deps.configStore.load());
   }
 
   private getVoicePort(): IVoicePort {
-    return this.deps.router.resolveVoice(ApiConfigStore.load());
+    return this.deps.router.resolveVoice(this.deps.configStore.load());
   }
 
   subscribe(taskId: string, callback: (task: PipelineTask) => void): () => void {
@@ -375,7 +376,7 @@ export class PipelineService {
       this.startStage(task.id, 'generating_videos', '生成视频', 55);
       const videoTasks: VideoTask[] = [];
       const externalTaskIds: string[] = [];
-      const activePlatform = ApiConfigStore.load().activePlatform;
+      const activePlatform = this.deps.configStore.load().activePlatform;
       this.pendingVideoTasks.set(task.id, new Set(externalTaskIds));
 
       for (let i = 0; i < segments.length; i++) {

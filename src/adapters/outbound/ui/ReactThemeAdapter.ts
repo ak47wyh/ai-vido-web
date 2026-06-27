@@ -12,6 +12,8 @@
  */
 
 import type { IThemePort, ThemeMode } from '../../../domain/ports/UiPorts';
+import type { ILoggerPort } from '../../../domain/ports/CrossCuttingPorts';
+import { ConsoleLoggerAdapter } from '../infrastructure/ConsoleLoggerAdapter';
 import { ApiConfigStore } from '../config/ApiConfigStore';
 
 export type ThemeChangeEvent = {
@@ -21,6 +23,8 @@ export type ThemeChangeEvent = {
 type ThemeListener = (event: ThemeChangeEvent) => void;
 
 class ThemeEventBus {
+  constructor(private logger: ILoggerPort) {}
+
   private listeners = new Set<ThemeListener>();
 
   subscribe(listener: ThemeListener): () => void {
@@ -30,16 +34,27 @@ class ThemeEventBus {
 
   emit(event: ThemeChangeEvent): void {
     this.listeners.forEach(l => {
-      try { l(event); } catch (e) {
-        console.error('[ThemeEventBus] listener error', e);
+      try {
+        l(event);
+      } catch (err) {
+        this.logger.error('[ThemeEventBus] listener error', err, {
+          service: 'ReactThemeAdapter',
+        });
       }
     });
   }
 }
 
-export const themeEventBus = new ThemeEventBus();
+export function createThemeEventBus(logger?: ILoggerPort): ThemeEventBus {
+  return new ThemeEventBus(logger ?? new ConsoleLoggerAdapter({ service: 'ReactThemeAdapter' }));
+}
+
+// 默认实例（向后兼容）；dependencies.ts 可调用 createThemeEventBus(defaultLogger) 覆盖
+export const themeEventBus: ThemeEventBus = createThemeEventBus();
 
 class ReactThemeAdapter implements IThemePort {
+  constructor(private eventBus: ThemeEventBus = themeEventBus) {}
+
   getCurrentMode(): ThemeMode {
     const config = ApiConfigStore.load();
     return (config.theme as ThemeMode) || 'dark';
@@ -48,12 +63,16 @@ class ReactThemeAdapter implements IThemePort {
   setMode(mode: ThemeMode): void {
     const config = ApiConfigStore.load();
     ApiConfigStore.save({ ...config, theme: mode });
-    themeEventBus.emit({ mode });
+    this.eventBus.emit({ mode });
   }
 
   onChange(listener: (mode: ThemeMode) => void): () => void {
-    return themeEventBus.subscribe(event => listener(event.mode));
+    return this.eventBus.subscribe(event => listener(event.mode));
   }
+}
+
+export function createReactThemeAdapter(logger?: ILoggerPort): IThemePort {
+  return new ReactThemeAdapter(createThemeEventBus(logger));
 }
 
 export const reactThemeAdapter: IThemePort = new ReactThemeAdapter();

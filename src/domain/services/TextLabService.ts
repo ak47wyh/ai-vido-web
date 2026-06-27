@@ -5,8 +5,9 @@ import type {
   TextStreamCallbacks,
   TextGenerationResult,
 } from '../ports/OutboundPorts';
+import type { IApiConfigStore } from '../ports/PlatformPorts';
+import type { ILoggerPort } from '../ports/CrossCuttingPorts';
 import type { PlatformRouter } from './PlatformRouter';
-import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
 
 /**
  * 场景润色类型
@@ -126,14 +127,22 @@ const STYLE_MODIFIERS: Record<RefineStyle, string> = {
  */
 export class TextLabService {
   private router: PlatformRouter;
+  private configStore: IApiConfigStore;
+  private logger: ILoggerPort;
 
-  constructor(router: PlatformRouter) {
+  constructor(
+    router: PlatformRouter,
+    configStore: IApiConfigStore,
+    logger: ILoggerPort,
+  ) {
     this.router = router;
+    this.configStore = configStore;
+    this.logger = logger;
   }
 
   /** 获取当前配置对应的文本生成适配器 */
   private getTextPort(): ITextGenerationPort {
-    const config = ApiConfigStore.load();
+    const config = this.configStore.load();
     return this.router.resolve('text', config);
   }
 

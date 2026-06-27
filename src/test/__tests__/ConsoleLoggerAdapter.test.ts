@@ -102,4 +102,46 @@ describe('ConsoleLoggerAdapter', () => {
     expect(line).toContain('[Child]');
     expect(line).not.toContain('[Parent]');
   });
+
+  it('redacts nested Authorization header inside headers object', () => {
+    const logger = new ConsoleLoggerAdapter();
+    logger.info('request', {
+      headers: { Authorization: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload' },
+      url: 'https://api.example.com/v1/test',
+    });
+    const line = logSpy.mock.calls[0][0];
+    expect(line).toContain('[REDACTED]');
+    expect(line).not.toContain('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9');
+    expect(line).toContain('url');
+    expect(line).toContain('api.example.com');
+  });
+
+  it('redacts long Bearer token literals in string values', () => {
+    const logger = new ConsoleLoggerAdapter();
+    logger.info('msg', { token: 'sk-proj-abcdefghijklmnopqrstuvwxyz0123456789' });
+    const line = logSpy.mock.calls[0][0];
+    expect(line).toContain('[REDACTED]');
+    expect(line).not.toContain('sk-proj-abcdefghijklmnopqrstuvwxyz0123456789');
+  });
+
+  it('redacts arrays of objects with sensitive keys', () => {
+    const logger = new ConsoleLoggerAdapter();
+    logger.info('list', {
+      items: [{ name: 'a', apiKey: 'secret-1' }, { name: 'b', apiKey: 'secret-2' }],
+    });
+    const line = logSpy.mock.calls[0][0];
+    expect(line).toContain('[REDACTED]');
+    expect(line).not.toContain('secret-1');
+    expect(line).not.toContain('secret-2');
+    expect(line).toContain('"a"');
+    expect(line).toContain('"b"');
+  });
+
+  it('handles deep nesting (depth limit)', () => {
+    const logger = new ConsoleLoggerAdapter();
+    logger.info('deep', { a: { b: { c: { d: { e: { apiKey: 'leaked' } } } } } });
+    const line = logSpy.mock.calls[0][0];
+    expect(line).toContain('[REDACTED]');
+    expect(line).not.toContain('leaked');
+  });
 });

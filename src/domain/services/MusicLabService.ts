@@ -7,9 +7,9 @@ import type {
   CoverPreprocessResult,
 } from '../ports/OutboundPorts';
 import type { IFileStoragePort } from '../ports/FileStoragePorts';
+import type { IApiConfigStore } from '../ports/PlatformPorts';
+import type { ILoggerPort } from '../ports/CrossCuttingPorts';
 import type { PlatformRouter } from './PlatformRouter';
-import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
-import { defaultLogger } from '../../adapters/outbound/infrastructure/ConsoleLoggerAdapter';
 
 export interface ResolvedMusicResult {
   audioUrl: string;
@@ -26,23 +26,31 @@ export interface ResolvedMusicResult {
  * 独立音乐实验室服务，仅注入 IMusicPort + IFileStoragePort。
  * 负责 hex → Blob URL 转换，并将生成的音频持久化到 OPFS（Phase 2-A），
  * 避免页面刷新后音乐丢失。
+ *
+ * Phase 2 反转：依赖注入 IApiConfigStore + ILoggerPort，移除对
+ * ApiConfigStore 单例和 defaultLogger 的硬编码引用。
  */
 export class MusicLabService {
   private router: PlatformRouter;
-  private logger = defaultLogger;
+  private configStore: IApiConfigStore;
+  private logger: ILoggerPort;
   private getFileStorage: () => IFileStoragePort;
 
   constructor(
     router: PlatformRouter,
+    configStore: IApiConfigStore,
     fileStorage: IFileStoragePort | (() => IFileStoragePort),
+    logger: ILoggerPort,
   ) {
     this.router = router;
+    this.configStore = configStore;
+    this.logger = logger;
     this.getFileStorage = typeof fileStorage === 'function' ? fileStorage : () => fileStorage;
   }
 
   /** 获取当前配置对应的音乐生成适配器 */
   private getMusicPort(): IMusicPort {
-    return this.router.resolveMusic(ApiConfigStore.load());
+    return this.router.resolveMusic(this.configStore.load());
   }
 
   /**
@@ -62,7 +70,12 @@ export class MusicLabService {
     try {
       await this.getFileStorage().storeBlob(storagePath, audioBlob);
     } catch (e) {
-      this.logger.warn('Failed to persist music to OPFS, falling back to in-memory Blob URL', e instanceof Error ? e : new Error(String(e)));
+      this.logger.warn('Failed to persist music to OPFS, falling back to in-memory Blob URL', {
+        service: 'MusicLabService',
+        method: 'generateMusic',
+        storagePath,
+        error: e instanceof Error ? e.message : String(e),
+      });
       const audioUrl = URL.createObjectURL(audioBlob);
       return this.buildResult(audioUrl, undefined, result);
     }

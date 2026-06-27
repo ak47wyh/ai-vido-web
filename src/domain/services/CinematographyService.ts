@@ -1,7 +1,8 @@
 import type { ITextGenerationPort } from '../ports/OutboundPorts';
+import type { IApiConfigStore } from '../ports/PlatformPorts';
+import type { ILoggerPort } from '../ports/CrossCuttingPorts';
 import type { StorySegment } from '../entities/models';
 import type { PlatformRouter } from './PlatformRouter';
-import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
 
 export type ShotType =
   | 'extreme-wide'    // EWS
@@ -60,11 +61,21 @@ const MOVEMENT_DESCRIPTIONS: Record<CameraMovement, string> = {
 
 export class CinematographyService {
   private router: PlatformRouter;
-  constructor(router: PlatformRouter) { this.router = router; }
+  private configStore: IApiConfigStore;
+  private logger: ILoggerPort;
+  constructor(
+    router: PlatformRouter,
+    configStore: IApiConfigStore,
+    logger: ILoggerPort,
+  ) {
+    this.router = router;
+    this.configStore = configStore;
+    this.logger = logger;
+  }
 
   /** 获取当前配置对应的文本生成适配器 */
   private getTextPort(): ITextGenerationPort {
-    return this.router.resolveText(ApiConfigStore.load());
+    return this.router.resolveText(this.configStore.load());
   }
 
   /**

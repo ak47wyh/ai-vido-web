@@ -1,8 +1,9 @@
 import type { IWhisperPort } from '../ports/PostProcessPorts';
 import type { ITextGenerationPort } from '../ports/OutboundPorts';
+import type { IApiConfigStore } from '../ports/PlatformPorts';
+import type { ILoggerPort } from '../ports/CrossCuttingPorts';
 import type { StorySegment } from '../entities/models';
 import type { PlatformRouter } from './PlatformRouter';
-import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
 
 export interface SrtEntry {
   index: number;
@@ -24,15 +25,24 @@ export interface SrtEntry {
 export class SubtitleService {
   private whisperPort: IWhisperPort;
   private router: PlatformRouter;
+  private configStore: IApiConfigStore;
+  private logger: ILoggerPort;
 
-  constructor(whisperPort: IWhisperPort, router: PlatformRouter) {
+  constructor(
+    whisperPort: IWhisperPort,
+    router: PlatformRouter,
+    configStore: IApiConfigStore,
+    logger: ILoggerPort,
+  ) {
     this.whisperPort = whisperPort;
     this.router = router;
+    this.configStore = configStore;
+    this.logger = logger;
   }
 
   /** 获取当前配置对应的文本生成适配器 */
   private getTextPort(): ITextGenerationPort {
-    return this.router.resolveText(ApiConfigStore.load());
+    return this.router.resolveText(this.configStore.load());
   }
 
   /**

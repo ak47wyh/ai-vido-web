@@ -8,10 +8,14 @@
 
 import i18n from '../../../i18n';
 import type { ITranslationPort, LocaleCode } from '../../../domain/ports/UiPorts';
+import type { ILoggerPort } from '../../../domain/ports/CrossCuttingPorts';
+import { ConsoleLoggerAdapter } from '../infrastructure/ConsoleLoggerAdapter';
 
 type LocaleListener = (locale: LocaleCode) => void;
 
 class LocaleEventBus {
+  constructor(private logger: ILoggerPort) {}
+
   private listeners = new Set<LocaleListener>();
 
   subscribe(listener: LocaleListener): () => void {
@@ -21,20 +25,31 @@ class LocaleEventBus {
 
   emit(locale: LocaleCode): void {
     this.listeners.forEach(l => {
-      try { l(locale); } catch (e) {
-        console.error('[LocaleEventBus] listener error', e);
+      try {
+        l(locale);
+      } catch (err) {
+        this.logger.error('[LocaleEventBus] listener error', err, {
+          service: 'I18nextTranslationAdapter',
+        });
       }
     });
   }
 }
 
-export const localeEventBus = new LocaleEventBus();
+export function createLocaleEventBus(logger?: ILoggerPort): LocaleEventBus {
+  return new LocaleEventBus(logger ?? new ConsoleLoggerAdapter({ service: 'I18nextTranslationAdapter' }));
+}
+
+export const localeEventBus: LocaleEventBus = createLocaleEventBus();
 
 class I18nextTranslationAdapter implements ITranslationPort {
-  constructor() {
+  constructor(
+    private eventBus: LocaleEventBus = localeEventBus,
+    private logger: ILoggerPort = new ConsoleLoggerAdapter({ service: 'I18nextTranslationAdapter' }),
+  ) {
     // i18next 内部变化时转发到事件总线
     i18n.on('languageChanged', (lng: string) => {
-      localeEventBus.emit(lng as LocaleCode);
+      this.eventBus.emit(lng as LocaleCode);
     });
   }
 
@@ -47,16 +62,29 @@ class I18nextTranslationAdapter implements ITranslationPort {
   }
 
   async setLocale(locale: LocaleCode): Promise<void> {
-    await i18n.changeLanguage(locale);
+    try {
+      await i18n.changeLanguage(locale);
+    } catch (err) {
+      this.logger.error('[I18nextTranslationAdapter] setLocale failed', err, {
+        service: 'I18nextTranslationAdapter',
+        locale,
+      });
+      throw err;
+    }
   }
 
   onChange(listener: (locale: LocaleCode) => void): () => void {
-    return localeEventBus.subscribe(listener);
+    return this.eventBus.subscribe(listener);
   }
 
   isReady(): boolean {
     return i18n.isInitialized;
   }
+}
+
+export function createI18nextTranslationAdapter(logger?: ILoggerPort): ITranslationPort {
+  const bus = createLocaleEventBus(logger);
+  return new I18nextTranslationAdapter(bus, logger ?? new ConsoleLoggerAdapter({ service: 'I18nextTranslationAdapter' }));
 }
 
 export const i18nextTranslationAdapter: ITranslationPort = new I18nextTranslationAdapter();

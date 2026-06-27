@@ -1,6 +1,7 @@
 import type { ITextGenerationPort } from '../ports/OutboundPorts';
+import type { IApiConfigStore } from '../ports/PlatformPorts';
+import type { ILoggerPort } from '../ports/CrossCuttingPorts';
 import type { PlatformRouter } from './PlatformRouter';
-import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
 
 export interface AgentMessage {
   role: 'user' | 'assistant' | 'tool';
@@ -31,11 +32,21 @@ const SYSTEM_PROMPT = `你是一个专业的 AI 视频创作助手，能够根�
 
 export class AgentService {
   private router: PlatformRouter;
-  constructor(router: PlatformRouter) { this.router = router; }
+  private configStore: IApiConfigStore;
+  private logger: ILoggerPort;
+  constructor(
+    router: PlatformRouter,
+    configStore: IApiConfigStore,
+    logger: ILoggerPort,
+  ) {
+    this.router = router;
+    this.configStore = configStore;
+    this.logger = logger;
+  }
 
   /** 获取当前配置对应的文本生成适配器 */
   private getTextPort(): ITextGenerationPort {
-    return this.router.resolveText(ApiConfigStore.load());
+    return this.router.resolveText(this.configStore.load());
   }
 
   async chat(messages: AgentMessage[]): Promise<string> {

@@ -6,20 +6,29 @@ import type {
   VideoAgentContext,
   VideoAgentTaskResult,
 } from '../ports/OutboundPorts';
+import type { IApiConfigStore } from '../ports/PlatformPorts';
+import type { ILoggerPort } from '../ports/CrossCuttingPorts';
 import type { PlatformRouter } from './PlatformRouter';
-import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
 
 export class VideoLabService {
   private router: PlatformRouter;
+  private configStore: IApiConfigStore;
+  private logger: ILoggerPort;
   private activePollers = new Map<string, ReturnType<typeof setInterval>>();
 
-  constructor(router: PlatformRouter) {
+  constructor(
+    router: PlatformRouter,
+    configStore: IApiConfigStore,
+    logger: ILoggerPort,
+  ) {
     this.router = router;
+    this.configStore = configStore;
+    this.logger = logger;
   }
 
   /** 获取当前配置对应的视频生成适配器 */
   private getVideoPort(): IVideoGeneratorPort {
-    return this.router.resolveVideo(ApiConfigStore.load());
+    return this.router.resolveVideo(this.configStore.load());
   }
 
   async submitTask(context: VideoPromptContext): Promise<string> {

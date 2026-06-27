@@ -24,6 +24,9 @@ import { WhisperAdapter } from './adapters/outbound/api/WhisperAdapter';
 import { MockTextSplitterAdapter } from './adapters/outbound/api/MockTextSplitter';
 import { MockStoryBreakdownAdapter } from './adapters/outbound/api/MockStoryBreakdown';
 
+// ==================== API 配置 Port 适配器 ====================
+import { apiConfigStoreAdapter } from './adapters/outbound/config/ApiConfigStoreAdapter';
+
 // ==================== 领域服务层 ====================
 import { StoryService } from './domain/services/StoryService';
 import { VideoGenerationService } from './domain/services/VideoGenerationService';
@@ -49,10 +52,17 @@ import { BGMRecommendationService } from './domain/services/BGMRecommendationSer
 import { platformRouter } from './domain/services/PlatformRouter';
 
 // ==================== 基础设施层（横切关注点） ====================
-import { defaultLogger } from './adapters/outbound/infrastructure/ConsoleLoggerAdapter';
+import { ConsoleLoggerAdapter } from './adapters/outbound/infrastructure/ConsoleLoggerAdapter';
+import { CompositeLoggerAdapter, ConsoleSinkAdapter } from './adapters/outbound/infrastructure/CompositeLoggerAdapter';
+import { logSink } from './adapters/outbound/infrastructure/RingBufferLogSinkAdapter';
 import { defaultEventBus } from './adapters/outbound/infrastructure/MemoryEventBusAdapter';
 import { defaultMetrics } from './adapters/outbound/infrastructure/NoopMetricsAdapter';
 import { defaultResilience } from './adapters/outbound/infrastructure/DefaultResilienceAdapter';
+
+export const defaultLogger = new CompositeLoggerAdapter([
+  new ConsoleSinkAdapter(new ConsoleLoggerAdapter(), { service: 'app' }),
+  logSink,
+], { service: 'app' });
 
 
 // ==================== 文件存储层（OPFS / IndexedDB） ====================
@@ -83,23 +93,43 @@ let _fileStorageAdapter: IFileStoragePort | null = null;
 /**
  * 异步初始化文件存储。必须在应用启动时调用。
  * 同时执行旧 OfflineCache 数据迁移。
+ *
+ * 错误信息会写入 logger，可在应用内日志面板（Ctrl+`）查看。
  */
 export async function initializeFileStorage(): Promise<IFileStoragePort> {
   if (_fileStorageAdapter) return _fileStorageAdapter;
-  _fileStorageAdapter = await createFileStorageAdapter();
+  try {
+    _fileStorageAdapter = await createFileStorageAdapter(defaultLogger);
+    defaultLogger.info('[FileStorage] initialized', {
+      service: 'fileStorage',
+      storageType: _fileStorageAdapter.getStorageType?.() ?? 'unknown',
+    });
 
-  // 执行旧数据迁移（首次启动时）
-  if (needsMigration()) {
-    await migrateOfflineCache(_fileStorageAdapter, generatedFileRepo);
+    // 执行旧数据迁移（首次启动时）
+    if (needsMigration()) {
+      defaultLogger.info('[FileStorage] migrating offline cache', {
+        service: 'fileStorage',
+      });
+      await migrateOfflineCache(_fileStorageAdapter, generatedFileRepo);
+    }
+
+    return _fileStorageAdapter;
+  } catch (err) {
+    defaultLogger.error('[FileStorage] initialization failed', err, {
+      service: 'fileStorage',
+    });
+    throw err;
   }
-
-  return _fileStorageAdapter;
 }
 
 /** 获取已初始化的文件存储端口（同步） */
 export function getFileStorage(): IFileStoragePort {
   if (!_fileStorageAdapter) {
-    throw new Error('[DI] FileStorage not initialized. Call await initializeFileStorage() first.');
+    const err = new Error('[DI] FileStorage not initialized. Call await initializeFileStorage() first.');
+    defaultLogger.error('[DI] getFileStorage called before initialization', err, {
+      service: 'fileStorage',
+    });
+    throw err;
   }
   return _fileStorageAdapter;
 }
@@ -144,31 +174,50 @@ export const storyService = new StoryService(
 );
 
 export const imageGenerationService = new ImageGenerationService(
-  characterRepo, backgroundRepo, platformRouter, getFileStorage
+  characterRepo, backgroundRepo, platformRouter, apiConfigStoreAdapter, getFileStorage, defaultLogger.child({ service: 'ImageGenerationService' })
 );
 
-export const textGenerationService = new TextGenerationService(platformRouter);
+export const textGenerationService = new TextGenerationService(
+  platformRouter, apiConfigStoreAdapter,
+  defaultLogger.child({ service: 'TextGenerationService' })
+);
 
-export const textLabService = new TextLabService(platformRouter);
+export const textLabService = new TextLabService(
+  platformRouter, apiConfigStoreAdapter,
+  defaultLogger.child({ service: 'TextLabService' })
+);
 
 // ========================================
 // 视音频域服务（视频生成/配音/BGM/后期）
 // ========================================
 export const videoGenerationService = new VideoGenerationService(
-  videoTaskRepo, segmentRepo, characterRepo, backgroundRepo, platformRouter, getFileStorage
+  videoTaskRepo, segmentRepo, characterRepo, backgroundRepo, platformRouter, getFileStorage,
+  apiConfigStoreAdapter, defaultLogger.child({ service: 'VideoGenerationService' })
 );
 
-export const videoLabService = new VideoLabService(platformRouter);
+export const videoLabService = new VideoLabService(
+  platformRouter, apiConfigStoreAdapter,
+  defaultLogger.child({ service: 'VideoLabService' })
+);
 
-export const voiceService = new VoiceService(platformRouter, characterRepo, segmentRepo, getFileStorage);
+export const voiceService = new VoiceService(
+  platformRouter, characterRepo, segmentRepo, getFileStorage,
+  apiConfigStoreAdapter, defaultLogger.child({ service: 'VoiceService' })
+);
 
-export const musicService = new MusicService(platformRouter, segmentRepo, getFileStorage);
+export const musicService = new MusicService(platformRouter, apiConfigStoreAdapter, segmentRepo, getFileStorage, defaultLogger.child({ service: 'MusicService' }));
 
-export const musicLabService = new MusicLabService(platformRouter, getFileStorage);
+export const musicLabService = new MusicLabService(
+  platformRouter, apiConfigStoreAdapter, getFileStorage,
+  defaultLogger.child({ service: 'MusicLabService' })
+);
 
 export const postProcessService = new PostProcessService(ffmpegAdapter, whisperAdapter);
 
-export const subtitleService = new SubtitleService(whisperAdapter, platformRouter);
+export const subtitleService = new SubtitleService(
+  whisperAdapter, platformRouter, apiConfigStoreAdapter,
+  defaultLogger.child({ service: 'SubtitleService' })
+);
 
 // ========================================
 // 业务管线服务（全流程编排）
@@ -180,6 +229,7 @@ export const pipelineService = new PipelineService({
   fileStorage: getFileStorage,
   logger,
   eventBus,
+  configStore: apiConfigStoreAdapter,
 });
 
 // ========================================
@@ -202,10 +252,19 @@ export const fileManagementService = new FileManagementService(fileAdapter);
 // ========================================
 // AI 增强服务
 // ========================================
-export const agentService = new AgentService(platformRouter);
+export const agentService = new AgentService(
+  platformRouter, apiConfigStoreAdapter,
+  defaultLogger.child({ service: 'AgentService' })
+);
 export const autoEditService = new AutoEditService(ffmpegAdapter);
-export const cinematographyService = new CinematographyService(platformRouter);
-export const bgmRecommendationService = new BGMRecommendationService(platformRouter);
+export const cinematographyService = new CinematographyService(
+  platformRouter, apiConfigStoreAdapter,
+  defaultLogger.child({ service: 'CinematographyService' })
+);
+export const bgmRecommendationService = new BGMRecommendationService(
+  platformRouter, apiConfigStoreAdapter,
+  defaultLogger.child({ service: 'BGMRecommendationService' })
+);
 
 // ==================== 素材库（离线存储） ====================
 import { AssetLibraryService } from './domain/services/AssetLibraryService';
@@ -253,15 +312,15 @@ export const subtitlePort: import('./domain/ports/DomainServicePorts').ISubtitle
 // ========================================
 import { reactNotificationAdapter } from './adapters/outbound/ui/ReactNotificationAdapter';
 import { reactConfirmAdapter } from './adapters/outbound/ui/ReactConfirmAdapter';
-import { reactThemeAdapter } from './adapters/outbound/ui/ReactThemeAdapter';
-import { i18nextTranslationAdapter } from './adapters/outbound/ui/I18nextTranslationAdapter';
-import { browserNetworkStatusAdapter } from './adapters/outbound/infrastructure/BrowserNetworkStatusAdapter';
+import { createReactThemeAdapter } from './adapters/outbound/ui/ReactThemeAdapter';
+import { createI18nextTranslationAdapter } from './adapters/outbound/ui/I18nextTranslationAdapter';
+import { createBrowserNetworkStatusAdapter } from './adapters/outbound/infrastructure/BrowserNetworkStatusAdapter';
 
 export const notifier: import('./domain/ports/CrossCuttingPorts').INotificationPort = reactNotificationAdapter;
 export const confirmer: import('./domain/ports/CrossCuttingPorts').IConfirmPort = reactConfirmAdapter;
-export const themePort: import('./domain/ports/UiPorts').IThemePort = reactThemeAdapter;
-export const translationPort: import('./domain/ports/UiPorts').ITranslationPort = i18nextTranslationAdapter;
-export const networkPort: import('./domain/ports/UiPorts').INetworkStatusPort = browserNetworkStatusAdapter;
+export const themePort: import('./domain/ports/UiPorts').IThemePort = createReactThemeAdapter(defaultLogger.child({ service: 'ui.theme' }));
+export const translationPort: import('./domain/ports/UiPorts').ITranslationPort = createI18nextTranslationAdapter(defaultLogger.child({ service: 'ui.i18n' }));
+export const networkPort: import('./domain/ports/UiPorts').INetworkStatusPort = createBrowserNetworkStatusAdapter(defaultLogger.child({ service: 'ui.network' }));
 
 // ========================================
 // 业务编排 Port 适配器（IAutoEditPort / IAssetExportPort）

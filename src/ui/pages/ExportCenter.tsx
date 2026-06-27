@@ -6,6 +6,7 @@ import { useSpaceScopedStories, useSpaceScopedFinalCuts } from '../hooks/useSpac
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { getErrorMessage } from '../utils/errorUtils';
+import { useObjectUrl } from '../hooks/useObjectUrl';
 import { PostProductionPanel } from '../components/PostProductionPanel';
 import type { FinalCut } from '../../domain/entities/models';
 
@@ -118,41 +119,16 @@ export const ExportCenter: React.FC = () => {
       {previewCutId && (() => {
         const cut = filteredCuts.find(c => c.id === previewCutId);
         if (!cut) return null;
-        const videoUrl = URL.createObjectURL(cut.videoBlob);
         return (
-          <div className="glass-panel" style={{ padding: '0.75rem', marginBottom: '0.75rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-              <Film size={18} />
-              <h3 style={{ margin: 0, fontSize: '0.9rem' }}>{getStoryTitle(cut.storyId)}</h3>
-              <button
-                className="btn btn-secondary btn-xs"
-                style={{ marginLeft: 'auto' }}
-                onClick={() => setPreviewCutId(null)}
-              >
-                {t('export.closePreview')}
-              </button>
-            </div>
-            <video
-              src={videoUrl}
-              controls
-              autoPlay
-              style={{ width: '100%', maxHeight: '480px', borderRadius: 'var(--radius-md)', background: '#000' }}
-            />
-            <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              {formatSize(cut.size)} · {formatDuration(cut.duration)} · {cut.hasSubtitles ? t('export.withSubs') : t('export.noSubs')} · {formatDate(cut.createdAt)}
-            </div>
-            <div style={{ marginTop: '0.5rem' }}>
-              <PostProductionPanel
-                videoBlob={cut.videoBlob}
-                videoUrl={null}
-                onVideoProcessed={({ blob }) => {
-                  cut.videoBlob = blob;
-                  finalCutRepo.save(cut);
-                  showToast('success', t('export.videoUpdated'));
-                }}
-              />
-            </div>
-          </div>
+          <PreviewPanel
+            key={cut.id}
+            cut={cut}
+            getStoryTitle={getStoryTitle}
+            formatSize={formatSize}
+            formatDuration={formatDuration}
+            formatDate={formatDate}
+            onClose={() => setPreviewCutId(null)}
+          />
         );
       })()}
 
@@ -243,3 +219,56 @@ function filterCuts(cuts: FinalCut[], range: FilterRange): FinalCut[] {
     .filter(c => now - c.createdAt <= threshold)
     .sort((a, b) => b.createdAt - a.createdAt);
 }
+
+/**
+ * 预览面板：独立组件以便 useObjectUrl 在卸载时自动 revoke。
+ */
+const PreviewPanel: React.FC<{
+  cut: FinalCut;
+  getStoryTitle: (id: string) => string;
+  formatSize: (size: number) => string;
+  formatDuration: (ms: number) => string;
+  formatDate: (ts: number) => string;
+  onClose: () => void;
+}> = ({ cut, getStoryTitle, formatSize, formatDuration, formatDate, onClose }) => {
+  const { t } = useTranslation();
+  const { showToast } = useToast();
+  const videoUrl = useObjectUrl(cut.videoBlob);
+
+  return (
+    <div className="glass-panel" style={{ padding: '0.75rem', marginBottom: '0.75rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+        <Film size={18} />
+        <h3 style={{ margin: 0, fontSize: '0.9rem' }}>{getStoryTitle(cut.storyId)}</h3>
+        <button
+          className="btn btn-secondary btn-xs"
+          style={{ marginLeft: 'auto' }}
+          onClick={onClose}
+        >
+          {t('export.closePreview')}
+        </button>
+      </div>
+      {videoUrl && (
+        <video
+          src={videoUrl}
+          controls
+          autoPlay
+          style={{ width: '100%', maxHeight: '480px', borderRadius: 'var(--radius-md)', background: '#000' }}
+        />
+      )}
+      <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+        {formatSize(cut.size)} · {formatDuration(cut.duration)} · {cut.hasSubtitles ? t('export.withSubs') : t('export.noSubs')} · {formatDate(cut.createdAt)}
+      </div>
+      <div style={{ marginTop: '0.5rem' }}>
+        <PostProductionPanel
+          videoBlob={cut.videoBlob}
+          videoUrl={null}
+          onVideoProcessed={({ blob }) => {
+            finalCutRepo.save({ ...cut, videoBlob: blob });
+            showToast('success', t('export.videoUpdated'));
+          }}
+        />
+      </div>
+    </div>
+  );
+};
