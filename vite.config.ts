@@ -1,10 +1,16 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { filesStoragePlugin } from './vite/filesStoragePlugin'
 
 // https://vite.dev/config/
 export default defineConfig({
   base: '/ai-vido-web/',
-  plugins: [react()],
+  plugins: [
+    react(),
+    // 本地文件存储插件 —— 为前端提供 POST /__files/upload 等路由，
+    // 让图片/视频/音频 Blob 可以直接落到磁盘，无需 fetch 外部 URL
+    filesStoragePlugin(),
+  ],
   server: {
     proxy: {
       // 现有：代理 Anthropic 兼容端点，解决 CORS 问题

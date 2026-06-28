@@ -11,6 +11,10 @@ import type { GeneratedFileType } from '../../../domain/entities/models';
  *     ├── video/     (.mp4, .webm)
  *     └── other/     (.glb 等)
  *
+ * 路径约定：所有 path 参数为 "<dir>/<filename>" 形式（如 "images/abc123"）。
+ * OPFS API 的 getFileHandle / getDirectoryHandle 都不接受斜杠分隔的路径，
+ * 必须逐级 getDirectoryHandle 行走，最后再 getFileHandle。
+ *
  * 浏览器兼容性：Chrome 86+, Edge 86+, Safari 15.2+, Firefox 111+
  */
 export class OPFSFileStorageAdapter implements IFileStoragePort {
@@ -36,16 +40,26 @@ export class OPFSFileStorageAdapter implements IFileStoragePort {
 
   async storeBlob(path: string, blob: Blob): Promise<void> {
     this.ensureInitialized();
-    const fileHandle = await this.rootDir!.getFileHandle(path, { create: true });
-    const writable = await fileHandle.createWritable();
-    await writable.write(blob);
-    await writable.close();
+    try {
+      const fileHandle = await this.resolveFileHandle(path, { create: true });
+      const writable = await fileHandle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+    } catch (e) {
+      // 包装 OPFS 原始错误为更可读的提示，便于 UI 层展示给用户
+      const reason = e instanceof Error ? e.message : String(e);
+      throw new Error(
+        `[OPFSFileStorage] 写入 "${path}" 失败：${reason}。` +
+        `提示：OPFS 仅在 https / localhost 环境可用，且浏览器必须支持 File System Access API。`,
+        { cause: e }
+      );
+    }
   }
 
   async getBlob(path: string): Promise<Blob | null> {
     this.ensureInitialized();
     try {
-      const fileHandle = await this.rootDir!.getFileHandle(path);
+      const fileHandle = await this.resolveFileHandle(path, { create: false });
       return await fileHandle.getFile();
     } catch {
       return null;
@@ -54,8 +68,10 @@ export class OPFSFileStorageAdapter implements IFileStoragePort {
 
   async deleteBlob(path: string): Promise<void> {
     this.ensureInitialized();
+    const { dirHandle, fileName } = await this.resolveDirectory(path, { create: false });
+    if (!dirHandle) return; // 路径无效，安静失败
     try {
-      await this.rootDir!.removeEntry(path);
+      await dirHandle.removeEntry(fileName);
     } catch {
       // 文件不存在时忽略
     }
@@ -64,7 +80,7 @@ export class OPFSFileStorageAdapter implements IFileStoragePort {
   async blobExists(path: string): Promise<boolean> {
     this.ensureInitialized();
     try {
-      await this.rootDir!.getFileHandle(path);
+      await this.resolveFileHandle(path, { create: false });
       return true;
     } catch {
       return false;
@@ -202,6 +218,53 @@ export class OPFSFileStorageAdapter implements IFileStoragePort {
     if (!this.rootDir) {
       throw new Error('[OPFSFileStorage] Not initialized. Call initialize() first.');
     }
+  }
+
+  /**
+   * 解析 "<dir>/<dir>/.../<filename>" 形式的逻辑路径，逐级 getDirectoryHandle 行走，
+   * 最后返回文件句柄。
+   *
+   * 关键：OPFS 的 FileSystemDirectoryHandle.getFileHandle 不接受斜杠分隔的路径，
+   *       必须一级一级地向下走。任何错误都会被上层调用方捕获（getBlob / blobExists
+   *       会转换为 null/false，storeBlob 会向上抛错让 toast 显示）。
+   *
+   * @param path 逻辑路径，例如 "images/abc123" 或 "images/sub/foo.png"
+   * @param options.create 是否在中间目录或文件不存在时创建
+   */
+  private async resolveFileHandle(
+    path: string,
+    options: { create: boolean }
+  ): Promise<FileSystemFileHandle> {
+    const { dirHandle, fileName } = await this.resolveDirectory(path, options);
+    if (!dirHandle) {
+      throw new Error(`[OPFSFileStorage] Invalid storage path: "${path}" (expected "<dir>/<filename>")`);
+    }
+    return await dirHandle.getFileHandle(fileName, { create: options.create });
+  }
+
+  /**
+   * 解析路径并返回父目录句柄与文件名。
+   * 路径非法（无斜杠）时返回 { dirHandle: null }，由 deleteBlob 等方法安静忽略。
+   *
+   * @param options.create 写入场景（storeBlob）传 true 自动创建中间目录；
+   *                       读取/删除场景（getBlob / blobExists / deleteBlob）传 false，
+   *                       目录不存在时返回 null 或抛错，避免意外重建空目录。
+   */
+  private async resolveDirectory(
+    path: string,
+    options: { create: boolean }
+  ): Promise<{ dirHandle: FileSystemDirectoryHandle | null; fileName: string }> {
+    const segments = path.split('/').filter(s => s.length > 0);
+    if (segments.length < 2) {
+      return { dirHandle: null, fileName: '' };
+    }
+    const fileName = segments.pop()!;
+    let dir: FileSystemDirectoryHandle = this.rootDir!;
+    for (const seg of segments) {
+      // 写入路径允许创建中间目录；读取/删除路径在目录不存在时应抛错被上层 catch
+      dir = await dir.getDirectoryHandle(seg, { create: options.create });
+    }
+    return { dirHandle: dir, fileName };
   }
 
   private dirToFileType(dirName: string): GeneratedFileType {

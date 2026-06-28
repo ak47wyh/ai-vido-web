@@ -1,12 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ExternalLink, RefreshCw, Cpu, Trash2, FolderOpen, Palette, CheckCircle, ChevronDown, Zap } from 'lucide-react';
+import { ExternalLink, RefreshCw, Cpu, Trash2, FolderOpen, FolderCog, Palette, CheckCircle, ChevronDown, Zap, Save, Database } from 'lucide-react';
 import { ApiConfigStore, type ApiConfig, type PlatformId } from '../../adapters/outbound/config/ApiConfigStore';
 import { useToast } from '../contexts/ToastContext';
 import { modelManagementService, fileManagementService } from '../../dependencies';
 import type { ModelInfo, FileItem } from '../../domain/ports/OutboundPorts';
 import { getErrorMessage } from '../utils/errorUtils';
 import { PLATFORM_METADATA, getCapabilitySummary, type Capability } from '../../domain/services/platformCapabilities';
+import {
+  isSWActive,
+  getMediaCacheStats,
+  clearAllMediaCache,
+  type MediaCacheStats,
+} from '../../utils/imageCache';
 
 // Settings Components
 import { SettingsSection } from '../components/settings/SettingsSection';
@@ -948,6 +954,12 @@ export const Settings: React.FC = () => {
         )}
       </SettingsSection>
 
+      {/* ── 本地保存路径（避开外部 OSS CORS） ─────────────── */}
+      <LocalStorageSettingsSection />
+
+      {/* ── 媒体缓存（Service Worker） ─────────────────── */}
+      <MediaCacheSettingsSection />
+
       {/* ── Auto-save indicator ─────────────────────────── */}
       <div style={{
         position: 'fixed',
@@ -970,4 +982,442 @@ export const Settings: React.FC = () => {
       </div>
     </div>
   );
-};
+}
+
+// ==========================================
+// 本地文件存储配置区块 —— 让用户选择存储后端与本地保存路径
+// ==========================================
+
+/** 把字节数格式化为人类可读字符串（KB/MB/GB） */
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+function LocalStorageSettingsSection() {
+  const { t } = useTranslation();
+
+  // 用户偏好：local / opfs / indexeddb / auto
+  const [preference, setPreference] = useState<'local' | 'opfs' | 'indexeddb' | 'auto'>(() => {
+    const v = window.localStorage.getItem('ai_vido_storage_preference');
+    return (v === 'local' || v === 'opfs' || v === 'indexeddb' || v === 'auto') ? v : 'auto';
+  });
+
+  // 探测 Vite 插件的 API 路径（默认 /__files / files）
+  const [apiBase, setApiBase] = useState(() =>
+    window.localStorage.getItem('ai_vido_files_api_base') || '/__files'
+  );
+  const [publicPath, setPublicPath] = useState(() =>
+    window.localStorage.getItem('ai_vido_files_public_path') || '/files'
+  );
+
+  // 服务端实际保存根目录（仅显示，不可改 —— 由 Vite FILES_DIR 环境变量决定）
+  const [_serverRoot] = useState<string>('docs/files');
+  const [pluginOnline, setPluginOnline] = useState<boolean | null>(null);
+  const [fileCount, setFileCount] = useState<number | null>(null);
+  // 磁盘用量聚合（由 /__files/stats 提供）
+  const [diskUsage, setDiskUsage] = useState<{
+    totalSize: number;
+    totalFiles: number;
+    byType: Record<string, { count: number; size: number }>;
+    maxUploadBytes?: number;
+  } | null>(null);
+
+  // 探测插件可用性 + 文件数量 + 磁盘用量（不触发 setState in effect —— 一次性 effect，初始探测）
+  useEffect(() => {
+    let cancelled = false;
+    // 同步重置状态是必要的"探测中"UI提示，
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPluginOnline(null);
+    (async () => {
+      try {
+        // 优先用 /__files/stats（一次拿全）
+        const r = await fetch(`${apiBase}/stats`);
+        if (cancelled) return;
+        if (r.ok) {
+          const data = await r.json();
+          setPluginOnline(true);
+          setDiskUsage({
+            totalSize: data.totalSize ?? 0,
+            totalFiles: data.totalFiles ?? 0,
+            byType: data.byType ?? {},
+            maxUploadBytes: data.maxUploadBytes,
+          });
+          setFileCount(data.totalFiles ?? 0);
+          return;
+        }
+        // 回退：用 list 接口
+        const lr = await fetch(`${apiBase}/list?dir=images`);
+        if (cancelled) return;
+        setPluginOnline(lr.ok);
+        if (lr.ok) {
+          const data = await lr.json();
+          const entries = Array.isArray(data.entries) ? data.entries : [];
+          setFileCount(entries.length);
+        } else {
+          setFileCount(null);
+        }
+      } catch {
+        if (cancelled) return;
+        setPluginOnline(false);
+        setFileCount(null);
+        setDiskUsage(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [apiBase]);
+
+  const probePlugin = useCallback(() => {
+    // 触发重新探测：重置状态再启动 effect
+    setPluginOnline(null);
+  }, []);
+
+  // 持久化
+  const persist = useCallback((next: { preference?: typeof preference; apiBase?: string; publicPath?: string }) => {
+    if (next.preference !== undefined) {
+      setPreference(next.preference);
+      window.localStorage.setItem('ai_vido_storage_preference', next.preference);
+    }
+    if (next.apiBase !== undefined) {
+      setApiBase(next.apiBase);
+      window.localStorage.setItem('ai_vido_files_api_base', next.apiBase);
+    }
+    if (next.publicPath !== undefined) {
+      setPublicPath(next.publicPath);
+      window.localStorage.setItem('ai_vido_files_public_path', next.publicPath);
+    }
+  }, []);
+
+  const handleReload = useCallback(() => {
+    window.location.reload();
+  }, []);
+
+  return (
+    <SettingsSection
+      icon={<FolderCog size={20} />}
+      title={t('settings.localStorage.title', '本地保存路径')}
+      badge={undefined}
+      defaultExpanded={false}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div style={{
+          padding: '0.75rem 1rem',
+          background: pluginOnline === false ? 'rgba(248, 113, 113, 0.1)' : 'rgba(74, 222, 128, 0.1)',
+          border: `1px solid ${pluginOnline === false ? 'rgba(248, 113, 113, 0.3)' : 'rgba(74, 222, 128, 0.3)'}`,
+          borderRadius: '8px',
+          fontSize: '0.85rem',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 500 }}>
+            {pluginOnline === false ? '⚠️ ' : pluginOnline === true ? '✅ ' : '⏳ '}
+            {pluginOnline === false
+              ? t('settings.localStorage.pluginOffline', 'Vite 文件存储插件未挂载')
+              : pluginOnline === true
+              ? t('settings.localStorage.pluginOnline', 'Vite 文件存储插件已挂载')
+              : t('settings.localStorage.probing', '正在探测插件状态...')}
+          </div>
+          {pluginOnline === false && (
+            <div style={{ marginTop: '0.4rem', color: 'var(--text-muted)' }}>
+              {t(
+                'settings.localStorage.pluginOfflineHint',
+                '请检查 vite.config.ts 中是否注册了 filesStoragePlugin()；或设置环境变量 FILES_DIR 指定保存目录。'
+              )}
+            </div>
+          )}
+        </div>
+
+        <FormField
+          label={t('settings.localStorage.preferenceLabel', '存储后端')}
+          value={preference}
+          onChange={v => persist({ preference: v as typeof preference })}
+          placeholder="auto"
+          type="select"
+          options={[
+            { value: 'auto', label: t('settings.localStorage.prefAuto', '自动（推荐）') },
+            { value: 'local', label: t('settings.localStorage.prefLocal', '本地磁盘（Vite 插件）') },
+            { value: 'opfs', label: t('settings.localStorage.prefOpfs', '浏览器 OPFS（Origin Private File System）') },
+            { value: 'indexeddb', label: t('settings.localStorage.prefIdb', '浏览器 IndexedDB（兜底）') },
+          ]}
+        />
+
+        <FormField
+          label={t('settings.localStorage.serverRootLabel', '服务端保存目录（仅显示）')}
+          value={_serverRoot}
+          onChange={() => undefined}
+          hint={t(
+            'settings.localStorage.serverRootHint',
+            '由 Vite 插件配置 / FILES_DIR 环境变量决定；修改需要重启 Vite dev server。'
+          )}
+        />
+
+        <FormField
+          label={t('settings.localStorage.apiBaseLabel', 'API 路由前缀')}
+          value={apiBase}
+          onChange={v => persist({ apiBase: v })}
+          placeholder="/__files"
+          hint={t(
+            'settings.localStorage.apiBaseHint',
+            'Vite 插件提供的上传/删除/列表 API 前缀。'
+          )}
+        />
+
+        <FormField
+          label={t('settings.localStorage.publicPathLabel', '静态访问前缀')}
+          value={publicPath}
+          onChange={v => persist({ publicPath: v })}
+          placeholder="/files"
+          hint={t(
+            'settings.localStorage.publicPathHint',
+            '已保存文件可通过此路径访问，例如 /files/images/abc.png。'
+          )}
+        />
+
+        {diskUsage && (
+          <div style={{
+            padding: '0.75rem',
+            background: 'rgba(0,0,0,0.04)',
+            borderRadius: '6px',
+            fontSize: '0.82rem',
+            color: 'var(--text-muted)',
+          }}>
+            <div style={{ fontWeight: 500, marginBottom: '0.5rem', color: 'var(--text-color, #fff)' }}>
+              {t('settings.localStorage.diskUsage', '磁盘用量')}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.25rem 1rem' }}>
+              <div>{t('settings.localStorage.diskUsageImages', '图片')}</div>
+              <div style={{ textAlign: 'right' }}>
+                {diskUsage.byType.images?.count ?? 0} ·{' '}
+                {formatBytes(diskUsage.byType.images?.size ?? 0)}
+              </div>
+              <div>{t('settings.localStorage.diskUsageAudio', '音频')}</div>
+              <div style={{ textAlign: 'right' }}>
+                {diskUsage.byType.audio?.count ?? 0} ·{' '}
+                {formatBytes(diskUsage.byType.audio?.size ?? 0)}
+              </div>
+              <div>{t('settings.localStorage.diskUsageVideo', '视频')}</div>
+              <div style={{ textAlign: 'right' }}>
+                {diskUsage.byType.video?.count ?? 0} ·{' '}
+                {formatBytes(diskUsage.byType.video?.size ?? 0)}
+              </div>
+              <div>{t('settings.localStorage.diskUsageOther', '其他')}</div>
+              <div style={{ textAlign: 'right' }}>
+                {diskUsage.byType.other?.count ?? 0} ·{' '}
+                {formatBytes(diskUsage.byType.other?.size ?? 0)}
+              </div>
+              <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.25rem', fontWeight: 500 }}>
+                {t('settings.localStorage.diskUsageTotal', '合计')}
+              </div>
+              <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.25rem', textAlign: 'right', fontWeight: 500 }}>
+                {diskUsage.totalFiles} · {formatBytes(diskUsage.totalSize)}
+              </div>
+            </div>
+            {diskUsage.maxUploadBytes && (
+              <div style={{ marginTop: '0.5rem', fontSize: '0.78rem' }}>
+                {t(
+                  'settings.localStorage.maxUpload',
+                  '单次上传上限：{{size}}MB（可在 vite.config.ts 调整）',
+                  { size: (diskUsage.maxUploadBytes / 1024 / 1024).toFixed(1) }
+                )}
+              </div>
+            )}
+          </div>
+        )}
+        {!diskUsage && fileCount !== null && (
+          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            {t(
+              'settings.localStorage.fileCount',
+              '「images」目录下已有 {{count}} 个文件（插件版本较旧，无 stats 接口）',
+              { count: fileCount }
+            )}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={probePlugin}
+            disabled={pluginOnline === null}
+          >
+            <RefreshCw size={14} />
+            {t('settings.localStorage.probeBtn', '重新探测')}
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={handleReload}
+          >
+            <Save size={14} />
+            {t('settings.localStorage.saveAndReloadBtn', '保存并刷新')}
+          </button>
+        </div>
+
+        <div style={{
+          fontSize: '0.78rem',
+          color: 'var(--text-muted)',
+          padding: '0.5rem',
+          background: 'rgba(0,0,0,0.05)',
+          borderRadius: '6px',
+          lineHeight: 1.5,
+        }}>
+          {t(
+            'settings.localStorage.whyHint',
+            '为什么需要本地保存？\n外部图片 URL（如 OSS 签名链接）通常被浏览器 CORS 策略拦截，无法直接 fetch 到 Blob。本适配器把生成的图片/音频/视频 Blob 直接 POST 到本地 Vite 服务，由服务端写到磁盘，完全不调用任何外部接口。'
+          )}
+        </div>
+      </div>
+    </SettingsSection>
+  );
+}
+
+// ==========================================
+// 媒体缓存配置区块 —— Service Worker 状态 / CacheStorage 统计 / 清空
+// ==========================================
+function MediaCacheSettingsSection() {
+  const { t } = useTranslation();
+  const [swActive, setSwActive] = useState<boolean | null>(null);
+  const [stats, setStats] = useState<MediaCacheStats | null>(null);
+  const [isClearing, setIsClearing] = useState(false);
+
+  // 初始探测
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const active = await isSWActive();
+        if (cancelled) return;
+        setSwActive(active);
+        if (active) {
+          const s = await getMediaCacheStats();
+          if (cancelled) return;
+          setStats(s);
+        }
+      } catch {
+        if (!cancelled) setSwActive(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleRefresh = useCallback(async () => {
+    setStats(null);
+    const active = await isSWActive();
+    setSwActive(active);
+    if (active) {
+      const s = await getMediaCacheStats();
+      setStats(s);
+    }
+  }, []);
+
+  const handleClear = useCallback(async () => {
+    if (isClearing) return;
+    setIsClearing(true);
+    try {
+      await clearAllMediaCache();
+      // 清空后立即重新探测
+      await handleRefresh();
+    } finally {
+      setIsClearing(false);
+    }
+  }, [handleRefresh, isClearing]);
+
+  return (
+    <SettingsSection
+      icon={<Database size={20} />}
+      title={t('settings.mediaCache.title', '媒体缓存（Service Worker）')}
+      badge={undefined}
+      defaultExpanded={false}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div style={{
+          padding: '0.75rem 1rem',
+          background: swActive === false ? 'rgba(248, 113, 113, 0.1)' : 'rgba(74, 222, 128, 0.1)',
+          border: `1px solid ${swActive === false ? 'rgba(248, 113, 113, 0.3)' : 'rgba(74, 222, 128, 0.3)'}`,
+          borderRadius: '8px',
+          fontSize: '0.85rem',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 500 }}>
+            {swActive === false ? '⚠️ ' : swActive === true ? '✅ ' : '⏳ '}
+            {swActive === false
+              ? t('settings.mediaCache.swOffline', 'Service Worker 未激活（无法缓存跨域媒体）')
+              : swActive === true
+              ? t('settings.mediaCache.swOnline', 'Service Worker 已激活 — 跨域媒体自动缓存')
+              : t('settings.mediaCache.probing', '正在探测 SW 状态...')}
+          </div>
+          {swActive === false && (
+            <div style={{ marginTop: '0.4rem', color: 'var(--text-muted)' }}>
+              {t(
+                'settings.mediaCache.swOfflineHint',
+                '可能原因：浏览器不支持 SW、当前不是 HTTPS / localhost、或者 sw.js 注册失败。'
+              )}
+            </div>
+          )}
+        </div>
+
+        {stats && (
+          <div style={{
+            padding: '0.75rem',
+            background: 'rgba(0,0,0,0.04)',
+            borderRadius: '6px',
+            fontSize: '0.82rem',
+          }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.25rem 1rem' }}>
+              <div>{t('settings.mediaCache.entryCount', '已缓存条目')}</div>
+              <div style={{ textAlign: 'right' }}>{stats.count} / {stats.maxEntries}</div>
+              <div>{t('settings.mediaCache.totalSize', '估算大小')}</div>
+              <div style={{ textAlign: 'right' }}>{formatBytes(stats.totalBytes)}</div>
+              {stats.oldestTimestamp > 0 && (
+                <>
+                  <div>{t('settings.mediaCache.oldest', '最旧缓存')}</div>
+                  <div style={{ textAlign: 'right' }}>
+                    {new Date(stats.oldestTimestamp).toLocaleString()}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={handleRefresh}
+            disabled={swActive === null}
+          >
+            <RefreshCw size={14} />
+            {t('settings.mediaCache.refreshBtn', '刷新状态')}
+          </button>
+          <button
+            type="button"
+            className="btn btn-danger"
+            onClick={handleClear}
+            disabled={isClearing || swActive !== true}
+            style={{ background: 'rgba(248, 113, 113, 0.2)', color: '#f87171' }}
+          >
+            <Trash2 size={14} />
+            {isClearing
+              ? t('settings.mediaCache.clearing', '清空中...')
+              : t('settings.mediaCache.clearBtn', '清空媒体缓存')}
+          </button>
+        </div>
+
+        <div style={{
+          fontSize: '0.78rem',
+          color: 'var(--text-muted)',
+          padding: '0.5rem',
+          background: 'rgba(0,0,0,0.05)',
+          borderRadius: '6px',
+          lineHeight: 1.5,
+        }}>
+          {t(
+            'settings.mediaCache.howItWorks',
+            '工作原理：\n• 跨域图片 URL（如 OSS 签名链接）首次通过 <img> 加载时，Service Worker 自动缓存到 CacheStorage。\n• 点击「保存」时，主线程从 CacheStorage 读取字节（绕过 CORS），调用本地磁盘落盘。\n• 二次保存 0 网络请求。\n• 最多缓存 200 条（LRU 淘汰）。'
+          )}
+        </div>
+      </div>
+    </SettingsSection>
+  );
+}

@@ -61,7 +61,7 @@ export interface IFileStoragePort {
   /** 当前适配器是否可用 */
   isAvailable(): boolean;
   /** 返回底层存储类型 */
-  getStorageType(): 'opfs' | 'indexeddb';
+  getStorageType(): 'opfs' | 'indexeddb' | 'local';
 }
 
 // ==========================================

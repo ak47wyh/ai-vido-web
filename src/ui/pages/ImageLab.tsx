@@ -11,6 +11,10 @@ import { ImageUploadField } from '../components/ImageUploadField';
 import { ImageGallery, type GalleryImage } from '../components/ImageGallery';
 import { ImageAdvancedSettings, type ImageAdvancedSettingsValue } from '../components/ImageAdvancedSettings';
 import { LabPageLayout } from '../components/LabPageLayout';
+import {
+  getCachedMediaBlob,
+  triggerNativeDownload,
+} from '../../utils/imageCache';
 
 type ImageLabTab = 't2i' | 'i2i';
 
@@ -167,22 +171,154 @@ export const ImageLab: React.FC = () => {
 
   const handleSaveConfirm = async (name: string, tags: string) => {
     if (!saveTargetImage || !currentSpaceId) return;
+    const tagList = tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [];
+
+    // ==================== 路径 A：Service Worker 缓存命中 ====================
+    // 优先级最高。SW 在 <img> 加载时已经把跨域媒体写入 CacheStorage，
+    // 主线程读缓存 → Blob → saveImageFromBlob，**0 网络请求**。
+    if (saveTargetImage.url.startsWith('http')) {
+      const cached = await getCachedMediaBlob(saveTargetImage.url);
+      if (cached) {
+        try {
+          const saved = await assetLibraryService.saveImageFromBlob({
+            spaceId: currentSpaceId,
+            name,
+            blob: cached,
+            prompt: saveTargetImage.prompt,
+            model: saveTargetImage.model || '',
+            aspectRatio: saveTargetImage.aspectRatio || '',
+            tags: tagList,
+            sourceType: 'lab',
+          });
+          showToast(
+            'success',
+            t(
+              'assetLibrary.saveSuccessFromCache',
+              '素材已从浏览器缓存保存，0 网络请求。\n文件名：{{name}}',
+              { name: saved.name }
+            )
+          );
+          setShowSaveDialog(false);
+          setSaveTargetImage(null);
+          return;
+        } catch (e) {
+          console.warn('[ImageLab] SW cache save failed, falling back:', e);
+        }
+      }
+    }
+
+    // ==================== 主路径：saveImageFromUrl（data URI / CORS 友好 URL） ====================
+    // data URI 直接 atob 转 Blob（0 网络请求）；
+    // http(s) URL 走 fetch（受 CORS 限制，OSS 会失败）。
     try {
-      await assetLibraryService.saveImageFromUrl({
+      const saved = await assetLibraryService.saveImageFromUrl({
         spaceId: currentSpaceId,
         name,
         imageUrl: saveTargetImage.url,
         prompt: saveTargetImage.prompt,
         model: saveTargetImage.model || '',
         aspectRatio: saveTargetImage.aspectRatio || '',
-        tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+        tags: tagList,
         sourceType: 'lab',
       });
-      showToast('success', t('assetLibrary.saveSuccess', '素材保存成功'));
+      const storageType = assetLibraryService.getStorageType();
+      const locationHint = storageType === 'local'
+        ? t(
+            'assetLibrary.saveSuccessLocal',
+            '素材已直接保存到本地磁盘「{{path}}」，无需调用任何外部 API。',
+            { path: 'docs/files/images/' }
+          )
+        : t(
+            'assetLibrary.saveSuccessWithLocation',
+            '素材已保存到当前故事空间的「图片素材库」，可在「角色与背景」页面查看。'
+          );
+      showToast('success', `${locationHint}\n文件名：${saved.name}`);
       setShowSaveDialog(false);
       setSaveTargetImage(null);
-    } catch (e) {
-      showToast('error', getErrorMessage(e, t('assetLibrary.saveFailed', '素材保存失败')));
+      return;
+    } catch (_innerErr) {
+      // 主路径失败（CORS 阻断），尝试路径 B：从 <img> 元素提取
+      if (saveTargetImage.url.startsWith('http')) {
+        const recovered = await tryExtractBlobFromDomImage(saveTargetImage.url);
+        if (recovered) {
+          try {
+            const saved = await assetLibraryService.saveImageFromBlob({
+              spaceId: currentSpaceId,
+              name,
+              blob: recovered.blob,
+              prompt: saveTargetImage.prompt,
+              model: saveTargetImage.model || '',
+              aspectRatio: saveTargetImage.aspectRatio || '',
+              tags: tagList,
+              sourceType: 'lab',
+            });
+            showToast(
+              'success',
+              t(
+                'assetLibrary.saveSuccessFromCanvas',
+                '素材已从 DOM 画布提取保存。\n文件名：{{name}}',
+                { name: saved.name }
+              )
+            );
+            setShowSaveDialog(false);
+            setSaveTargetImage(null);
+            return;
+          } catch {
+            // fall through to download fallback
+          }
+        }
+      }
+    }
+
+    // ==================== 路径 C：浏览器原生下载兜底 ====================
+    // 缓存未命中 + CORS 阻断 + Canvas 提取失败 → 触发浏览器原生下载
+    const filename = buildDownloadFilename(saveTargetImage.prompt);
+    const ok = triggerNativeDownload(saveTargetImage.url, filename);
+    if (ok) {
+      showToast(
+        'info',
+        t(
+          'assetLibrary.saveFallbackDownload',
+          '由于 CORS 限制无法保存到素材库，已触发浏览器下载。请检查下载文件夹。'
+        )
+      );
+    } else {
+      const reason = getErrorMessage(
+        new Error('all save paths failed'),
+        t('assetLibrary.saveFailed', '素材保存失败')
+      );
+      showToast('error', reason);
+    }
+    setShowSaveDialog(false);
+    setSaveTargetImage(null);
+  };
+
+  /**
+   * 从已经渲染到 DOM 的 <img> 元素提取图片 Blob。
+   * 绕开 fetch 拦截：浏览器渲染跨域图片不需要 CORS，但 canvas 读取需要图片"未污染"。
+   * - 如果图片加载时带了 crossorigin 属性（且服务端允许），canvas 可读
+   * - 否则只能拿到一个"被污染"的 canvas，无法 toBlob
+   *
+   * 因此本方法只能"碰运气"：只有图片加载时未污染（通常是 data URI / 同源）才能成功。
+   * 对 OSS 等 CORS-tainted 图片，本方法会抛错，调用方应回退到 data URI 流程。
+   */
+  const tryExtractBlobFromDomImage = async (url: string): Promise<{ blob: Blob } | null> => {
+    try {
+      // 查找页面上所有 <img src={url}>；匹配 url 完全相等的元素
+      const imgs = Array.from(document.images);
+      const img = imgs.find(el => el.src === url || el.currentSrc === url);
+      if (!img || !img.complete || img.naturalWidth === 0) return null;
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+      ctx.drawImage(img, 0, 0);
+      const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
+      return blob ? { blob } : null;
+    } catch {
+      // 跨域图片导致 SecurityError
+      return null;
     }
   };
 
