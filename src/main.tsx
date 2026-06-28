@@ -30,6 +30,14 @@ registerServiceWorker(swPath).then(reg => {
   }
 })
 
+// 新 SW 接管后自动刷新，确保用户看到最新行为
+let refreshing = false
+navigator.serviceWorker?.addEventListener('controllerchange', () => {
+  if (refreshing) return
+  refreshing = true
+  window.location.reload()
+})
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />

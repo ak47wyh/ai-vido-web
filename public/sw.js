@@ -14,8 +14,8 @@
 //   - 解包成 Blob 后用 new Response() 重新构造，加上
 //     'Access-Control-Allow-Origin: *' 头，主线程就能正常读 .blob()
 
-const STATIC_CACHE_NAME = 'minimax-video-studio-v1';
-const MEDIA_CACHE_NAME = 'ai-vido-media-v1';
+const STATIC_CACHE_NAME = 'ai-vido-web-v2';
+const MEDIA_CACHE_NAME = 'ai-vido-media-v2';
 const STATIC_ASSETS = ['/', '/index.html', '/manifest.json'];
 const MAX_MEDIA_ENTRIES = 200;
 
@@ -65,6 +65,9 @@ self.addEventListener('fetch', (event) => {
 
   // 跳过 API（避免缓存动态数据）
   if (url.pathname.startsWith('/api/')) return;
+
+  // 跳过 OSS 代理端点（动态代理，不应缓存）
+  if (url.pathname.startsWith('/__oss-proxy')) return;
 
   // 同源资源：cache-first
   if (
