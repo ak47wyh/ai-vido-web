@@ -1,6 +1,10 @@
 import type { IVoicePort, T2AAsyncContext, T2AAsyncStatus, T2ASyncContext, T2ASyncResult, T2AStreamCallbacks, T2AStreamHandle, VoiceDesignResult, VoiceType, VoiceListResult } from '../ports/OutboundPorts';
-import type { ICharacterRepository } from '../ports/OutboundPorts';
+import type { ICharacterRepository, IStorySegmentRepository } from '../ports/OutboundPorts';
+import type { IFileStoragePort } from '../ports/FileStoragePorts';
+import type { IApiConfigStore } from '../ports/PlatformPorts';
+import type { ILoggerPort } from '../ports/CrossCuttingPorts';
 import type { StorySegment } from '../entities/models';
+import type { PlatformRouter } from './PlatformRouter';
 
 /** Max text length for synchronous T2A (short text = instant response) */
 const SYNC_T2A_MAX_LENGTH = 500;
@@ -14,16 +18,38 @@ export interface CloneVoiceOptions {
   aigcWatermark?: boolean;
 }
 
+/**
+ * VoiceService
+ * - Phase 2 反转：依赖注入 IApiConfigStore + ILoggerPort，移除对
+ *   ApiConfigStore 单例和 defaultLogger 的硬编码引用。
+ */
 export class VoiceService {
-  voicePort: IVoicePort;
+  private router: PlatformRouter;
+  private configStore: IApiConfigStore;
+  private logger: ILoggerPort;
   characterRepo: ICharacterRepository;
+  segmentRepo: IStorySegmentRepository;
+  private getFileStorage: () => IFileStoragePort;
 
   constructor(
-    voicePort: IVoicePort,
-    characterRepo: ICharacterRepository
+    router: PlatformRouter,
+    characterRepo: ICharacterRepository,
+    segmentRepo: IStorySegmentRepository,
+    fileStorage: IFileStoragePort | (() => IFileStoragePort),
+    configStore: IApiConfigStore,
+    logger: ILoggerPort,
   ) {
-    this.voicePort = voicePort;
+    this.router = router;
     this.characterRepo = characterRepo;
+    this.segmentRepo = segmentRepo;
+    this.getFileStorage = typeof fileStorage === 'function' ? fileStorage : () => fileStorage;
+    this.configStore = configStore;
+    this.logger = logger;
+  }
+
+  /** 获取当前配置对应的语音合成适配器 */
+  private getVoicePort(): IVoicePort {
+    return this.router.resolveVoice(this.configStore.load());
   }
 
   /**
@@ -67,15 +93,15 @@ export class VoiceService {
     promptText?: string,
     options?: CloneVoiceOptions
   ): Promise<string> {
-    const { fileId } = await this.voicePort.uploadFile(audioFile, 'voice_clone');
+    const { fileId } = await this.getVoicePort().uploadFile(audioFile, 'voice_clone');
 
     let promptAudioFileId: string | undefined;
     if (promptAudioFile) {
-      const result = await this.voicePort.uploadFile(promptAudioFile, 'prompt_audio');
+      const result = await this.getVoicePort().uploadFile(promptAudioFile, 'prompt_audio');
       promptAudioFileId = result.fileId;
     }
 
-    const cloneResult = await this.voicePort.cloneVoice({
+    const cloneResult = await this.getVoicePort().cloneVoice({
       fileId,
       voiceId: customVoiceId,
       text,
@@ -146,7 +172,7 @@ export class VoiceService {
       ...options,
     };
 
-    return this.voicePort.synthesizeSpeechSync(context);
+    return this.getVoicePort().synthesizeSpeechSync(context);
   }
 
   /**
@@ -171,7 +197,7 @@ export class VoiceService {
       languageBoost: options?.languageBoost || 'auto',
       ...options,
     };
-    return this.voicePort.synthesizeSpeechStream(context, callbacks);
+    return this.getVoicePort().synthesizeSpeechStream(context, callbacks);
   }
 
   /**
@@ -192,7 +218,7 @@ export class VoiceService {
       ...options,
     };
 
-    const result = await this.voicePort.createT2ATask(context);
+    const result = await this.getVoicePort().createT2ATask(context);
     return result.taskId;
   }
 
@@ -214,19 +240,19 @@ export class VoiceService {
       ...options,
     };
 
-    const result = await this.voicePort.createT2ATask(context);
+    const result = await this.getVoicePort().createT2ATask(context);
     return result.taskId;
   }
 
   async queryNarrationStatus(taskId: string): Promise<T2AAsyncStatus> {
-    return this.voicePort.queryT2ATask(taskId);
+    return this.getVoicePort().queryT2ATask(taskId);
   }
 
   /**
    * Design a new voice using text description.
    */
   async designVoice(prompt: string, previewText: string, voiceId?: string, aigcWatermark?: boolean): Promise<VoiceDesignResult> {
-    return this.voicePort.designVoice(prompt, previewText, voiceId, aigcWatermark);
+    return this.getVoicePort().designVoice(prompt, previewText, voiceId, aigcWatermark);
   }
 
   /**
@@ -237,7 +263,7 @@ export class VoiceService {
     if (!character) throw new Error('Character not found');
 
     const voiceId = `design_${Date.now()}`;
-    const result = await this.voicePort.designVoice(prompt, previewText, voiceId);
+    const result = await this.getVoicePort().designVoice(prompt, previewText, voiceId);
 
     character.voiceId = result.voiceId;
     await this.characterRepo.save(character);
@@ -263,7 +289,7 @@ export class VoiceService {
   }
 
   /**
-   * 将 T2ASyncResult 解析为可播放的 Blob URL
+   * 将 T2ASyncResult 解析为可播放的 Blob URL（不持久化，仅临时播放）
    * - 如果返回的是 hex 编码，直接转 Blob URL
    * - 如果返回的是 URL，通过 fetchAudioAsBlobUrl 带 auth 下载后转 Blob URL
    */
@@ -272,9 +298,97 @@ export class VoiceService {
       return this.hexToBlobUrl(result.audioHex);
     }
     if (result.audioUrl) {
-      return this.voicePort.fetchAudioAsBlobUrl(result.audioUrl);
+      return this.getVoicePort().fetchAudioAsBlobUrl(result.audioUrl);
     }
     throw new Error('未返回音频数据');
+  }
+
+  /**
+   * 为分镜生成旁白并持久化到 OPFS（Phase 2-A）。
+   *
+   * 数据流：
+   *   1. 同步合成音频
+   *   2. hex/URL → Blob
+   *   3. 写入 OPFS：audio/narration_{segmentId}.mp3
+   *   4. 写入 segment.narrationAudioStoragePath
+   *   5. segmentRepo.save 持久化元数据
+   *   6. 返回 Object URL 供当前会话播放
+   *
+   * 刷新后组件可从 segment.narrationAudioStoragePath 通过 getNarrationAudioUrl() 恢复。
+   */
+  async generateAndPersistNarration(segmentId: string, text: string, voiceId: string): Promise<string> {
+    const segment = await this.segmentRepo.findById(segmentId);
+    if (!segment) throw new Error('Segment not found');
+
+    const result = await this.synthesizeSync(text, voiceId);
+    const blob = await this.resultToAudioBlob(result);
+
+    const storagePath = `audio/narration_${segmentId}.mp3`;
+    await this.getFileStorage().storeBlob(storagePath, blob);
+
+    segment.narrationAudioStoragePath = storagePath;
+    await this.segmentRepo.save(segment);
+
+    return this.getFileStorage().getObjectUrl(storagePath);
+  }
+
+  /**
+   * 异步版：创建长文异步任务，轮询完成后持久化（Phase 2-A）。
+   */
+  async generateAndPersistNarrationAsync(
+    segmentId: string,
+    text: string,
+    voiceId: string,
+    onProgress?: (status: T2AAsyncStatus) => void,
+  ): Promise<string> {
+    const segment = await this.segmentRepo.findById(segmentId);
+    if (!segment) throw new Error('Segment not found');
+
+    if (text.length <= SYNC_T2A_MAX_LENGTH) {
+      return this.generateAndPersistNarration(segmentId, text, voiceId);
+    }
+
+    const taskId = await this.createAsyncTask(text, voiceId);
+
+    let status: T2AAsyncStatus;
+    do {
+      await new Promise(r => setTimeout(r, 3000));
+      status = await this.queryNarrationStatus(taskId);
+      onProgress?.(status);
+    } while (status.status === 'processing');
+
+    if (status.status !== 'success' || !status.audioUrl) {
+      throw new Error(status.errorMessage || '异步 T2A 任务失败');
+    }
+
+    const audioBlobUrl = await this.getVoicePort().fetchAudioAsBlobUrl(status.audioUrl);
+    let blob: Blob;
+    try {
+      const blobRes = await fetch(audioBlobUrl);
+      blob = await blobRes.blob();
+    } finally {
+      this.getFileStorage().revokeObjectUrl(audioBlobUrl);
+    }
+
+    const storagePath = `audio/narration_${segmentId}.mp3`;
+    await this.getFileStorage().storeBlob(storagePath, blob);
+
+    segment.narrationAudioStoragePath = storagePath;
+    await this.segmentRepo.save(segment);
+
+    return this.getFileStorage().getObjectUrl(storagePath);
+  }
+
+  /**
+   * 从已持久化的分镜恢复旁白 Object URL。
+   * 若 segment 未持久化或文件已失效，返回 null。
+   */
+  async getNarrationAudioUrl(segment: StorySegment): Promise<string | null> {
+    if (!segment.narrationAudioStoragePath) return null;
+    const fileStorage = this.getFileStorage();
+    const exists = await fileStorage.blobExists(segment.narrationAudioStoragePath);
+    if (!exists) return null;
+    return fileStorage.getObjectUrl(segment.narrationAudioStoragePath);
   }
 
   /**
@@ -282,7 +396,7 @@ export class VoiceService {
    */
   async downloadAudio(audioUrl: string, filename: string): Promise<void> {
     // 先获取 Blob URL（带认证）
-    const blobUrl = await this.voicePort.fetchAudioAsBlobUrl(audioUrl);
+    const blobUrl = await this.getVoicePort().fetchAudioAsBlobUrl(audioUrl);
     try {
       const link = document.createElement('a');
       link.href = blobUrl;
@@ -296,21 +410,42 @@ export class VoiceService {
     }
   }
 
-  /** hex 编码音频转 Blob URL */
-  private hexToBlobUrl(hex: string, format = 'mp3'): string {
+  /** hex 编码音频转 Blob */
+  private hexToAudioBlob(hex: string, format = 'mp3'): Blob {
     const bytes = new Uint8Array(hex.length / 2);
     for (let i = 0; i < hex.length; i += 2) {
       bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
     }
-    const blob = new Blob([bytes], { type: `audio/${format}` });
-    return URL.createObjectURL(blob);
+    return new Blob([bytes], { type: `audio/${format}` });
+  }
+
+  /** hex 编码音频转 Blob URL */
+  private hexToBlobUrl(hex: string, format = 'mp3'): string {
+    return URL.createObjectURL(this.hexToAudioBlob(hex, format));
+  }
+
+  /** T2ASyncResult → 音频 Blob */
+  private async resultToAudioBlob(result: T2ASyncResult): Promise<Blob> {
+    if (result.audioHex) {
+      return this.hexToAudioBlob(result.audioHex);
+    }
+    if (result.audioUrl) {
+      const blobUrl = await this.getVoicePort().fetchAudioAsBlobUrl(result.audioUrl);
+      try {
+        const res = await fetch(blobUrl);
+        return await res.blob();
+      } finally {
+        this.getFileStorage().revokeObjectUrl(blobUrl);
+      }
+    }
+    throw new Error('未返回音频数据');
   }
 
   /**
    * Get available voices from the API.
    */
   async getAvailableVoices(voiceType: VoiceType): Promise<VoiceListResult> {
-    return this.voicePort.getAvailableVoices(voiceType);
+    return this.getVoicePort().getAvailableVoices(voiceType);
   }
 
   /**
@@ -326,7 +461,7 @@ export class VoiceService {
    * Also unbinds it from any character currently using it.
    */
   async deleteVoice(voiceType: 'voice_cloning' | 'voice_generation', voiceId: string): Promise<void> {
-    await this.voicePort.deleteVoice(voiceType, voiceId);
+    await this.getVoicePort().deleteVoice(voiceType, voiceId);
 
     // Unbind from any character using this voice
     const allCharacters = await this.characterRepo.findAll();

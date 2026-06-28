@@ -33,6 +33,96 @@
   --transition-normal: 0.3s ease-in-out;
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   亮色主题 (Light Theme) —— 暖色调柔光，降低纯白刺眼感
+═══════════════════════════════════════════════════════════════ */
+:root[data-theme="light"] {
+  --bg-dark: #ece9e2;
+  --bg-panel: rgba(252, 250, 245, 0.92);
+  --bg-panel-hover: rgba(247, 244, 236, 0.96);
+  --text-main: #2c2a26;
+  --text-muted: #6e6a62;
+  --text-inverse: #ffffff;
+  --border-color: rgba(60, 50, 35, 0.12);
+  --border-color-focus: rgba(99, 102, 241, 0.45);
+  --shadow-glow: 0 0 15px rgba(99, 102, 241, 0.22);
+}
+
+:root[data-theme="light"] .glass-panel {
+  background: var(--bg-panel);
+  border-color: var(--border-color);
+}
+
+:root[data-theme="light"] .glass-panel.interactive:hover {
+  background: var(--bg-panel-hover);
+  border-color: rgba(60, 50, 35, 0.2);
+}
+
+:root[data-theme="light"] body {
+  background-color: var(--bg-dark);
+}
+
+:root[data-theme="light"] h1,
+:root[data-theme="light"] h2,
+:root[data-theme="light"] h3,
+:root[data-theme="light"] h4,
+:root[data-theme="light"] h5,
+:root[data-theme="light"] h6 {
+  color: var(--text-main);
+}
+
+:root[data-theme="light"] p {
+  color: var(--text-muted);
+}
+
+/* 亮色主题下表单输入框使用暖灰底色，避免纯黑/纯白对比过强 */
+:root[data-theme="light"] .form-input,
+:root[data-theme="light"] .form-textarea,
+:root[data-theme="light"] .form-select {
+  background: rgba(255, 253, 248, 0.6);
+}
+
+/* 亮色主题下滚动条配色 */
+:root[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: rgba(60, 50, 35, 0.2);
+}
+
+:root[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(60, 50, 35, 0.35);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   蓝色主题 (Blue Theme)
+═══════════════════════════════════════════════════════════════ */
+:root[data-theme="blue"] {
+  --bg-dark: #0c1929;
+  --bg-panel: rgba(30, 58, 95, 0.6);
+  --bg-panel-hover: rgba(30, 58, 95, 0.8);
+  --primary-color: #3b82f6;
+  --primary-hover: #2563eb;
+  --accent-color: #06b6d4;
+  --text-main: #f1f5f9;
+  --text-muted: #94a3b8;
+  --text-inverse: #ffffff;
+  --border-color: rgba(59, 130, 246, 0.3);
+  --border-color-focus: rgba(59, 130, 246, 0.5);
+  --shadow-glow: 0 0 20px rgba(59, 130, 246, 0.4);
+}
+
+:root[data-theme="blue"] .glass-panel {
+  background: var(--bg-panel);
+  border-color: var(--border-color);
+}
+
+:root[data-theme="blue"] .glass-panel.interactive:hover {
+  background: var(--bg-panel-hover);
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+:root[data-theme="blue"] body {
+  background-color: var(--bg-dark);
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -317,6 +407,19 @@ p {
   opacity: 0.9;
   background: var(--primary-color);
   border: none;
+}
+
+/* 禁用态：能力矩阵不支持该模式 */
+.lab-tab-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-style: dashed;
+}
+
+.lab-tab-disabled:hover {
+  background: transparent;
+  border-color: var(--border-color);
+  opacity: 0.4;
 }
 
 .lab-content {

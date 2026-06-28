@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { confirmEventBus, type ConfirmBridgeRequest } from '../../adapters/outbound/ui/ReactConfirmAdapter';
 
 interface ConfirmOptions {
   title: string;
@@ -79,6 +80,21 @@ export const ConfirmProvider: React.FC<React.PropsWithChildren> = ({ children })
     return new Promise<boolean>((resolve) => {
       setDialog({ ...options, resolve });
     });
+  }, []);
+
+  // 订阅 reactConfirmAdapter 发出的事件桥
+  useEffect(() => {
+    const unsubscribe = confirmEventBus.subscribe((req: ConfirmBridgeRequest) => {
+      setDialog({
+        title: req.title,
+        message: req.message,
+        confirmLabel: req.confirmText,
+        cancelLabel: req.cancelText,
+        danger: req.destructive,
+        resolve: req.resolve,
+      });
+    });
+    return unsubscribe;
   }, []);
 
   const handleConfirm = () => {

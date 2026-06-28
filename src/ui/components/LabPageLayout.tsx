@@ -5,6 +5,10 @@ interface TabItem {
   label: string;
   icon: React.ReactNode;
   color?: string;
+  /** 是否禁用（能力矩阵不支持） */
+  disabled?: boolean;
+  /** 禁用原因（tooltip） */
+  disabledReason?: string;
 }
 
 interface LabPageLayoutProps {
@@ -55,9 +59,11 @@ export const LabPageLayout: React.FC<LabPageLayoutProps> = ({
           {tabs.map(tab => (
             <button
               key={tab.key}
-              className={`lab-tab ${activeTab === tab.key ? 'lab-tab-active' : ''}`}
+              className={`lab-tab ${activeTab === tab.key ? 'lab-tab-active' : ''} ${tab.disabled ? 'lab-tab-disabled' : ''}`}
               style={activeTab === tab.key && tab.color ? { background: tab.color } : undefined}
-              onClick={() => onTabChange(tab.key)}
+              onClick={() => { if (!tab.disabled) onTabChange(tab.key); }}
+              disabled={tab.disabled}
+              title={tab.disabled ? tab.disabledReason ?? '该平台不支持此模式' : undefined}
             >
               {tab.icon} {tab.label}
             </button>

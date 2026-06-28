@@ -1,11 +1,28 @@
 import type { ITextGenerationPort, RefineResult } from '../ports/OutboundPorts';
+import type { IApiConfigStore } from '../ports/PlatformPorts';
+import type { ILoggerPort } from '../ports/CrossCuttingPorts';
+import type { PlatformRouter } from './PlatformRouter';
 import { recordTextGenUsage } from '../../utils/cacheMonitor';
 
 export class TextGenerationService {
-  textPort: ITextGenerationPort;
+  private router: PlatformRouter;
+  private configStore: IApiConfigStore;
+  private logger: ILoggerPort;
 
-  constructor(textPort: ITextGenerationPort) {
-    this.textPort = textPort;
+  constructor(
+    router: PlatformRouter,
+    configStore: IApiConfigStore,
+    logger: ILoggerPort,
+  ) {
+    this.router = router;
+    this.configStore = configStore;
+    this.logger = logger;
+  }
+
+  /** 获取当前配置对应的文本生成适配器 */
+  private getTextPort(): ITextGenerationPort {
+    const config = this.configStore.load();
+    return this.router.resolve('text', config);
   }
 
   /**
@@ -22,7 +39,8 @@ export class TextGenerationService {
       background: '场景环境',
     };
 
-    const result = await this.textPort.chatCompletion({
+    const textPort = this.getTextPort();
+    const result = await textPort.chatCompletion({
       model: 'MiniMax-M2.5-highspeed',
       messages: [
         {
@@ -59,7 +77,8 @@ export class TextGenerationService {
    * Refine story text to be more cinematic and visual.
    */
   async refineText(rawText: string): Promise<RefineResult> {
-    const result = await this.textPort.chatCompletion({
+    const textPort = this.getTextPort();
+    const result = await textPort.chatCompletion({
       model: 'MiniMax-M2.5-highspeed',
       messages: [
         {
@@ -96,7 +115,8 @@ export class TextGenerationService {
    * Suggest a BGM style description based on segment content.
    */
   async suggestBGMStyle(segmentContent: string): Promise<RefineResult> {
-    const result = await this.textPort.chatCompletion({
+    const textPort = this.getTextPort();
+    const result = await textPort.chatCompletion({
       model: 'MiniMax-M2.5-highspeed',
       messages: [
         {
@@ -148,7 +168,8 @@ export class TextGenerationService {
         : '',
     ].filter(Boolean).join('\n');
 
-    const result = await this.textPort.chatCompletion({
+    const textPort = this.getTextPort();
+    const result = await textPort.chatCompletion({
       model: 'MiniMax-M2.5',
       messages: [
         {

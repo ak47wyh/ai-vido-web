@@ -1,5 +1,8 @@
 import type { ITextGenerationPort } from '../ports/OutboundPorts';
+import type { IApiConfigStore } from '../ports/PlatformPorts';
+import type { ILoggerPort } from '../ports/CrossCuttingPorts';
 import type { StorySegment } from '../entities/models';
+import type { PlatformRouter } from './PlatformRouter';
 
 export type ShotType =
   | 'extreme-wide'    // EWS
@@ -57,15 +60,30 @@ const MOVEMENT_DESCRIPTIONS: Record<CameraMovement, string> = {
 };
 
 export class CinematographyService {
-  private textPort: ITextGenerationPort;
-  constructor(textPort: ITextGenerationPort) { this.textPort = textPort; }
+  private router: PlatformRouter;
+  private configStore: IApiConfigStore;
+  private logger: ILoggerPort;
+  constructor(
+    router: PlatformRouter,
+    configStore: IApiConfigStore,
+    logger: ILoggerPort,
+  ) {
+    this.router = router;
+    this.configStore = configStore;
+    this.logger = logger;
+  }
+
+  /** 获取当前配置对应的文本生成适配器 */
+  private getTextPort(): ITextGenerationPort {
+    return this.router.resolveText(this.configStore.load());
+  }
 
   /**
    * Analyze a story segment and suggest the optimal camera shots.
    * Returns 2-3 shot suggestions to create a more dynamic video.
    */
   async suggestShots(segment: StorySegment, characterNames: string[]): Promise<ShotSuggestion[]> {
-    const result = await this.textPort.chatCompletion({
+    const result = await this.getTextPort().chatCompletion({
       model: 'MiniMax-M2.5',
       messages: [
         {
@@ -113,7 +131,7 @@ export class CinematographyService {
    * Enhance a basic video prompt with cinematography details.
    */
   async enhancePromptWithShot(basePrompt: string, shot: ShotSuggestion): Promise<string> {
-    const result = await this.textPort.chatCompletion({
+    const result = await this.getTextPort().chatCompletion({
       model: 'MiniMax-M2.5-highspeed',
       messages: [
         {

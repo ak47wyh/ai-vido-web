@@ -63,7 +63,9 @@ const getStatusLabel = (status: VideoTask['status'], t: (key: string) => string)
   }
 };
 
-export const SegmentCard: React.FC<SegmentCardProps> = ({
+export const SegmentCard: React.FC<SegmentCardProps> = React.memo(({
+  // Phase 4 性能优化：包裹 React.memo 后，仅当本 segment 的 props 真正变化时才会重渲染
+  // 父组件 StoryWorkbench 已对共享回调做 useCallback 稳定化
   segment, index, task, characterMap, backgrounds,
   narrationStatus, narrationUrl,
   isBGMEditing, bgmPrompt, bgmMode, bgmLyrics, bgmModel, bgmCoverAudioUrl,
@@ -282,4 +284,6 @@ export const SegmentCard: React.FC<SegmentCardProps> = ({
       )}
     </div>
   );
-};
+});
+
+SegmentCard.displayName = 'SegmentCard';

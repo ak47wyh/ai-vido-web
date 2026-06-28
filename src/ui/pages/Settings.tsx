@@ -1,56 +1,344 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Save, Key, ExternalLink, CheckCircle, AlertCircle, RefreshCw, Cpu, Trash2, FolderOpen } from 'lucide-react';
-import { ApiConfigStore, type ApiConfig } from '../../adapters/outbound/config/ApiConfigStore';
+import { ExternalLink, RefreshCw, Cpu, Trash2, FolderOpen, FolderCog, Palette, CheckCircle, ChevronDown, Zap, Save, Database } from 'lucide-react';
+import { ApiConfigStore, type ApiConfig, type PlatformId } from '../../adapters/outbound/config/ApiConfigStore';
 import { useToast } from '../contexts/ToastContext';
 import { modelManagementService, fileManagementService } from '../../dependencies';
 import type { ModelInfo, FileItem } from '../../domain/ports/OutboundPorts';
 import { getErrorMessage } from '../utils/errorUtils';
+import { PLATFORM_METADATA, getCapabilitySummary, type Capability } from '../../domain/services/platformCapabilities';
+import {
+  isSWActive,
+  getMediaCacheStats,
+  clearAllMediaCache,
+  type MediaCacheStats,
+} from '../../utils/imageCache';
+
+// Settings Components
+import { SettingsSection } from '../components/settings/SettingsSection';
+import { FormField } from '../components/settings/FormField';
+import { StatusBadge } from '../components/settings/StatusBadge';
+import { ValidationButton } from '../components/settings/ValidationButton';
+import { ThemeSelector } from '../components/settings/ThemeSelector';
+
+// ===== Token 校验函数 =====
+
+async function validateArkToken(apiKey: string, baseUrl: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const response = await fetch(`${baseUrl}/models`, {
+      headers: { 'Authorization': `Bearer ${apiKey}` },
+    });
+    if (!response.ok) {
+      const errText = await response.text();
+      return { ok: false, error: `校验失败 (HTTP ${response.status})：${errText}` };
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: `网络错误：${err instanceof Error ? err.message : String(err)}` };
+  }
+}
+
+async function validateCozeToken(token: string, baseUrl: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const response = await fetch(`${baseUrl}/v1/bots/list`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ page_index: 1, page_size: 1 }),
+    });
+    if (!response.ok) {
+      const errText = await response.text();
+      return { ok: false, error: `校验失败 (HTTP ${response.status})：${errText}` };
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: `网络错误：${err instanceof Error ? err.message : String(err)}` };
+  }
+}
+
+// ===== 能力标签映射 =====
+const CAPABILITY_LABELS: Record<Capability, string> = {
+  video: '视频',
+  videoFl2v: '首尾帧',
+  videoS2v: '参考生',
+  image: '图片',
+  text: '文本',
+  voice: '语音',
+  music: '音乐',
+};
+
+/** 能力小标签 */
+const CapabilityChips: React.FC<{ platform: PlatformId; accentColor: string }> = ({ platform, accentColor }) => {
+  const caps = PLATFORM_METADATA[platform]?.capabilities ?? [];
+  if (caps.length === 0) return null;
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+      {caps.map(c => (
+        <span
+          key={c}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.25rem',
+            padding: '0.1rem 0.5rem',
+            borderRadius: '9999px',
+            fontSize: '0.68rem',
+            fontWeight: 600,
+            background: `${accentColor}1a`,
+            color: accentColor,
+            border: `1px solid ${accentColor}33`,
+          }}
+        >
+          {CAPABILITY_LABELS[c]}
+        </span>
+      ))}
+    </div>
+  );
+};
+
+// ===== 平台配置卡片组件（可折叠 + 能力标签） =====
+
+interface PlatformCardProps {
+  id: PlatformId;
+  icon: React.ReactNode;
+  name: string;
+  description: string;
+  isActive: boolean;
+  isConfigured: boolean;
+  expanded: boolean;
+  onToggleExpand: () => void;
+  children: React.ReactNode;
+  onActivate: () => void;
+  onValidate: () => Promise<void>;
+  validateLabel: string;
+  externalLink?: string;
+  externalLinkLabel?: string;
+  accentColor?: string;
+}
+
+const PlatformCard: React.FC<PlatformCardProps> = ({
+  id,
+  icon,
+  name,
+  description,
+  isActive,
+  isConfigured,
+  expanded,
+  onToggleExpand,
+  children,
+  onActivate,
+  onValidate,
+  validateLabel,
+  externalLink,
+  externalLinkLabel,
+  accentColor = 'var(--primary-color)',
+}) => {
+  return (
+    <div
+      className="glass-panel"
+      style={{
+        padding: 0,
+        border: isActive ? `1px solid ${accentColor}` : '1px solid var(--border-color)',
+        borderLeft: `3px solid ${isActive ? accentColor : 'transparent'}`,
+        transition: 'all var(--transition-normal)',
+        boxShadow: isActive ? `0 4px 16px ${accentColor}22` : 'var(--shadow-md)',
+        overflow: 'hidden',
+      }}
+    >
+      {/* ── Header（可点击折叠） ── */}
+      <div
+        onClick={onToggleExpand}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem',
+          padding: '0.85rem 1rem',
+          cursor: 'pointer',
+          transition: 'background var(--transition-fast)',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-panel-hover)'; }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+      >
+        {/* 图标方块（带品牌色底） */}
+        <div
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 'var(--radius-md)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '1.3rem',
+            background: `${accentColor}1a`,
+            border: `1px solid ${accentColor}33`,
+            flexShrink: 0,
+          }}
+        >
+          {icon}
+        </div>
+
+        {/* 名称 + 状态 */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <h3 style={{ margin: 0, fontSize: '0.92rem', fontWeight: 600, color: 'var(--text-main)' }}>{name}</h3>
+            {isActive && <StatusBadge status="connected" label="已激活" />}
+            {!isConfigured && !isActive && <StatusBadge status="inactive" label="未配置" />}
+          </div>
+          <p style={{ margin: '0.15rem 0 0', fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.3 }}>
+            {description}
+          </p>
+        </div>
+
+        {/* 折叠箭头 */}
+        <ChevronDown
+          size={18}
+          style={{
+            color: 'var(--text-muted)',
+            transition: 'transform var(--transition-fast)',
+            transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+            flexShrink: 0,
+          }}
+        />
+      </div>
+
+      {/* ── 能力标签栏（始终显示） ── */}
+      <div style={{ padding: '0 1rem 0.6rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <CapabilityChips platform={id} accentColor={accentColor} />
+      </div>
+
+      {/* ── 展开内容：配置字段 + 操作 ── */}
+      {expanded && (
+        <div
+          style={{
+            padding: '0 1rem 1rem',
+            borderTop: '1px solid var(--border-color)',
+            animation: 'fadeIn 0.2s ease-out',
+          }}
+        >
+          {/* 配置字段 */}
+          <div style={{ display: 'grid', gap: '0.65rem', paddingTop: '0.85rem' }}>
+            {children}
+          </div>
+
+          {/* 操作按钮 */}
+          <div style={{ display: 'flex', gap: '0.6rem', marginTop: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* 激活按钮 */}
+            <button
+              type="button"
+              className={`btn ${isActive ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={onActivate}
+              disabled={!isConfigured && !isActive}
+              style={{
+                background: isActive ? accentColor : undefined,
+                borderColor: isActive ? accentColor : undefined,
+                fontSize: '0.82rem',
+                padding: '0.5rem 1rem',
+              }}
+            >
+              {isActive ? (
+                <>
+                  <CheckCircle size={14} />
+                  已激活
+                </>
+              ) : (
+                <>
+                  <Zap size={14} />
+                  激活此平台
+                </>
+              )}
+            </button>
+
+            {/* 验证按钮 */}
+            {isConfigured && (
+              <ValidationButton onValidate={onValidate} label={validateLabel} />
+            )}
+
+            {/* 外部链接 */}
+            {externalLink && (
+              <a
+                href={externalLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                  fontSize: '0.78rem', color: 'var(--primary-color)',
+                  textDecoration: 'none', marginLeft: 'auto',
+                }}
+              >
+                <ExternalLink size={13} />
+                {externalLinkLabel}
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const Settings: React.FC = () => {
   const { t } = useTranslation();
   const { showToast } = useToast();
   const [config, setConfig] = useState<ApiConfig>(() => ApiConfigStore.load());
 
-  // Model management state — initialize from cache
-  const [textModels, setTextModels] = useState<ModelInfo[]>(() => {
-    const cached = modelManagementService.getCachedModels();
-    return cached?.models ?? [];
-  });
+  // 当前展开的平台卡片（默认展开激活平台）
+  const [expandedPlatform, setExpandedPlatform] = useState<PlatformId | null>(
+    () => ApiConfigStore.load().activePlatform,
+  );
+  const toggleExpand = useCallback((platform: PlatformId) => {
+    setExpandedPlatform(prev => (prev === platform ? null : platform));
+  }, []);
+
+  // 监听配置变化，自动保存
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      ApiConfigStore.autoSave(config);
+    }, 500); // 防抖 500ms
+    return () => clearTimeout(timeoutId);
+  }, [config]);
+
+  const handleChange = useCallback((field: keyof ApiConfig, value: string) => {
+    setConfig(prev => ({ ...prev, [field]: value }));
+  }, []);
+
+  const handleActivate = useCallback((platform: PlatformId) => {
+    setConfig(prev => ({ ...prev, activePlatform: platform }));
+    setExpandedPlatform(platform); // 激活后自动展开该平台
+    const meta = PLATFORM_METADATA[platform];
+    showToast('success', `已切换到${meta?.name ?? platform}平台`);
+  }, [showToast]);
+
+  // 当前激活平台元信息
+  const activeMeta = PLATFORM_METADATA[config.activePlatform];
+
+  // Model management state
+  const [textModels, setTextModels] = useState<ModelInfo[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
-  const [cachedAt, setCachedAt] = useState<string | null>(() => {
-    const cached = modelManagementService.getCachedModels();
-    return cached ? new Date(cached.cachedAt).toLocaleString() : null;
-  });
+  const [cachedAt, setCachedAt] = useState<string | null>(null);
+
+  // 初始化时读取缓存
+  useEffect(() => {
+    modelManagementService.getCachedModels().then(cached => {
+      if (cached) {
+        setTextModels(cached.models);
+        setCachedAt(new Date(cached.cachedAt).toLocaleString());
+      }
+    });
+  }, []);
 
   // File management state
   const [files, setFiles] = useState<FileItem[]>([]);
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
   const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
 
-  const handleChange = (field: keyof ApiConfig, value: string) => {
-    setConfig(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log('[Settings] 保存配置，参数:', JSON.stringify(config, null, 2));
-    try {
-      ApiConfigStore.save(config);
-      console.log('[Settings] 配置保存成功');
-      showToast('success', t('settings.savedMsg'));
-    } catch (e) {
-      console.error('[Settings] 配置保存失败:', e);
-      showToast('error', getErrorMessage(e, t('settings.saveFailed', '保存配置失败')));
-    }
-  };
-
   const handleRefreshModels = async () => {
     setIsLoadingModels(true);
     try {
       const models = await modelManagementService.refreshModels();
       setTextModels(models);
-      const cached = modelManagementService.getCachedModels();
+      const cached = await modelManagementService.getCachedModels();
       setCachedAt(cached ? new Date(cached.cachedAt).toLocaleString() : null);
       showToast('success', t('models.refreshSuccess'));
     } catch (e) {
@@ -85,7 +373,33 @@ export const Settings: React.FC = () => {
     }
   };
 
-  const isLive = config.minimaxApiKey.trim().length > 0;
+  const handleVolcValidate = async () => {
+    const result = await validateArkToken(config.volcArkApiKey, config.volcArkBaseUrl);
+    if (result.ok) {
+      showToast('success', t('settings.volcValidateSuccess'));
+    } else {
+      showToast('error', t('settings.volcValidateFailed', { error: result.error }));
+    }
+  };
+
+  const handleCozeValidate = async () => {
+    const result = await validateCozeToken(config.cozePatToken, config.cozeBaseUrl);
+    if (result.ok) {
+      showToast('success', t('settings.cozeValidateSuccess'));
+    } else {
+      showToast('error', t('settings.cozeValidateFailed', { error: result.error }));
+    }
+  };
+
+  // 检查平台是否已配置
+  const isMiniMaxConfigured = !!config.minimaxApiKey.trim();
+  const isVolcConfigured = !!config.volcArkApiKey.trim();
+  const isCozeConfigured = !!config.cozePatToken.trim();
+  const isKlingConfigured = !!config.klingAccessKey.trim() && !!config.klingSecretKey.trim();
+  const isWanConfigured = !!config.wanApiKey.trim();
+  const isHunyuanConfigured = !!config.hunyuanSecretId.trim() && !!config.hunyuanSecretKey.trim();
+  const isZhipuConfigured = !!config.zhipuApiKey.trim();
+  const isViduConfigured = !!config.viduApiKey.trim();
 
   const staticVideoModels = modelManagementService.getStaticVideoModels();
   const staticImageModels = modelManagementService.getStaticImageModels();
@@ -96,295 +410,1014 @@ export const Settings: React.FC = () => {
       <div className="page-header">
         <div>
           <h1>{t('settings.title')}</h1>
-          <p>{t('settings.subtitle')}</p>
         </div>
       </div>
 
-      <form onSubmit={handleSave} style={{ width: '100%' }}>
+      {/* ── Appearance Section ─────────────────────────────── */}
+      <SettingsSection
+        icon={<Palette size={20} />}
+        title={t('settings.appearanceSection')}
+        badge={undefined}
+        defaultExpanded={true}
+      >
+        <ThemeSelector />
+      </SettingsSection>
 
-        {/* ── MiniMax Section ──────────────────────────────────── */}
-        <div className="glass-panel" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
+      {/* ── Platform Configuration ─────────────────────────── */}
+      <div style={{ marginBottom: '1rem' }}>
+        <h2 style={{
+          fontSize: '0.9rem',
+          fontWeight: 600,
+          color: 'var(--text-muted)',
+          marginBottom: '0.75rem',
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em'
+        }}>
+          平台配置
+        </h2>
 
-          {/* Section header */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
-            <Key size={20} style={{ color: 'var(--primary-color)' }} />
-            <h2 style={{ margin: 0, fontSize: '1rem' }}>{t('settings.minimaxSection')}</h2>
-            {/* Live / Mock badge */}
-            <span style={{
-              marginLeft: 'auto',
-              padding: '0.2rem 0.7rem',
-              borderRadius: '999px',
-              fontSize: '0.75rem',
-              fontWeight: 700,
-              background: isLive ? 'rgba(52,211,153,0.15)' : 'rgba(251,191,36,0.15)',
-              color: isLive ? '#34d399' : '#fbbf24',
-              border: `1px solid ${isLive ? 'rgba(52,211,153,0.4)' : 'rgba(251,191,36,0.4)'}`,
-            }}>
-              {isLive ? t('settings.liveBadge') : t('settings.mockBadge')}
-            </span>
-          </div>
-
-          {/* Status hint */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: '0.6rem',
-            padding: '0.5rem 0.75rem',
-            borderRadius: 'var(--radius-sm)',
-            marginBottom: '1rem',
-            background: isLive ? 'rgba(52,211,153,0.08)' : 'rgba(251,191,36,0.08)',
-            border: `1px solid ${isLive ? 'rgba(52,211,153,0.25)' : 'rgba(251,191,36,0.25)'}`,
-            fontSize: '0.875rem',
-            color: 'var(--text-muted)',
-          }}>
-            {isLive
-              ? <CheckCircle size={16} style={{ color: '#34d399', flexShrink: 0, marginTop: '1px' }} />
-              : <AlertCircle size={16} style={{ color: '#fbbf24', flexShrink: 0, marginTop: '1px' }} />
-            }
-            <span>{isLive ? t('settings.liveHint') : t('settings.mockHint')}</span>
-          </div>
-
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '1rem' }}>
-            {t('settings.minimaxDesc')}
-          </p>
-
-          {/* API Key */}
-          <div className="form-group">
-            <label className="form-label">{t('settings.apiKeyLabel')}</label>
-            <div style={{ position: 'relative' }}>
-              <input
-                id="settings-minimax-api-key"
-                className="form-input"
-                type="password"
-                value={config.minimaxApiKey}
-                onChange={e => handleChange('minimaxApiKey', e.target.value)}
-                placeholder={t('settings.apiKeyPlaceholder')}
-                autoComplete="off"
-                style={{ paddingRight: '2.5rem' }}
-              />
-              <Key size={15} style={{
-                position: 'absolute', right: '0.75rem', top: '50%',
-                transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none'
-              }} />
-            </div>
-          </div>
-
-          {/* Group ID */}
-          <div className="form-group">
-            <label className="form-label">{t('settings.groupIdLabel')}</label>
-            <input
-              id="settings-minimax-group-id"
-              className="form-input"
-              type="text"
-              value={config.minimaxGroupId}
-              onChange={e => handleChange('minimaxGroupId', e.target.value)}
-              placeholder={t('settings.groupIdPlaceholder')}
-              autoComplete="off"
-            />
-          </div>
-
-          {/* Base URL */}
-          <div className="form-group">
-            <label className="form-label">{t('settings.baseUrlLabel')}</label>
-            <input
-              id="settings-minimax-base-url"
-              className="form-input"
-              type="text"
-              value={config.minimaxBaseUrl}
-              onChange={e => handleChange('minimaxBaseUrl', e.target.value)}
-              placeholder={t('settings.baseUrlPlaceholder')}
-            />
-          </div>
-
-          {/* Anthropic Base URL */}
-          <div className="form-group">
-            <label className="form-label">{t('settings.anthropicBaseUrlLabel')}</label>
-            <input
-              id="settings-minimax-anthropic-base-url"
-              className="form-input"
-              type="text"
-              value={config.minimaxAnthropicBaseUrl}
-              onChange={e => handleChange('minimaxAnthropicBaseUrl', e.target.value)}
-              placeholder={t('settings.anthropicBaseUrlPlaceholder')}
-            />
-            <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{t('settings.anthropicBaseUrlHint')}</p>
-          </div>
-
-          {/* External link */}
-          <a
-            href="https://platform.minimaxi.com/user-center/basic-information/interface-key"
-            target="_blank"
-            rel="noopener noreferrer"
+        {/* ── 当前激活平台 Hero Banner ── */}
+        {activeMeta && (
+          <div
+            className="glass-panel"
             style={{
-              display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
-              fontSize: '0.85rem', color: 'var(--primary-color)',
-              textDecoration: 'none', marginTop: '0.25rem'
+              display: 'flex',
+              alignItems: 'center',
+              gap: '1rem',
+              padding: '1rem 1.25rem',
+              marginBottom: '0.75rem',
+              border: `1px solid ${activeMeta.accentColor}44`,
+              borderLeft: `4px solid ${activeMeta.accentColor}`,
+              background: `linear-gradient(135deg, ${activeMeta.accentColor}10, var(--bg-panel))`,
+              boxShadow: `0 4px 20px ${activeMeta.accentColor}1a`,
             }}
           >
-            <ExternalLink size={14} />
-            {t('settings.getTokenLink')}
-          </a>
-        </div>
-
-        {/* ── Available Models Section ──────────────────────────── */}
-        <div className="glass-panel" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-            <Cpu size={20} style={{ color: 'var(--primary-color)' }} />
-            <h2 style={{ margin: 0, fontSize: '1rem' }}>{t('models.title')}</h2>
-            <button
-              type="button"
-              className="btn btn-secondary btn-xs"
-              style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-              disabled={isLoadingModels}
-              onClick={handleRefreshModels}
+            <div
+              style={{
+                width: 52,
+                height: 52,
+                borderRadius: 'var(--radius-lg)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '1.8rem',
+                background: `${activeMeta.accentColor}1f`,
+                border: `1px solid ${activeMeta.accentColor}40`,
+                flexShrink: 0,
+              }}
             >
-              {isLoadingModels ? <RefreshCw size={12} className="spin" /> : <RefreshCw size={12} />}
-              {isLoadingModels ? t('models.refreshing') : t('models.refreshBtn')}
-            </button>
+              {activeMeta.icon}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.7rem', fontWeight: 700, color: activeMeta.accentColor, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  当前激活
+                </span>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                  {activeMeta.name} · {activeMeta.brand}
+                </h3>
+              </div>
+              <p style={{ margin: '0.2rem 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                {activeMeta.description} · 能力：{getCapabilitySummary(config.activePlatform)}
+              </p>
+            </div>
+            <a
+              href={activeMeta.externalLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                fontSize: '0.78rem', color: activeMeta.accentColor,
+                textDecoration: 'none', flexShrink: 0,
+              }}
+            >
+              <ExternalLink size={14} />
+              文档
+            </a>
           </div>
+        )}
 
+        {/* ── 平台卡片网格（2 列） ── */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))',
+          gap: '0.75rem',
+        }}>
+          {/* MiniMax */}
+          <PlatformCard
+            id="minimax"
+            icon="🎬"
+            name="MiniMax · 海螺"
+            description="全模态 · 视频/图片/文本/语音/音乐"
+            isActive={config.activePlatform === 'minimax'}
+            isConfigured={isMiniMaxConfigured}
+            expanded={expandedPlatform === 'minimax'}
+            onToggleExpand={() => toggleExpand('minimax')}
+            onActivate={() => handleActivate('minimax')}
+            onValidate={async () => showToast('info', 'MiniMax 无需验证')}
+            validateLabel="验证"
+            externalLink="https://platform.minimaxi.com/user-center/basic-information/interface-key"
+            externalLinkLabel="获取 Token"
+            accentColor="#6366f1"
+          >
+            <FormField
+              label={t('settings.apiKeyLabel')}
+              value={config.minimaxApiKey}
+              onChange={v => handleChange('minimaxApiKey', v)}
+              type="password"
+              placeholder={t('settings.apiKeyPlaceholder')}
+              autoComplete="off"
+              showKeyIcon
+            />
+            <FormField
+              label={t('settings.baseUrlLabel')}
+              value={config.minimaxBaseUrl}
+              onChange={v => handleChange('minimaxBaseUrl', v)}
+              placeholder={t('settings.baseUrlPlaceholder')}
+            />
+            <FormField
+              label={t('settings.anthropicBaseUrlLabel')}
+              value={config.minimaxAnthropicBaseUrl}
+              onChange={v => handleChange('minimaxAnthropicBaseUrl', v)}
+              placeholder={t('settings.anthropicBaseUrlPlaceholder')}
+              hint={t('settings.anthropicBaseUrlHint')}
+            />
+          </PlatformCard>
+
+          {/* Volcano Engine */}
+          <PlatformCard
+            id="volcengine"
+            icon="🌋"
+            name="火山引擎 · 即梦"
+            description="Seedance · 视频/图片/文本/3D"
+            isActive={config.activePlatform === 'volcengine'}
+            isConfigured={isVolcConfigured}
+            expanded={expandedPlatform === 'volcengine'}
+            onToggleExpand={() => toggleExpand('volcengine')}
+            onActivate={() => handleActivate('volcengine')}
+            onValidate={handleVolcValidate}
+            validateLabel={t('settings.volcValidateBtn')}
+            externalLink="https://console.volcengine.com/ark"
+            externalLinkLabel="获取 Token"
+            accentColor="#f97316"
+          >
+            <FormField
+              label={t('settings.volcArkApiKeyLabel')}
+              value={config.volcArkApiKey}
+              onChange={v => handleChange('volcArkApiKey', v)}
+              type="password"
+              placeholder={t('settings.volcArkApiKeyPlaceholder')}
+              autoComplete="off"
+              showKeyIcon
+            />
+            <FormField
+              label={t('settings.volcArkBaseUrlLabel')}
+              value={config.volcArkBaseUrl}
+              onChange={v => handleChange('volcArkBaseUrl', v)}
+              placeholder={t('settings.volcArkBaseUrlPlaceholder')}
+            />
+          </PlatformCard>
+
+          {/* Coze */}
+          <PlatformCard
+            id="coze"
+            icon="🤖"
+            name="Coze"
+            description="Bot 应用 · 对话管理"
+            isActive={config.activePlatform === 'coze'}
+            isConfigured={isCozeConfigured}
+            expanded={expandedPlatform === 'coze'}
+            onToggleExpand={() => toggleExpand('coze')}
+            onActivate={() => handleActivate('coze')}
+            onValidate={handleCozeValidate}
+            validateLabel={t('settings.cozeValidateBtn')}
+            externalLink="https://www.coze.cn"
+            externalLinkLabel="获取 Token"
+            accentColor="#8b5cf6"
+          >
+            <FormField
+              label={t('settings.cozePatTokenLabel')}
+              value={config.cozePatToken}
+              onChange={v => handleChange('cozePatToken', v)}
+              type="password"
+              placeholder={t('settings.cozePatTokenPlaceholder')}
+              autoComplete="off"
+              showKeyIcon
+            />
+            <FormField
+              label={t('settings.cozeBaseUrlLabel')}
+              value={config.cozeBaseUrl}
+              onChange={v => handleChange('cozeBaseUrl', v)}
+              placeholder={t('settings.cozeBaseUrlPlaceholder')}
+            />
+            <FormField
+              label={t('settings.cozeSpaceIdLabel')}
+              value={config.cozeSpaceId}
+              onChange={v => handleChange('cozeSpaceId', v)}
+              placeholder={t('settings.cozeSpaceIdPlaceholder')}
+            />
+          </PlatformCard>
+
+          {/* 可灵 Kling */}
+          <PlatformCard
+            id="kling"
+            icon={PLATFORM_METADATA.kling.icon}
+            name={`${PLATFORM_METADATA.kling.name} · ${PLATFORM_METADATA.kling.brand}`}
+            description={PLATFORM_METADATA.kling.description}
+            isActive={config.activePlatform === 'kling'}
+            isConfigured={isKlingConfigured}
+            expanded={expandedPlatform === 'kling'}
+            onToggleExpand={() => toggleExpand('kling')}
+            onActivate={() => handleActivate('kling')}
+            onValidate={async () => showToast('info', '可灵：保存配置后在视频实验室发起任务即可验证')}
+            validateLabel="验证"
+            externalLink={PLATFORM_METADATA.kling.externalLink}
+            externalLinkLabel="获取 Key"
+            accentColor={PLATFORM_METADATA.kling.accentColor}
+          >
+            <FormField
+              label="AccessKey"
+              value={config.klingAccessKey}
+              onChange={v => handleChange('klingAccessKey', v)}
+              type="password"
+              placeholder="可灵 AccessKey"
+              autoComplete="off"
+              showKeyIcon
+            />
+            <FormField
+              label="SecretKey"
+              value={config.klingSecretKey}
+              onChange={v => handleChange('klingSecretKey', v)}
+              type="password"
+              placeholder="可灵 SecretKey"
+              autoComplete="off"
+              showKeyIcon
+            />
+            <FormField
+              label="Base URL"
+              value={config.klingBaseUrl}
+              onChange={v => handleChange('klingBaseUrl', v)}
+              placeholder="https://api.klingai.com"
+            />
+          </PlatformCard>
+
+          {/* 通义万相 Wan */}
+          <PlatformCard
+            id="wan"
+            icon={PLATFORM_METADATA.wan.icon}
+            name={`${PLATFORM_METADATA.wan.name} · ${PLATFORM_METADATA.wan.brand}`}
+            description={PLATFORM_METADATA.wan.description}
+            isActive={config.activePlatform === 'wan'}
+            isConfigured={isWanConfigured}
+            expanded={expandedPlatform === 'wan'}
+            onToggleExpand={() => toggleExpand('wan')}
+            onActivate={() => handleActivate('wan')}
+            onValidate={async () => showToast('info', '万相：保存配置后在视频实验室发起任务即可验证')}
+            validateLabel="验证"
+            externalLink={PLATFORM_METADATA.wan.externalLink}
+            externalLinkLabel="获取 Key"
+            accentColor={PLATFORM_METADATA.wan.accentColor}
+          >
+            <FormField
+              label="API-Key"
+              value={config.wanApiKey}
+              onChange={v => handleChange('wanApiKey', v)}
+              type="password"
+              placeholder="DashScope API-Key"
+              autoComplete="off"
+              showKeyIcon
+            />
+            <FormField
+              label="Base URL"
+              value={config.wanBaseUrl}
+              onChange={v => handleChange('wanBaseUrl', v)}
+              placeholder="https://dashscope.aliyuncs.com/api/v1"
+            />
+          </PlatformCard>
+
+          {/* 腾讯混元 Hunyuan */}
+          <PlatformCard
+            id="hunyuan"
+            icon={PLATFORM_METADATA.hunyuan.icon}
+            name={`${PLATFORM_METADATA.hunyuan.name} · ${PLATFORM_METADATA.hunyuan.brand}`}
+            description={PLATFORM_METADATA.hunyuan.description}
+            isActive={config.activePlatform === 'hunyuan'}
+            isConfigured={isHunyuanConfigured}
+            expanded={expandedPlatform === 'hunyuan'}
+            onToggleExpand={() => toggleExpand('hunyuan')}
+            onActivate={() => handleActivate('hunyuan')}
+            onValidate={async () => showToast('info', '混元：保存配置后在视频实验室发起任务即可验证')}
+            validateLabel="验证"
+            externalLink={PLATFORM_METADATA.hunyuan.externalLink}
+            externalLinkLabel="获取 Key"
+            accentColor={PLATFORM_METADATA.hunyuan.accentColor}
+          >
+            <FormField
+              label="SecretId"
+              value={config.hunyuanSecretId}
+              onChange={v => handleChange('hunyuanSecretId', v)}
+              type="password"
+              placeholder="腾讯云 SecretId"
+              autoComplete="off"
+              showKeyIcon
+            />
+            <FormField
+              label="SecretKey"
+              value={config.hunyuanSecretKey}
+              onChange={v => handleChange('hunyuanSecretKey', v)}
+              type="password"
+              placeholder="腾讯云 SecretKey"
+              autoComplete="off"
+              showKeyIcon
+            />
+            <FormField
+              label="Base URL"
+              value={config.hunyuanBaseUrl}
+              onChange={v => handleChange('hunyuanBaseUrl', v)}
+              placeholder="https://hunyuan.tencentcloudapi.com"
+            />
+          </PlatformCard>
+
+          {/* 智谱 Zhipu */}
+          <PlatformCard
+            id="zhipu"
+            icon={PLATFORM_METADATA.zhipu.icon}
+            name={`${PLATFORM_METADATA.zhipu.name} · ${PLATFORM_METADATA.zhipu.brand}`}
+            description={PLATFORM_METADATA.zhipu.description}
+            isActive={config.activePlatform === 'zhipu'}
+            isConfigured={isZhipuConfigured}
+            expanded={expandedPlatform === 'zhipu'}
+            onToggleExpand={() => toggleExpand('zhipu')}
+            onActivate={() => handleActivate('zhipu')}
+            onValidate={async () => showToast('info', '智谱：保存配置后在视频实验室发起任务即可验证')}
+            validateLabel="验证"
+            externalLink={PLATFORM_METADATA.zhipu.externalLink}
+            externalLinkLabel="获取 Key"
+            accentColor={PLATFORM_METADATA.zhipu.accentColor}
+          >
+            <FormField
+              label="API-Key"
+              value={config.zhipuApiKey}
+              onChange={v => handleChange('zhipuApiKey', v)}
+              type="password"
+              placeholder="智谱 API-Key"
+              autoComplete="off"
+              showKeyIcon
+            />
+            <FormField
+              label="Base URL"
+              value={config.zhipuBaseUrl}
+              onChange={v => handleChange('zhipuBaseUrl', v)}
+              placeholder="https://open.bigmodel.cn/api/paas/v4"
+            />
+          </PlatformCard>
+
+          {/* Vidu */}
+          <PlatformCard
+            id="vidu"
+            icon={PLATFORM_METADATA.vidu.icon}
+            name={`${PLATFORM_METADATA.vidu.name} · ${PLATFORM_METADATA.vidu.brand}`}
+            description={PLATFORM_METADATA.vidu.description}
+            isActive={config.activePlatform === 'vidu'}
+            isConfigured={isViduConfigured}
+            expanded={expandedPlatform === 'vidu'}
+            onToggleExpand={() => toggleExpand('vidu')}
+            onActivate={() => handleActivate('vidu')}
+            onValidate={async () => showToast('info', 'Vidu：保存配置后在视频实验室发起任务即可验证')}
+            validateLabel="验证"
+            externalLink={PLATFORM_METADATA.vidu.externalLink}
+            externalLinkLabel="获取 Key"
+            accentColor={PLATFORM_METADATA.vidu.accentColor}
+          >
+            <FormField
+              label="API-Key"
+              value={config.viduApiKey}
+              onChange={v => handleChange('viduApiKey', v)}
+              type="password"
+              placeholder="Vidu API-Key"
+              autoComplete="off"
+              showKeyIcon
+            />
+            <FormField
+              label="Base URL"
+              value={config.viduBaseUrl}
+              onChange={v => handleChange('viduBaseUrl', v)}
+              placeholder="https://api.vidu.cn"
+            />
+          </PlatformCard>
+        </div>
+      </div>
+
+      {/* ── Available Models Section ────────────────────── */}
+      <SettingsSection
+        icon={<Cpu size={20} />}
+        title={t('models.title')}
+        badge={undefined}
+        defaultExpanded={false}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
           {cachedAt && (
-            <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
               {t('models.cachedAt', { time: cachedAt })}
             </p>
           )}
-
-          {/* Text Models (dynamic) */}
-          <div style={{ marginBottom: '0.75rem' }}>
-            <h4 style={{ fontSize: '0.85rem', marginBottom: '0.5rem', color: '#818cf8' }}>
-              {t('models.textModels')} <span style={{ fontSize: '0.7rem', opacity: 0.7 }}>({t('models.dynamic')})</span>
-            </h4>
-            {textModels.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                {textModels.map(m => (
-                  <div key={m.id} style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                    <CheckCircle size={12} style={{ color: '#34d399' }} />
-                    <span>{m.displayName}</span>
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>({m.id})</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{t('models.noModels')}</p>
-            )}
-          </div>
-
-          {/* Video Models (static) */}
-          <div style={{ marginBottom: '1rem' }}>
-            <h4 style={{ fontSize: '0.85rem', marginBottom: '0.5rem', color: '#818cf8' }}>
-              {t('models.videoModels')} <span style={{ fontSize: '0.7rem', opacity: 0.7 }}>({t('models.static')})</span>
-            </h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-              {staticVideoModels.map(m => (
-                <div key={m.id} style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#818cf8', flexShrink: 0 }} />
-                  <span>{m.displayName}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Image Models (static) */}
-          <div style={{ marginBottom: '1rem' }}>
-            <h4 style={{ fontSize: '0.85rem', marginBottom: '0.5rem', color: '#818cf8' }}>
-              {t('models.imageModels')} <span style={{ fontSize: '0.7rem', opacity: 0.7 }}>({t('models.static')})</span>
-            </h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-              {staticImageModels.map(m => (
-                <div key={m.id} style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#818cf8', flexShrink: 0 }} />
-                  <span>{m.displayName}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Music Models (static) */}
-          <div>
-            <h4 style={{ fontSize: '0.85rem', marginBottom: '0.5rem', color: '#818cf8' }}>
-              {t('models.musicModels')} <span style={{ fontSize: '0.7rem', opacity: 0.7 }}>({t('models.static')})</span>
-            </h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-              {staticMusicModels.map(m => (
-                <div key={m.id} style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#818cf8', flexShrink: 0 }} />
-                  <span>{m.displayName}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+          <button
+            type="button"
+            className="btn btn-secondary btn-xs"
+            disabled={isLoadingModels}
+            onClick={handleRefreshModels}
+          >
+            {isLoadingModels ? <RefreshCw size={12} className="spin" /> : <RefreshCw size={12} />}
+            {isLoadingModels ? t('models.refreshing') : t('models.refreshBtn')}
+          </button>
         </div>
 
-        {/* ── File Management Section ───────────────────────────── */}
-        <div className="glass-panel" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-            <FolderOpen size={20} style={{ color: 'var(--primary-color)' }} />
-            <h2 style={{ margin: 0, fontSize: '1rem' }}>{t('settings.fileManagement')}</h2>
-            <button
-              type="button"
-              className="btn btn-secondary btn-xs"
-              style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-              disabled={isLoadingFiles}
-              onClick={handleLoadFiles}
-            >
-              {isLoadingFiles ? <RefreshCw size={12} className="spin" /> : <RefreshCw size={12} />}
-              {t('settings.loadFilesBtn')}
-            </button>
-          </div>
-
-          {files.length > 0 ? (
-            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-              <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                    <th style={{ textAlign: 'left', padding: '0.4rem' }}>{t('settings.fileName')}</th>
-                    <th style={{ textAlign: 'left', padding: '0.4rem' }}>{t('settings.filePurpose')}</th>
-                    <th style={{ textAlign: 'right', padding: '0.4rem' }}>{t('settings.fileSize')}</th>
-                    <th style={{ textAlign: 'center', padding: '0.4rem' }}>{t('settings.fileAction')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {files.map(f => (
-                    <tr key={f.fileId} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                      <td style={{ padding: '0.4rem', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.filename || f.fileId}</td>
-                      <td style={{ padding: '0.4rem' }}>{f.purpose}</td>
-                      <td style={{ padding: '0.4rem', textAlign: 'right' }}>{(f.bytes / 1024).toFixed(1)} KB</td>
-                      <td style={{ padding: '0.4rem', textAlign: 'center' }}>
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
-                          style={{ padding: '0.2rem 0.4rem', fontSize: '0.7rem', color: '#f87171' }}
-                          disabled={deletingFileId === f.fileId}
-                          onClick={() => handleDeleteFile(f.fileId)}
-                        >
-                          {deletingFileId === f.fileId ? <RefreshCw size={10} className="spin" /> : <Trash2 size={10} />}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        {/* Text Models */}
+        <div style={{ marginBottom: '1rem' }}>
+          <h4 style={{ fontSize: '0.85rem', marginBottom: '0.5rem', color: 'var(--primary-color)' }}>
+            {t('models.textModels')}
+          </h4>
+          {textModels.length > 0 ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+              {textModels.map(m => (
+                <span key={m.id} className="lab-chip" style={{ fontSize: '0.75rem' }}>
+                  {m.displayName}
+                </span>
+              ))}
             </div>
           ) : (
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              {isLoadingFiles ? t('models.refreshing') : t('settings.noFiles')}
-            </p>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{t('models.noModels')}</p>
           )}
         </div>
 
-        {/* ── Save button ──────────────────────────────────────── */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        {/* Video Models */}
+        <div style={{ marginBottom: '1rem' }}>
+          <h4 style={{ fontSize: '0.85rem', marginBottom: '0.5rem', color: 'var(--primary-color)' }}>
+            {t('models.videoModels')}
+          </h4>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+            {staticVideoModels.map(m => (
+              <span key={m.id} className="lab-chip" style={{ fontSize: '0.75rem' }}>
+                {m.displayName}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* Image Models */}
+        <div style={{ marginBottom: '1rem' }}>
+          <h4 style={{ fontSize: '0.85rem', marginBottom: '0.5rem', color: 'var(--primary-color)' }}>
+            {t('models.imageModels')}
+          </h4>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+            {staticImageModels.map(m => (
+              <span key={m.id} className="lab-chip" style={{ fontSize: '0.75rem' }}>
+                {m.displayName}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* Music Models */}
+        <div>
+          <h4 style={{ fontSize: '0.85rem', marginBottom: '0.5rem', color: 'var(--primary-color)' }}>
+            {t('models.musicModels')}
+          </h4>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+            {staticMusicModels.map(m => (
+              <span key={m.id} className="lab-chip" style={{ fontSize: '0.75rem' }}>
+                {m.displayName}
+              </span>
+            ))}
+          </div>
+        </div>
+      </SettingsSection>
+
+      {/* ── File Management Section ──────────────────────── */}
+      <SettingsSection
+        icon={<FolderOpen size={20} />}
+        title={t('settings.fileManagement')}
+        badge={undefined}
+        defaultExpanded={false}
+      >
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
           <button
-            id="settings-save-btn"
-            type="submit"
-            className="btn btn-primary"
-            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+            type="button"
+            className="btn btn-secondary btn-xs"
+            disabled={isLoadingFiles}
+            onClick={handleLoadFiles}
           >
-            <Save size={16} />
-            {t('settings.saveBtn')}
+            {isLoadingFiles ? <RefreshCw size={12} className="spin" /> : <RefreshCw size={12} />}
+            {t('settings.loadFilesBtn')}
           </button>
         </div>
-      </form>
+
+        {files.length > 0 ? (
+          <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+            <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                  <th style={{ textAlign: 'left', padding: '0.5rem' }}>{t('settings.fileName')}</th>
+                  <th style={{ textAlign: 'left', padding: '0.5rem' }}>{t('settings.filePurpose')}</th>
+                  <th style={{ textAlign: 'right', padding: '0.5rem' }}>{t('settings.fileSize')}</th>
+                  <th style={{ textAlign: 'center', padding: '0.5rem' }}>{t('settings.fileAction')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {files.map(f => (
+                  <tr key={f.fileId} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                    <td style={{ padding: '0.5rem', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {f.filename || f.fileId}
+                    </td>
+                    <td style={{ padding: '0.5rem' }}>{f.purpose}</td>
+                    <td style={{ padding: '0.5rem', textAlign: 'right' }}>{(f.bytes / 1024).toFixed(1)} KB</td>
+                    <td style={{ padding: '0.5rem', textAlign: 'center' }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{ padding: '0.2rem 0.4rem', fontSize: '0.7rem', color: '#f87171' }}
+                        disabled={deletingFileId === f.fileId}
+                        onClick={() => handleDeleteFile(f.fileId)}
+                      >
+                        {deletingFileId === f.fileId ? <RefreshCw size={10} className="spin" /> : <Trash2 size={10} />}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>
+            {isLoadingFiles ? t('models.refreshing') : t('settings.noFiles')}
+          </p>
+        )}
+      </SettingsSection>
+
+      {/* ── 本地保存路径（避开外部 OSS CORS） ─────────────── */}
+      <LocalStorageSettingsSection />
+
+      {/* ── 媒体缓存（Service Worker） ─────────────────── */}
+      <MediaCacheSettingsSection />
+
+      {/* ── Auto-save indicator ─────────────────────────── */}
+      <div style={{
+        position: 'fixed',
+        bottom: '1.5rem',
+        right: '1.5rem',
+        padding: '0.5rem 1rem',
+        borderRadius: 'var(--radius-full)',
+        background: 'var(--bg-panel)',
+        border: '1px solid var(--border-color)',
+        backdropFilter: 'blur(8px)',
+        fontSize: '0.75rem',
+        color: 'var(--text-muted)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.5rem',
+        boxShadow: 'var(--shadow-lg)',
+      }}>
+        <CheckCircle size={12} style={{ color: 'var(--primary-color)' }} />
+        自动保存已开启
+      </div>
     </div>
   );
-};
+}
+
+// ==========================================
+// 本地文件存储配置区块 —— 让用户选择存储后端与本地保存路径
+// ==========================================
+
+/** 把字节数格式化为人类可读字符串（KB/MB/GB） */
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+function LocalStorageSettingsSection() {
+  const { t } = useTranslation();
+
+  // 用户偏好：local / opfs / indexeddb / auto
+  const [preference, setPreference] = useState<'local' | 'opfs' | 'indexeddb' | 'auto'>(() => {
+    const v = window.localStorage.getItem('ai_vido_storage_preference');
+    return (v === 'local' || v === 'opfs' || v === 'indexeddb' || v === 'auto') ? v : 'auto';
+  });
+
+  // 探测 Vite 插件的 API 路径（默认 /__files / files）
+  const [apiBase, setApiBase] = useState(() =>
+    window.localStorage.getItem('ai_vido_files_api_base') || '/__files'
+  );
+  const [publicPath, setPublicPath] = useState(() =>
+    window.localStorage.getItem('ai_vido_files_public_path') || '/files'
+  );
+
+  // 服务端实际保存根目录（仅显示，不可改 —— 由 Vite FILES_DIR 环境变量决定）
+  const [_serverRoot] = useState<string>('docs/files');
+  const [pluginOnline, setPluginOnline] = useState<boolean | null>(null);
+  const [fileCount, setFileCount] = useState<number | null>(null);
+  // 磁盘用量聚合（由 /__files/stats 提供）
+  const [diskUsage, setDiskUsage] = useState<{
+    totalSize: number;
+    totalFiles: number;
+    byType: Record<string, { count: number; size: number }>;
+    maxUploadBytes?: number;
+  } | null>(null);
+
+  // 探测插件可用性 + 文件数量 + 磁盘用量（不触发 setState in effect —— 一次性 effect，初始探测）
+  useEffect(() => {
+    let cancelled = false;
+    // 同步重置状态是必要的"探测中"UI提示，
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPluginOnline(null);
+    (async () => {
+      try {
+        // 优先用 /__files/stats（一次拿全）
+        const r = await fetch(`${apiBase}/stats`);
+        if (cancelled) return;
+        if (r.ok) {
+          const data = await r.json();
+          setPluginOnline(true);
+          setDiskUsage({
+            totalSize: data.totalSize ?? 0,
+            totalFiles: data.totalFiles ?? 0,
+            byType: data.byType ?? {},
+            maxUploadBytes: data.maxUploadBytes,
+          });
+          setFileCount(data.totalFiles ?? 0);
+          return;
+        }
+        // 回退：用 list 接口
+        const lr = await fetch(`${apiBase}/list?dir=images`);
+        if (cancelled) return;
+        setPluginOnline(lr.ok);
+        if (lr.ok) {
+          const data = await lr.json();
+          const entries = Array.isArray(data.entries) ? data.entries : [];
+          setFileCount(entries.length);
+        } else {
+          setFileCount(null);
+        }
+      } catch {
+        if (cancelled) return;
+        setPluginOnline(false);
+        setFileCount(null);
+        setDiskUsage(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [apiBase]);
+
+  const probePlugin = useCallback(() => {
+    // 触发重新探测：重置状态再启动 effect
+    setPluginOnline(null);
+  }, []);
+
+  // 持久化
+  const persist = useCallback((next: { preference?: typeof preference; apiBase?: string; publicPath?: string }) => {
+    if (next.preference !== undefined) {
+      setPreference(next.preference);
+      window.localStorage.setItem('ai_vido_storage_preference', next.preference);
+    }
+    if (next.apiBase !== undefined) {
+      setApiBase(next.apiBase);
+      window.localStorage.setItem('ai_vido_files_api_base', next.apiBase);
+    }
+    if (next.publicPath !== undefined) {
+      setPublicPath(next.publicPath);
+      window.localStorage.setItem('ai_vido_files_public_path', next.publicPath);
+    }
+  }, []);
+
+  const handleReload = useCallback(() => {
+    window.location.reload();
+  }, []);
+
+  return (
+    <SettingsSection
+      icon={<FolderCog size={20} />}
+      title={t('settings.localStorage.title', '本地保存路径')}
+      badge={undefined}
+      defaultExpanded={false}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div style={{
+          padding: '0.75rem 1rem',
+          background: pluginOnline === false ? 'rgba(248, 113, 113, 0.1)' : 'rgba(74, 222, 128, 0.1)',
+          border: `1px solid ${pluginOnline === false ? 'rgba(248, 113, 113, 0.3)' : 'rgba(74, 222, 128, 0.3)'}`,
+          borderRadius: '8px',
+          fontSize: '0.85rem',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 500 }}>
+            {pluginOnline === false ? '⚠️ ' : pluginOnline === true ? '✅ ' : '⏳ '}
+            {pluginOnline === false
+              ? t('settings.localStorage.pluginOffline', 'Vite 文件存储插件未挂载')
+              : pluginOnline === true
+              ? t('settings.localStorage.pluginOnline', 'Vite 文件存储插件已挂载')
+              : t('settings.localStorage.probing', '正在探测插件状态...')}
+          </div>
+          {pluginOnline === false && (
+            <div style={{ marginTop: '0.4rem', color: 'var(--text-muted)' }}>
+              {t(
+                'settings.localStorage.pluginOfflineHint',
+                '请检查 vite.config.ts 中是否注册了 filesStoragePlugin()；或设置环境变量 FILES_DIR 指定保存目录。'
+              )}
+            </div>
+          )}
+        </div>
+
+        <FormField
+          label={t('settings.localStorage.preferenceLabel', '存储后端')}
+          value={preference}
+          onChange={v => persist({ preference: v as typeof preference })}
+          placeholder="auto"
+          type="select"
+          options={[
+            { value: 'auto', label: t('settings.localStorage.prefAuto', '自动（推荐）') },
+            { value: 'local', label: t('settings.localStorage.prefLocal', '本地磁盘（Vite 插件）') },
+            { value: 'opfs', label: t('settings.localStorage.prefOpfs', '浏览器 OPFS（Origin Private File System）') },
+            { value: 'indexeddb', label: t('settings.localStorage.prefIdb', '浏览器 IndexedDB（兜底）') },
+          ]}
+        />
+
+        <FormField
+          label={t('settings.localStorage.serverRootLabel', '服务端保存目录（仅显示）')}
+          value={_serverRoot}
+          onChange={() => undefined}
+          hint={t(
+            'settings.localStorage.serverRootHint',
+            '由 Vite 插件配置 / FILES_DIR 环境变量决定；修改需要重启 Vite dev server。'
+          )}
+        />
+
+        <FormField
+          label={t('settings.localStorage.apiBaseLabel', 'API 路由前缀')}
+          value={apiBase}
+          onChange={v => persist({ apiBase: v })}
+          placeholder="/__files"
+          hint={t(
+            'settings.localStorage.apiBaseHint',
+            'Vite 插件提供的上传/删除/列表 API 前缀。'
+          )}
+        />
+
+        <FormField
+          label={t('settings.localStorage.publicPathLabel', '静态访问前缀')}
+          value={publicPath}
+          onChange={v => persist({ publicPath: v })}
+          placeholder="/files"
+          hint={t(
+            'settings.localStorage.publicPathHint',
+            '已保存文件可通过此路径访问，例如 /files/images/abc.png。'
+          )}
+        />
+
+        {diskUsage && (
+          <div style={{
+            padding: '0.75rem',
+            background: 'rgba(0,0,0,0.04)',
+            borderRadius: '6px',
+            fontSize: '0.82rem',
+            color: 'var(--text-muted)',
+          }}>
+            <div style={{ fontWeight: 500, marginBottom: '0.5rem', color: 'var(--text-color, #fff)' }}>
+              {t('settings.localStorage.diskUsage', '磁盘用量')}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.25rem 1rem' }}>
+              <div>{t('settings.localStorage.diskUsageImages', '图片')}</div>
+              <div style={{ textAlign: 'right' }}>
+                {diskUsage.byType.images?.count ?? 0} ·{' '}
+                {formatBytes(diskUsage.byType.images?.size ?? 0)}
+              </div>
+              <div>{t('settings.localStorage.diskUsageAudio', '音频')}</div>
+              <div style={{ textAlign: 'right' }}>
+                {diskUsage.byType.audio?.count ?? 0} ·{' '}
+                {formatBytes(diskUsage.byType.audio?.size ?? 0)}
+              </div>
+              <div>{t('settings.localStorage.diskUsageVideo', '视频')}</div>
+              <div style={{ textAlign: 'right' }}>
+                {diskUsage.byType.video?.count ?? 0} ·{' '}
+                {formatBytes(diskUsage.byType.video?.size ?? 0)}
+              </div>
+              <div>{t('settings.localStorage.diskUsageOther', '其他')}</div>
+              <div style={{ textAlign: 'right' }}>
+                {diskUsage.byType.other?.count ?? 0} ·{' '}
+                {formatBytes(diskUsage.byType.other?.size ?? 0)}
+              </div>
+              <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.25rem', fontWeight: 500 }}>
+                {t('settings.localStorage.diskUsageTotal', '合计')}
+              </div>
+              <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.25rem', textAlign: 'right', fontWeight: 500 }}>
+                {diskUsage.totalFiles} · {formatBytes(diskUsage.totalSize)}
+              </div>
+            </div>
+            {diskUsage.maxUploadBytes && (
+              <div style={{ marginTop: '0.5rem', fontSize: '0.78rem' }}>
+                {t(
+                  'settings.localStorage.maxUpload',
+                  '单次上传上限：{{size}}MB（可在 vite.config.ts 调整）',
+                  { size: (diskUsage.maxUploadBytes / 1024 / 1024).toFixed(1) }
+                )}
+              </div>
+            )}
+          </div>
+        )}
+        {!diskUsage && fileCount !== null && (
+          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            {t(
+              'settings.localStorage.fileCount',
+              '「images」目录下已有 {{count}} 个文件（插件版本较旧，无 stats 接口）',
+              { count: fileCount }
+            )}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={probePlugin}
+            disabled={pluginOnline === null}
+          >
+            <RefreshCw size={14} />
+            {t('settings.localStorage.probeBtn', '重新探测')}
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={handleReload}
+          >
+            <Save size={14} />
+            {t('settings.localStorage.saveAndReloadBtn', '保存并刷新')}
+          </button>
+        </div>
+
+        <div style={{
+          fontSize: '0.78rem',
+          color: 'var(--text-muted)',
+          padding: '0.5rem',
+          background: 'rgba(0,0,0,0.05)',
+          borderRadius: '6px',
+          lineHeight: 1.5,
+        }}>
+          {t(
+            'settings.localStorage.whyHint',
+            '为什么需要本地保存？\n外部图片 URL（如 OSS 签名链接）通常被浏览器 CORS 策略拦截，无法直接 fetch 到 Blob。本适配器把生成的图片/音频/视频 Blob 直接 POST 到本地 Vite 服务，由服务端写到磁盘，完全不调用任何外部接口。'
+          )}
+        </div>
+      </div>
+    </SettingsSection>
+  );
+}
+
+// ==========================================
+// 媒体缓存配置区块 —— Service Worker 状态 / CacheStorage 统计 / 清空
+// ==========================================
+function MediaCacheSettingsSection() {
+  const { t } = useTranslation();
+  const [swActive, setSwActive] = useState<boolean | null>(null);
+  const [stats, setStats] = useState<MediaCacheStats | null>(null);
+  const [isClearing, setIsClearing] = useState(false);
+
+  // 初始探测
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const active = await isSWActive();
+        if (cancelled) return;
+        setSwActive(active);
+        if (active) {
+          const s = await getMediaCacheStats();
+          if (cancelled) return;
+          setStats(s);
+        }
+      } catch {
+        if (!cancelled) setSwActive(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleRefresh = useCallback(async () => {
+    setStats(null);
+    const active = await isSWActive();
+    setSwActive(active);
+    if (active) {
+      const s = await getMediaCacheStats();
+      setStats(s);
+    }
+  }, []);
+
+  const handleClear = useCallback(async () => {
+    if (isClearing) return;
+    setIsClearing(true);
+    try {
+      await clearAllMediaCache();
+      // 清空后立即重新探测
+      await handleRefresh();
+    } finally {
+      setIsClearing(false);
+    }
+  }, [handleRefresh, isClearing]);
+
+  return (
+    <SettingsSection
+      icon={<Database size={20} />}
+      title={t('settings.mediaCache.title', '媒体缓存（Service Worker）')}
+      badge={undefined}
+      defaultExpanded={false}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div style={{
+          padding: '0.75rem 1rem',
+          background: swActive === false ? 'rgba(248, 113, 113, 0.1)' : 'rgba(74, 222, 128, 0.1)',
+          border: `1px solid ${swActive === false ? 'rgba(248, 113, 113, 0.3)' : 'rgba(74, 222, 128, 0.3)'}`,
+          borderRadius: '8px',
+          fontSize: '0.85rem',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 500 }}>
+            {swActive === false ? '⚠️ ' : swActive === true ? '✅ ' : '⏳ '}
+            {swActive === false
+              ? t('settings.mediaCache.swOffline', 'Service Worker 未激活（无法缓存跨域媒体）')
+              : swActive === true
+              ? t('settings.mediaCache.swOnline', 'Service Worker 已激活 — 跨域媒体自动缓存')
+              : t('settings.mediaCache.probing', '正在探测 SW 状态...')}
+          </div>
+          {swActive === false && (
+            <div style={{ marginTop: '0.4rem', color: 'var(--text-muted)' }}>
+              {t(
+                'settings.mediaCache.swOfflineHint',
+                '可能原因：浏览器不支持 SW、当前不是 HTTPS / localhost、或者 sw.js 注册失败。'
+              )}
+            </div>
+          )}
+        </div>
+
+        {stats && (
+          <div style={{
+            padding: '0.75rem',
+            background: 'rgba(0,0,0,0.04)',
+            borderRadius: '6px',
+            fontSize: '0.82rem',
+          }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.25rem 1rem' }}>
+              <div>{t('settings.mediaCache.entryCount', '已缓存条目')}</div>
+              <div style={{ textAlign: 'right' }}>{stats.count} / {stats.maxEntries}</div>
+              <div>{t('settings.mediaCache.totalSize', '估算大小')}</div>
+              <div style={{ textAlign: 'right' }}>{formatBytes(stats.totalBytes)}</div>
+              {stats.oldestTimestamp > 0 && (
+                <>
+                  <div>{t('settings.mediaCache.oldest', '最旧缓存')}</div>
+                  <div style={{ textAlign: 'right' }}>
+                    {new Date(stats.oldestTimestamp).toLocaleString()}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={handleRefresh}
+            disabled={swActive === null}
+          >
+            <RefreshCw size={14} />
+            {t('settings.mediaCache.refreshBtn', '刷新状态')}
+          </button>
+          <button
+            type="button"
+            className="btn btn-danger"
+            onClick={handleClear}
+            disabled={isClearing || swActive !== true}
+            style={{ background: 'rgba(248, 113, 113, 0.2)', color: '#f87171' }}
+          >
+            <Trash2 size={14} />
+            {isClearing
+              ? t('settings.mediaCache.clearing', '清空中...')
+              : t('settings.mediaCache.clearBtn', '清空媒体缓存')}
+          </button>
+        </div>
+
+        <div style={{
+          fontSize: '0.78rem',
+          color: 'var(--text-muted)',
+          padding: '0.5rem',
+          background: 'rgba(0,0,0,0.05)',
+          borderRadius: '6px',
+          lineHeight: 1.5,
+        }}>
+          {t(
+            'settings.mediaCache.howItWorks',
+            '工作原理：\n• 跨域图片 URL（如 OSS 签名链接）首次通过 <img> 加载时，Service Worker 自动缓存到 CacheStorage。\n• 点击「保存」时，主线程从 CacheStorage 读取字节（绕过 CORS），调用本地磁盘落盘。\n• 二次保存 0 网络请求。\n• 最多缓存 200 条（LRU 淘汰）。'
+          )}
+        </div>
+      </div>
+    </SettingsSection>
+  );
+}

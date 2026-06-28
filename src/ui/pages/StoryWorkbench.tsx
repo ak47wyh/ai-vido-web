@@ -204,11 +204,11 @@ export const StoryWorkbench: React.FC = () => {
 
   // ---- Video ----
 
-  const handleSelectBackground = async (segmentId: string, bgId: string) => {
+  const handleSelectBackground = useCallback(async (segmentId: string, bgId: string) => {
     await storyService.updateSegmentBackground(segmentId, bgId);
-  };
+  }, []);
 
-  const handleGenerateVideo = async (segmentId: string) => {
+  const handleGenerateVideo = useCallback(async (segmentId: string) => {
     if (!ws.selectedStoryId) return;
     const seg = segments.find(s => s.id === segmentId);
     if (!seg) return;
@@ -219,7 +219,7 @@ export const StoryWorkbench: React.FC = () => {
         firstFrameImage: seg.firstFrameImage,
       });
     } catch (e: unknown) { showToast('error', getErrorMessage(e)); }
-  };
+  }, [segments, showToast, ws]);
 
   const handleBatchGenerate = async () => {
     if (!ws.selectedStoryId) return;
@@ -266,7 +266,7 @@ export const StoryWorkbench: React.FC = () => {
     } catch (e: unknown) { showToast('error', getErrorMessage(e)); }
   };
 
-  const handleUpdateActionContent = async (segmentId: string, content: string) => {
+  const handleUpdateActionContent = useCallback(async (segmentId: string, content: string) => {
     try {
       const seg = segments.find(s => s.id === segmentId);
       if (seg) {
@@ -274,9 +274,9 @@ export const StoryWorkbench: React.FC = () => {
         await storyService.segmentRepo.save(seg);
       }
     } catch (e) { showToast('error', getErrorMessage(e)); }
-  };
+  }, [segments, showToast]);
 
-  const handleUpdateFirstFrameImage = async (segmentId: string, url: string) => {
+  const handleUpdateFirstFrameImage = useCallback(async (segmentId: string, url: string) => {
     try {
       const seg = segments.find(s => s.id === segmentId);
       if (seg) {
@@ -284,7 +284,7 @@ export const StoryWorkbench: React.FC = () => {
         await storyService.segmentRepo.save(seg);
       }
     } catch (e) { showToast('error', getErrorMessage(e)); }
-  };
+  }, [segments, showToast]);
 
   const handleAssembleFinalVideo = async () => {
     if (!ws.selectedStoryId) return;
@@ -304,7 +304,7 @@ export const StoryWorkbench: React.FC = () => {
 
   // ---- Narration ----
 
-  const handleGenerateNarration = async (segmentId: string, content: string, characterIds: string[]) => {
+  const handleGenerateNarration = useCallback(async (segmentId: string, content: string, characterIds: string[]) => {
     const charWithVoice = characterIds.map(id => characters.find(c => c.id === id)).find(c => c?.voiceId);
     if (!charWithVoice?.voiceId) { showToast('warning', t('character.noVoice')); return; }
     wsDispatch({ type: 'SET_NARRATION_STATUS', segmentId, status: 'running' });
@@ -346,11 +346,11 @@ export const StoryWorkbench: React.FC = () => {
       wsDispatch({ type: 'SET_NARRATION_STATUS', segmentId, status: 'failed' });
       showToast('error', getErrorMessage(e, t('character.narrationFailed')));
     }
-  };
+  }, [characters, showToast, t]);
 
   // ---- BGM ----
 
-  const handleGenerateBGM = async (segmentId: string) => {
+  const handleGenerateBGM = useCallback(async (segmentId: string) => {
     if (!bgm.prompt.trim()) { showToast('warning', t('music.promptLabel')); return; }
     bgmDispatch({ type: 'SET_GENERATING', value: true });
     try {
@@ -368,16 +368,16 @@ export const StoryWorkbench: React.FC = () => {
       bgmDispatch({ type: 'GENERATED' });
     } catch (e: unknown) { showToast('error', getErrorMessage(e, t('music.bgmGenerateFailed'))); }
     finally { bgmDispatch({ type: 'SET_GENERATING', value: false }); }
-  };
+  }, [bgm, showToast, t]);
 
-  const handleRemoveBGM = async (segmentId: string) => {
+  const handleRemoveBGM = useCallback(async (segmentId: string) => {
     const ok = await confirm({ title: t('music.removeBGM'), message: t('music.confirmRemoveBGM'), confirmLabel: t('music.removeBGMBtn'), danger: true });
     if (!ok) return;
     try { await musicService.removeBGMFromSegment(segmentId); showToast('success', t('music.removeBGM')); }
     catch (e: unknown) { showToast('error', getErrorMessage(e)); }
-  };
+  }, [confirm, showToast, t]);
 
-  const handleGenerateLyrics = async () => {
+  const handleGenerateLyrics = useCallback(async () => {
     if (!bgm.prompt.trim()) return;
     bgmDispatch({ type: 'SET_GENERATING_LYRICS', value: true });
     try {
@@ -386,7 +386,7 @@ export const StoryWorkbench: React.FC = () => {
       showToast('success', t('music.lyricsGenerated'));
     } catch (e: unknown) { showToast('error', getErrorMessage(e)); }
     finally { bgmDispatch({ type: 'SET_GENERATING_LYRICS', value: false }); }
-  };
+  }, [bgm.prompt, showToast, t]);
 
   // ---- AI Refine ----
 
@@ -442,14 +442,62 @@ export const StoryWorkbench: React.FC = () => {
 
   // ---- BGM Style suggestion ----
 
-  const handleSuggestBGMStyle = async (segmentContent: string) => {
+  const handleSuggestBGMStyle = useCallback(async (segmentContent: string) => {
     bgmDispatch({ type: 'SET_SUGGESTING_STYLE', value: true });
     try { const result = await textGenerationService.suggestBGMStyle(segmentContent); bgmDispatch({ type: 'SET_PROMPT', value: result.content }); showToast('success', t('textAI.bgmStyleSuggested')); }
     catch (e) { showToast('error', getErrorMessage(e, t('textAI.promptRefineFailed'))); }
     finally { bgmDispatch({ type: 'SET_SUGGESTING_STYLE', value: false }); }
-  };
+  }, [showToast, t]);
 
   const hasCharacters = characters.length > 0;
+
+  // ---- Phase 4 性能优化：稳定 SegmentCard 的高频回调，避免触发 React.memo 子组件重渲染 ----
+
+  /* START_EDIT 与 onGenerateBGM 等依赖 seg.id 的回调无法共享稳定引用，
+   故继续在 JSX 处使用 () => dispatch(...) 形式内联。
+   仅对不依赖 seg.id 的共享回调（BGM 状态编辑、AssetPicker 等）做稳定化 */
+
+  const handleBGMEditCancel = useCallback(() => {
+    bgmDispatch({ type: 'CANCEL_EDIT' });
+  }, []);
+
+  const handleBgmPromptChange = useCallback((v: string) => {
+    bgmDispatch({ type: 'SET_PROMPT', value: v });
+  }, []);
+
+  const handleBgmModeChange = useCallback((v: 'instrumental' | 'autoLyrics' | 'customLyrics' | 'cover') => {
+    bgmDispatch({ type: 'SET_MODE', value: v });
+  }, []);
+
+  const handleBgmModelChange = useCallback((v: 'music-2.6' | 'music-2.6-free' | 'music-cover' | 'music-cover-free') => {
+    bgmDispatch({ type: 'SET_MODEL', value: v });
+  }, []);
+
+  const handleBgmLyricsChange = useCallback((v: string) => {
+    bgmDispatch({ type: 'SET_LYRICS', value: v });
+  }, []);
+
+  const handleBgmCoverAudioUrlChange = useCallback((v: string) => {
+    bgmDispatch({ type: 'SET_COVER_URL', value: v });
+  }, []);
+
+  const handlePickImage = useCallback((segmentId: string) => {
+    openPicker('image', async (asset) => {
+      if (!('blobKey' in asset)) return;
+      try {
+        const url = await assetLibraryService.getImageBlobUrl(asset as SavedImage);
+        handleUpdateFirstFrameImage(segmentId, url);
+      } catch {
+        handleUpdateFirstFrameImage(segmentId, '');
+      }
+    });
+  }, [openPicker, handleUpdateFirstFrameImage]);
+
+  const handlePickNarrationPrompt = useCallback((segmentId: string) => {
+    openPicker('prompt', (asset) => {
+      if ('content' in asset) handleUpdateActionContent(segmentId, (asset as SavedPrompt).content || '');
+    }, 'narration');
+  }, [openPicker, handleUpdateActionContent]);
   const hasBackgrounds = backgrounds.length > 0;
 
   return (
@@ -639,27 +687,19 @@ export const StoryWorkbench: React.FC = () => {
                 onGenerateNarration={handleGenerateNarration}
                 onRemoveBGM={handleRemoveBGM}
                 onBGMEditStart={() => bgmDispatch({ type: 'START_EDIT', segmentId: seg.id })}
-                onBGMEditCancel={() => bgmDispatch({ type: 'CANCEL_EDIT' })}
-                onBgmPromptChange={(v) => bgmDispatch({ type: 'SET_PROMPT', value: v })}
-                onBgmModeChange={(v) => bgmDispatch({ type: 'SET_MODE', value: v })}
-                onBgmModelChange={(v) => bgmDispatch({ type: 'SET_MODEL', value: v })}
-                onBgmLyricsChange={(v) => bgmDispatch({ type: 'SET_LYRICS', value: v })}
-                onBgmCoverAudioUrlChange={(v) => bgmDispatch({ type: 'SET_COVER_URL', value: v })}
+                onBGMEditCancel={handleBGMEditCancel}
+                onBgmPromptChange={handleBgmPromptChange}
+                onBgmModeChange={handleBgmModeChange}
+                onBgmModelChange={handleBgmModelChange}
+                onBgmLyricsChange={handleBgmLyricsChange}
+                onBgmCoverAudioUrlChange={handleBgmCoverAudioUrlChange}
                 onGenerateBGM={() => handleGenerateBGM(seg.id)}
                 onGenerateLyrics={() => handleGenerateLyrics()}
                 onSuggestBGMStyle={handleSuggestBGMStyle}
                 onUpdateActionContent={handleUpdateActionContent}
                 onUpdateFirstFrameImage={handleUpdateFirstFrameImage}
-                onPickImage={() => openPicker('image', async (asset) => {
-                  if (!('blobKey' in asset)) return;
-                  try {
-                    const url = await assetLibraryService.getImageBlobUrl(asset as SavedImage);
-                    handleUpdateFirstFrameImage(seg.id, url);
-                  } catch {
-                    handleUpdateFirstFrameImage(seg.id, '');
-                  }
-                })}
-                onPickNarrationPrompt={() => openPicker('prompt', (asset) => { if ('content' in asset) handleUpdateActionContent(seg.id, (asset as SavedPrompt).content || ''); }, 'narration')}
+                onPickImage={() => handlePickImage(seg.id)}
+                onPickNarrationPrompt={() => handlePickNarrationPrompt(seg.id)}
               />
             ))}
           </div>

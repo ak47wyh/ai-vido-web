@@ -45,7 +45,7 @@ const STATUS_CONFIG: Record<string, { color: string; label: string }> = {
   FAIL: { color: '#ef4444', label: '失败' },
 };
 
-export const VideoTaskCard: React.FC<VideoTaskCardProps> = ({ task, onDelete, onRetry, onUseInStory, onUseAsInput }) => {
+export const VideoTaskCard: React.FC<VideoTaskCardProps> = React.memo(({ task, onDelete, onRetry, onUseInStory, onUseAsInput }) => {
   const statusKey = task.status.toUpperCase();
   const statusCfg = STATUS_CONFIG[statusKey] || { color: 'var(--text-muted)', label: task.status };
   const [elapsed, setElapsed] = useState(0);
@@ -178,4 +178,6 @@ export const VideoTaskCard: React.FC<VideoTaskCardProps> = ({ task, onDelete, on
       )}
     </div>
   );
-};
+});
+
+VideoTaskCard.displayName = 'VideoTaskCard';

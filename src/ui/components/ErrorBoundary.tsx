@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { logSink } from '../../adapters/outbound/infrastructure/RingBufferLogSinkAdapter';
 
 interface Props {
   children: React.ReactNode;
@@ -21,7 +22,24 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error('[ErrorBoundary] Caught error:', error, info.componentStack);
+    // 写入 RingBuffer，让应用内日志面板能看到 React 渲染错误
+    logSink.write({
+      id: typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `eb-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+      timestamp: Date.now(),
+      level: 'error',
+      message: `React ErrorBoundary caught: ${error.message}`,
+      context: {
+        source: 'ErrorBoundary',
+        componentStack: info.componentStack,
+      },
+      error: {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+      },
+    });
   }
 
   handleReload = () => {

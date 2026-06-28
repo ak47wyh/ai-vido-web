@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie';
-import type { Character, Background, Story, StorySegment, StorySpace, VideoTask, PipelineTask, FinalCut, SavedImage, SavedVoice, SavedPrompt } from '../../../domain/entities/models';
+import type { Character, Background, Story, StorySegment, StorySpace, VideoTask, PipelineTask, FinalCut, SavedImage, SavedVoice, SavedPrompt, GeneratedFile } from '../../../domain/entities/models';
+import type { SpaceSnapshot, Timeline } from '../../../domain/ports/PersistencePorts';
 
 export class AiVideoDatabase extends Dexie {
   storySpaces!: Table<StorySpace, string>;
@@ -13,6 +14,9 @@ export class AiVideoDatabase extends Dexie {
   savedImages!: Table<SavedImage, string>;
   savedVoices!: Table<SavedVoice, string>;
   savedPrompts!: Table<SavedPrompt, string>;
+  snapshots!: Table<SpaceSnapshot, string>;
+  timelines!: Table<Timeline, string>;
+  generatedFiles!: Table<GeneratedFile, string>;
 
   constructor() {
     super('AiVideoDatabase');
@@ -109,6 +113,41 @@ export class AiVideoDatabase extends Dexie {
       savedImages: 'id, spaceId, name, sourceType, createdAt',
       savedVoices: 'id, spaceId, name, sourceType, createdAt',
       savedPrompts: 'id, spaceId, name, category, createdAt'
+    });
+    // Version 9: Add Snapshot + Timeline tables (六边形架构：持久化 Port 落地)
+    //   - snapshots: 支持按 spaceId 查询
+    //   - timelines: 支持按 storyId 查询
+    this.version(9).stores({
+      storySpaces: 'id, name, createdAt',
+      characters: 'id, spaceId, name, createdAt',
+      backgrounds: 'id, spaceId, name, createdAt',
+      stories: 'id, spaceId, status, createdAt',
+      segments: 'id, storyId, sequenceOrder',
+      videoTasks: 'id, segmentId, status, createdAt',
+      pipelineTasks: 'id, storyId, status, createdAt',
+      finalCuts: 'id, storyId, pipelineTaskId, createdAt',
+      savedImages: 'id, spaceId, name, sourceType, createdAt',
+      savedVoices: 'id, spaceId, name, sourceType, createdAt',
+      savedPrompts: 'id, spaceId, name, category, createdAt',
+      snapshots: 'id, spaceId, createdAt',
+      timelines: 'id, storyId, createdAt, updatedAt'
+    });
+    // Version 10: Add GeneratedFile table (文件存储 OPFS 统一文件管理)
+    this.version(10).stores({
+      storySpaces: 'id, name, createdAt',
+      characters: 'id, spaceId, name, createdAt',
+      backgrounds: 'id, spaceId, name, createdAt',
+      stories: 'id, spaceId, status, createdAt',
+      segments: 'id, storyId, sequenceOrder',
+      videoTasks: 'id, segmentId, status, createdAt',
+      pipelineTasks: 'id, storyId, status, createdAt',
+      finalCuts: 'id, storyId, pipelineTaskId, createdAt',
+      savedImages: 'id, spaceId, name, sourceType, createdAt',
+      savedVoices: 'id, spaceId, name, sourceType, createdAt',
+      savedPrompts: 'id, spaceId, name, category, createdAt',
+      snapshots: 'id, spaceId, createdAt',
+      timelines: 'id, storyId, createdAt, updatedAt',
+      generatedFiles: 'id, spaceId, fileType, sourceEntityType, sourceEntityId, storagePath, createdAt, lastAccessedAt'
     });
   }
 }

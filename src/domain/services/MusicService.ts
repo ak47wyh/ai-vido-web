@@ -1,15 +1,33 @@
 import type { IMusicPort, IStorySegmentRepository, MusicGenerationContext, MusicModel, LyricsGenerationContext, LyricsGenerationResult, CoverPreprocessResult } from '../ports/OutboundPorts';
+import type { IFileStoragePort } from '../ports/FileStoragePorts';
+import type { IApiConfigStore } from '../ports/PlatformPorts';
+import type { ILoggerPort } from '../ports/CrossCuttingPorts';
+import type { PlatformRouter } from './PlatformRouter';
 
 export class MusicService {
-  musicPort: IMusicPort;
+  private router: PlatformRouter;
+  private configStore: IApiConfigStore;
+  private logger: ILoggerPort;
   segmentRepo: IStorySegmentRepository;
+  private getFileStorage: () => IFileStoragePort;
 
   constructor(
-    musicPort: IMusicPort,
-    segmentRepo: IStorySegmentRepository
+    router: PlatformRouter,
+    configStore: IApiConfigStore,
+    segmentRepo: IStorySegmentRepository,
+    fileStorage: IFileStoragePort | (() => IFileStoragePort),
+    logger: ILoggerPort,
   ) {
-    this.musicPort = musicPort;
+    this.router = router;
+    this.configStore = configStore;
     this.segmentRepo = segmentRepo;
+    this.getFileStorage = typeof fileStorage === 'function' ? fileStorage : () => fileStorage;
+    this.logger = logger;
+  }
+
+  /** 获取当前配置对应的音乐生成适配器 */
+  private getMusicPort(): IMusicPort {
+    return this.router.resolveMusic(this.configStore.load());
   }
 
   /**
@@ -41,7 +59,7 @@ export class MusicService {
       },
     };
 
-    const result = await this.musicPort.generateMusic(context);
+    const result = await this.getMusicPort().generateMusic(context);
 
     if (!result.audioUrl) {
       throw new Error('Music generation completed but no audio URL returned');
@@ -92,7 +110,7 @@ export class MusicService {
       },
     };
 
-    const result = await this.musicPort.generateMusic(context);
+    const result = await this.getMusicPort().generateMusic(context);
 
     if (!result.audioUrl) {
       throw new Error('Cover music generation completed but no audio URL returned');
@@ -119,18 +137,20 @@ export class MusicService {
       prompt,
     };
 
-    return this.musicPort.generateLyrics(context);
+    return this.getMusicPort().generateLyrics(context);
   }
 
   /**
    * Preprocess a reference audio for cover song generation.
    */
   async preprocessCover(audioUrl: string): Promise<CoverPreprocessResult> {
-    return this.musicPort.preprocessCover(audioUrl);
+    return this.getMusicPort().preprocessCover(audioUrl);
   }
 
   /**
    * Bind a BGM audio URL to a segment.
+   * 同时尝试下载音频 Blob 持久化到 OPFS（Phase 2-B），
+   * 失败时保留 bgmAudioUrl 降级显示。
    */
   async bindBGMToSegment(
     segmentId: string,
@@ -147,7 +167,43 @@ export class MusicService {
     segment.bgmLyrics = lyrics;
     segment.bgmIsInstrumental = isInstrumental;
 
+    // Phase 2-B：尝试下载音频并持久化到 OPFS
+    if (!audioUrl.startsWith('mock://')) {
+      try {
+        const res = await fetch(audioUrl);
+        if (res.ok) {
+          const blob = await res.blob();
+          const storagePath = `audio/bgm_${segmentId}.mp3`;
+          await this.getFileStorage().storeBlob(storagePath, blob);
+          segment.bgmStoragePath = storagePath;
+        }
+      } catch (e) {
+        const err = e instanceof Error ? e : new Error(String(e));
+        this.logger.warn(`Failed to cache BGM for segment ${segmentId}`, {
+          service: 'MusicService',
+          method: 'generateBGM',
+          segmentId,
+          error: err.message,
+        });
+      }
+    }
+
     await this.segmentRepo.save(segment);
+  }
+
+  /**
+   * 优先从本地缓存读取 BGM Blob URL，否则降级到外部 URL。
+   * UI 层播放 BGM 时调用。
+   */
+  async getBGMPlaybackUrl(segment: { bgmAudioUrl?: string; bgmStoragePath?: string }): Promise<string | null> {
+    if (segment.bgmStoragePath) {
+      const fileStorage = this.getFileStorage();
+      const exists = await fileStorage.blobExists(segment.bgmStoragePath);
+      if (exists) {
+        return fileStorage.getObjectUrl(segment.bgmStoragePath);
+      }
+    }
+    return segment.bgmAudioUrl || null;
   }
 
   /**

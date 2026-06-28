@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Image as ImageIcon, BookOpen, Settings,
@@ -11,12 +11,27 @@ import { useSpace } from '../contexts/SpaceContext';
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
 import { storySpaceService } from '../../dependencies';
 import { useToast } from '../contexts/ToastContext';
+import { ApiConfigStore, type PlatformId } from '../../adapters/outbound/config/ApiConfigStore';
+import { PLATFORM_METADATA, hasCapability, getCapabilitySummary, type Capability } from '../../domain/services/platformCapabilities';
 import './MainLayout.css';
+
+interface NavItem {
+  to: string;
+  icon: React.ReactNode;
+  label: string;
+  badge?: string;
+  /** 是否禁用（能力矩阵不支持） */
+  disabled?: boolean;
+  /** 禁用原因（tooltip） */
+  disabledReason?: string;
+  /** 该入口对应的能力（用于能力矩阵校验） */
+  capability?: Capability;
+}
 
 interface NavGroup {
   key: string;
   label: string;
-  items: { to: string; icon: React.ReactNode; label: string; badge?: string }[];
+  items: NavItem[];
 }
 
 export const MainLayout: React.FC = () => {
@@ -28,6 +43,14 @@ export const MainLayout: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+
+  // 当前激活平台（路由变化时刷新，确保 Settings 切换后立即生效）
+  const activePlatform: PlatformId = useMemo(
+    () => ApiConfigStore.getActivePlatform(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [location.pathname],
+  );
+  const activeMeta = PLATFORM_METADATA[activePlatform];
 
   // Detect mobile viewport
   useEffect(() => {
@@ -77,11 +100,11 @@ export const MainLayout: React.FC = () => {
       key: 'ai',
       label: t('nav.groupAI', 'AI 实验室'),
       items: [
-        { to: '/labs/image', icon: <ImageIcon size={18} />, label: t('nav.imageLab', '图片生成') },
-        { to: '/labs/video', icon: <Film size={18} />, label: t('nav.videoLab', '视频生成') },
-        { to: '/labs/voice', icon: <Mic size={18} />, label: t('nav.voiceLab', '音色与配音') },
-        { to: '/labs/music', icon: <MusicIcon size={18} />, label: t('nav.musicLab', '音乐生成') },
-        { to: '/labs/text', icon: <MessageSquare size={18} />, label: t('nav.textLab', '文本润色') },
+        { to: '/labs/image', icon: <ImageIcon size={18} />, label: t('nav.imageLab', '图片生成'), capability: 'image' },
+        { to: '/labs/video', icon: <Film size={18} />, label: t('nav.videoLab', '视频生成'), capability: 'video' },
+        { to: '/labs/voice', icon: <Mic size={18} />, label: t('nav.voiceLab', '音色与配音'), capability: 'voice' },
+        { to: '/labs/music', icon: <MusicIcon size={18} />, label: t('nav.musicLab', '音乐生成'), capability: 'music' },
+        { to: '/labs/text', icon: <MessageSquare size={18} />, label: t('nav.textLab', '文本润色'), capability: 'text' },
       ],
     },
     {
@@ -93,6 +116,21 @@ export const MainLayout: React.FC = () => {
       ],
     },
   ];
+
+  // 根据当前激活平台的能力矩阵，计算每个 Lab 入口的禁用状态
+  const navGroupsWithState: NavGroup[] = useMemo(() => navGroups.map(group => ({
+    ...group,
+    items: group.items.map(item => {
+      if (!item.capability) return item;
+      const supported = hasCapability(activePlatform, item.capability);
+      return {
+        ...item,
+        disabled: !supported,
+        disabledReason: supported ? undefined : `该平台不支持此能力（当前：${activeMeta?.name ?? activePlatform}）`,
+      };
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  })), [activePlatform, t]);
 
   // 判断当前路径属于哪个创作步骤（用于流程指示器）
   const creationSteps = ['/characters', '/backgrounds', '/workbench', '/export'];
@@ -157,6 +195,53 @@ export const MainLayout: React.FC = () => {
           {(!collapsed || isMobile) && <h2 className="logo-text">AI Video Studio</h2>}
         </div>
 
+        {/* Active Platform Badge — 当前激活平台徽标 */}
+        {(!collapsed || isMobile) && activeMeta && (
+          <div
+            className="active-platform-badge"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              padding: '0.4rem 0.6rem',
+              marginBottom: '0.75rem',
+              borderRadius: '8px',
+              background: `${activeMeta.accentColor}1a`, // 10% 透明度背景
+              border: `1px solid ${activeMeta.accentColor}40`,
+              fontSize: '0.78rem',
+              color: activeMeta.accentColor,
+              fontWeight: 600,
+            }}
+            title={`当前激活平台：${activeMeta.name}（${activeMeta.brand}）\n能力：${getCapabilitySummary(activePlatform)}`}
+          >
+            <span style={{ fontSize: '1rem', lineHeight: 1 }}>{activeMeta.icon}</span>
+            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {activeMeta.name}
+            </span>
+            <span style={{ fontSize: '0.65rem', opacity: 0.8, fontWeight: 500 }}>激活</span>
+          </div>
+        )}
+        {collapsed && !isMobile && activeMeta && (
+          <div
+            className="active-platform-badge-collapsed"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 32,
+              height: 32,
+              margin: '0 auto 0.75rem',
+              borderRadius: '8px',
+              background: `${activeMeta.accentColor}1a`,
+              border: `1px solid ${activeMeta.accentColor}40`,
+              fontSize: '1.1rem',
+            }}
+            title={`当前激活平台：${activeMeta.name}（${activeMeta.brand}）`}
+          >
+            {activeMeta.icon}
+          </div>
+        )}
+
         {/* Space Switcher */}
         {(!collapsed || isMobile) && (
           <div className="space-switcher">
@@ -203,22 +288,38 @@ export const MainLayout: React.FC = () => {
 
         {/* Navigation */}
         <nav className="sidebar-nav">
-          {navGroups.map(group => (
+          {navGroupsWithState.map(group => (
             <div key={group.key} className="nav-group">
               {(!collapsed || isMobile) && <div className="nav-group-label">{group.label}</div>}
-              {group.items.map(item => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.to === '/'}
-                  className={({ isActive }) => `nav-item ${isActive ? 'active' : ''} ${collapsed && !isMobile ? 'nav-item-collapsed' : ''}`}
-                  title={collapsed && !isMobile ? item.label : undefined}
-                >
-                  <span className="nav-icon">{item.icon}</span>
-                  {(!collapsed || isMobile) && <span className="nav-label">{item.label}</span>}
-                  {(!collapsed || isMobile) && item.badge && <span className="nav-badge">{item.badge}</span>}
-                </NavLink>
-              ))}
+              {group.items.map(item => {
+                // 禁用态：能力矩阵不支持，渲染为置灰 span + tooltip
+                if (item.disabled) {
+                  return (
+                    <span
+                      key={item.to}
+                      className={`nav-item nav-item-disabled ${collapsed && !isMobile ? 'nav-item-collapsed' : ''}`}
+                      title={item.disabledReason ?? '该平台不支持此能力'}
+                      aria-disabled={true}
+                    >
+                      <span className="nav-icon">{item.icon}</span>
+                      {(!collapsed || isMobile) && <span className="nav-label">{item.label}</span>}
+                    </span>
+                  );
+                }
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={item.to === '/'}
+                    className={({ isActive }) => `nav-item ${isActive ? 'active' : ''} ${collapsed && !isMobile ? 'nav-item-collapsed' : ''}`}
+                    title={collapsed && !isMobile ? item.label : undefined}
+                  >
+                    <span className="nav-icon">{item.icon}</span>
+                    {(!collapsed || isMobile) && <span className="nav-label">{item.label}</span>}
+                    {(!collapsed || isMobile) && item.badge && <span className="nav-badge">{item.badge}</span>}
+                  </NavLink>
+                );
+              })}
             </div>
           ))}
         </nav>

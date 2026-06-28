@@ -1,0 +1,106 @@
+import type { AxiosError } from 'axios';
+
+/**
+ * 腾讯混元 Hunyuan API 错误类。
+ *
+ * 腾讯云 API 错误响应体结构：
+ * {
+ *   "Response": {
+ *     "Error": {
+ *       "Code": "AuthFailure.SignatureFailure",
+ *       "Message": "签名校验失败..."
+ *     },
+ *     "RequestId": "xxx"
+ *   }
+ * }
+ */
+export class HunyuanApiError extends Error {
+  public readonly httpStatus: number;
+  public readonly errorCode: string;
+  public readonly rawMessage: string;
+
+  constructor(
+    httpStatus: number,
+    errorCode: string,
+    rawMessage: string,
+  ) {
+    super(HunyuanApiError.toUserMessage(httpStatus, errorCode, rawMessage));
+    this.name = 'HunyuanApiError';
+    this.httpStatus = httpStatus;
+    this.errorCode = errorCode;
+    this.rawMessage = rawMessage;
+  }
+
+  private static toUserMessage(status: number, code: string, raw: string): string {
+    // 腾讯云错误码前缀分类
+    if (code.startsWith('AuthFailure')) {
+      if (code.includes('Signature')) {
+        return '混元签名校验失败：请检查 SecretId/SecretKey 与系统时间是否正确。';
+      }
+      return '混元鉴权失败：请检查 SecretId/SecretKey 配置。';
+    }
+    switch (status) {
+      case 400:
+        return `请求参数错误：${raw}。请检查输入内容是否符合混元接口要求。`;
+      case 401:
+        return '混元鉴权失败：请检查 SecretId/SecretKey 配置。';
+      case 403:
+        return '当前账号无权访问此功能，请检查混元 API 权限配置。';
+      case 429:
+        return '请求过于频繁或并发达到上限，请稍后重试。';
+      case 500:
+      case 502:
+      case 503:
+        return '混元服务暂时不可用，请稍后重试。';
+      default:
+        if (code === 'LimitExceeded') return '混元请求次数超限，请稍后重试。';
+        if (code === 'ResourceNotFound') return '混元资源不存在：' + raw;
+        return `混元请求失败 (${status} ${code}): ${raw}`;
+    }
+  }
+
+  get isRetryable(): boolean {
+    return this.httpStatus === 429 || this.errorCode === 'InternalError' || this.errorCode === 'RequestLimitExceeded';
+  }
+}
+
+export function parseHunyuanError(error: AxiosError): HunyuanApiError {
+  const status = error.response?.status ?? 0;
+  const data = error.response?.data as HunyuanErrorBody | undefined;
+  const errInfo = data?.Response?.Error;
+  const errorCode = errInfo?.Code ?? 'UNKNOWN';
+  const rawMessage = errInfo?.Message ?? error.message ?? 'Unknown error';
+  return new HunyuanApiError(status, errorCode, rawMessage);
+}
+
+interface HunyuanErrorBody {
+  Response?: {
+    Error?: {
+      Code?: string;
+      Message?: string;
+    };
+    RequestId?: string;
+  };
+}
+
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelayMs: number = 1000,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (error instanceof HunyuanApiError && error.isRetryable && attempt < maxRetries) {
+        const delay = baseDelayMs * Math.pow(2, attempt);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError;
+}

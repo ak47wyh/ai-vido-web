@@ -1,6 +1,9 @@
 import type { IWhisperPort } from '../ports/PostProcessPorts';
 import type { ITextGenerationPort } from '../ports/OutboundPorts';
+import type { IApiConfigStore } from '../ports/PlatformPorts';
+import type { ILoggerPort } from '../ports/CrossCuttingPorts';
 import type { StorySegment } from '../entities/models';
+import type { PlatformRouter } from './PlatformRouter';
 
 export interface SrtEntry {
   index: number;
@@ -21,11 +24,25 @@ export interface SrtEntry {
  */
 export class SubtitleService {
   private whisperPort: IWhisperPort;
-  private textPort: ITextGenerationPort;
+  private router: PlatformRouter;
+  private configStore: IApiConfigStore;
+  private logger: ILoggerPort;
 
-  constructor(whisperPort: IWhisperPort, textPort: ITextGenerationPort) {
+  constructor(
+    whisperPort: IWhisperPort,
+    router: PlatformRouter,
+    configStore: IApiConfigStore,
+    logger: ILoggerPort,
+  ) {
     this.whisperPort = whisperPort;
-    this.textPort = textPort;
+    this.router = router;
+    this.configStore = configStore;
+    this.logger = logger;
+  }
+
+  /** 获取当前配置对应的文本生成适配器 */
+  private getTextPort(): ITextGenerationPort {
+    return this.router.resolveText(this.configStore.load());
   }
 
   /**
@@ -68,7 +85,7 @@ export class SubtitleService {
       .map((s, i) => `[S${i}] ${s.content}`)
       .join('\n');
 
-    const result = await this.textPort.chatCompletion({
+    const result = await this.getTextPort().chatCompletion({
       model: 'MiniMax-M2.5-highspeed',
       messages: [
         {
@@ -197,7 +214,7 @@ Output JSON array of objects: { "segmentIndex": number, "startMs": number, "endM
 
     const numbered = entries.map((e, i) => `[${i}] ${e.text}`).join('\n');
 
-    const result = await this.textPort.chatCompletion({
+    const result = await this.getTextPort().chatCompletion({
       model: 'MiniMax-M2.5-highspeed',
       messages: [
         {

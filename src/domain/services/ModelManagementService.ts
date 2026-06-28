@@ -1,18 +1,13 @@
 import type { IModelManagementPort, ModelInfo } from '../ports/OutboundPorts';
-
-const CACHE_KEY = 'minimax_cached_models';
-const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
-
-interface CachedModels {
-  models: ModelInfo[];
-  cachedAt: number;
-}
+import type { IModelCachePort, CachedModels } from '../ports/ModelCachePort';
 
 export class ModelManagementService {
   private modelPort: IModelManagementPort;
+  private cache: IModelCachePort<ModelInfo>;
 
-  constructor(modelPort: IModelManagementPort) {
+  constructor(modelPort: IModelManagementPort, cache: IModelCachePort<ModelInfo>) {
     this.modelPort = modelPort;
+    this.cache = cache;
   }
 
   /**
@@ -29,8 +24,8 @@ export class ModelManagementService {
     } while (afterId);
 
     // Cache the result
-    const cached: CachedModels = { models: allModels, cachedAt: Date.now() };
-    localStorage.setItem(CACHE_KEY, JSON.stringify(cached));
+    const cached: CachedModels<ModelInfo> = { models: allModels, cachedAt: Date.now() };
+    await this.cache.write(cached);
 
     return allModels;
   }
@@ -39,7 +34,7 @@ export class ModelManagementService {
    * Get models from cache if valid, otherwise fetch from API.
    */
   async getModels(): Promise<ModelInfo[]> {
-    const cached = this.getCachedModelsInternal();
+    const cached = await this.getCachedModelsInternal();
     if (cached) return cached.models;
     return this.fetchModels();
   }
@@ -54,7 +49,7 @@ export class ModelManagementService {
   /**
    * Get cached models info (models + cachedAt timestamp).
    */
-  getCachedModels(): CachedModels | null {
+  async getCachedModels(): Promise<CachedModels<ModelInfo> | null> {
     return this.getCachedModelsInternal();
   }
 
@@ -109,15 +104,7 @@ export class ModelManagementService {
     ];
   }
 
-  private getCachedModelsInternal(): CachedModels | null {
-    try {
-      const raw = localStorage.getItem(CACHE_KEY);
-      if (!raw) return null;
-      const cached: CachedModels = JSON.parse(raw);
-      if (Date.now() - cached.cachedAt > CACHE_TTL_MS) return null;
-      return cached;
-    } catch {
-      return null;
-    }
+  private async getCachedModelsInternal(): Promise<CachedModels<ModelInfo> | null> {
+    return this.cache.read();
   }
 }

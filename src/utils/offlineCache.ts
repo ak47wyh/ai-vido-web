@@ -184,14 +184,34 @@ export const offlineCache = new OfflineCache();
  * Service Worker registration helper.
  * Returns null if SW API is not available.
  */
-export async function registerServiceWorker(swPath = '/sw.js'): Promise<ServiceWorkerRegistration | null> {
+const BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '/';
+const resolvedScope = BASE_URL.endsWith('/') ? BASE_URL : `${BASE_URL}/`;
+
+export async function registerServiceWorker(
+  swPath = `${resolvedScope}sw.js`,
+): Promise<ServiceWorkerRegistration | null> {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
     console.warn('Service Worker not supported');
     return null;
   }
   try {
     const registration = await navigator.serviceWorker.register(swPath, {
-      scope: '/',
+      scope: resolvedScope,
+      updateViaCache: 'none',
+    });
+    // 检查是否有新版本等待激活，有则立即触发
+    if (registration.waiting) {
+      registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+    }
+    registration.addEventListener('updatefound', () => {
+      const newWorker = registration.installing;
+      if (newWorker) {
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            newWorker.postMessage({ type: 'SKIP_WAITING' });
+          }
+        });
+      }
     });
     console.log('[SW] Registered with scope:', registration.scope);
     return registration;

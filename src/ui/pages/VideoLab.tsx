@@ -11,6 +11,8 @@ import { ImageUploadField } from '../components/ImageUploadField';
 import { fileToBase64 } from '../utils/imageUtils';
 import type { VideoLabTask } from '../components/VideoTaskCard';
 import { LabPageLayout } from '../components/LabPageLayout';
+import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
+import { hasCapability } from '../../domain/services/platformCapabilities';
 
 type VideoLabTab = 't2v' | 'i2v' | 'fl2v' | 's2v' | 'agent' | 'tasks';
 
@@ -396,11 +398,15 @@ export const VideoLab: React.FC = () => {
   };
 
   // ==================== Tab Buttons ====================
-  const tabs: { key: VideoLabTab; label: string; icon: React.ReactNode; color?: string }[] = [
+  // 根据当前激活平台的能力矩阵，动态禁用不支持的视频生成模式
+  const activePlatform = ApiConfigStore.getActivePlatform();
+  const supportsFl2v = hasCapability(activePlatform, 'videoFl2v');
+  const supportsS2v = hasCapability(activePlatform, 'videoS2v');
+  const tabs: { key: VideoLabTab; label: string; icon: React.ReactNode; color?: string; disabled?: boolean; disabledReason?: string }[] = [
     { key: 't2v', label: '文生视频', icon: <Film size={16} /> },
     { key: 'i2v', label: '图生视频', icon: <Image size={16} />, color: '#3b82f6' },
-    { key: 'fl2v', label: '首尾帧', icon: <Layers size={16} />, color: '#8b5cf6' },
-    { key: 's2v', label: '主体参考', icon: <User size={16} />, color: '#ec4899' },
+    { key: 'fl2v', label: '首尾帧', icon: <Layers size={16} />, color: '#8b5cf6', disabled: !supportsFl2v, disabledReason: '该平台不支持首尾帧生视频模式' },
+    { key: 's2v', label: '主体参考', icon: <User size={16} />, color: '#ec4899', disabled: !supportsS2v, disabledReason: '该平台不支持主体参考生视频模式' },
     { key: 'agent', label: '视频模板', icon: <FileText size={16} />, color: '#f59e0b' },
     { key: 'tasks', label: `任务管理${tasks.length > 0 ? ` (${tasks.length})` : ''}`, icon: <RefreshCw size={16} />, color: '#06b6d4' },
   ];

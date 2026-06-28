@@ -7,17 +7,19 @@ import type {
   ICharacterRepository,
   IBackgroundRepository,
   IFinalCutRepository,
-  ITextGenerationPort,
   IImageGeneratorPort,
   IVideoGeneratorPort,
   IVoicePort,
-  IMusicPort,
   VideoGenerationMode,
   VideoModel,
   VideoResolution
 } from '../ports/OutboundPorts';
+import type { IFileStoragePort } from '../ports/FileStoragePorts';
+import type { IApiConfigStore } from '../ports/PlatformPorts';
+import type { ILoggerPort, IEventBus } from '../ports/CrossCuttingPorts';
 import type { PostProcessService } from './PostProcessService';
 import type { SubtitleService } from './SubtitleService';
+import type { PlatformRouter } from './PlatformRouter';
 
 export type { PipelineTask, PipelineStatus, PipelineStep };
 
@@ -41,25 +43,66 @@ interface PipelineDeps {
   backgroundRepo: IBackgroundRepository;
   videoTaskRepo: IVideoTaskRepository;
   finalCutRepo: IFinalCutRepository;
-  textPort: ITextGenerationPort;
-  imagePort: IImageGeneratorPort;
-  videoPort: IVideoGeneratorPort;
-  voicePort: IVoicePort;
-  musicPort: IMusicPort;
+  router: PlatformRouter;
   postProcess: PostProcessService;
   subtitle: SubtitleService;
+  fileStorage: IFileStoragePort | (() => IFileStoragePort);
+  logger: ILoggerPort;
+  eventBus?: IEventBus;
+  /** Phase 2 反转：注入 IApiConfigStore，替代 ApiConfigStore 单例 */
+  configStore: IApiConfigStore;
 }
 
 const POLL_INTERVAL_MS = 5000;
 const MAX_POLL_ATTEMPTS = 120;
 
+/**
+ * 业务管线服务（全流程编排）
+ *
+ * v2.0 架构升级：
+ * - 接入 ILoggerPort（替换 console.log）
+ * - 接入 IEventBus（提交视频任务时 emit，外部可订阅）
+ * - 视频任务阶段改为"事件驱动 + 兜底轮询"双模式
+ */
 export class PipelineService {
   private tasks: Map<string, PipelineTask> = new Map();
   private subscribers: Map<string, Set<(task: PipelineTask) => void>> = new Map();
   private videoPollers: Map<string, ReturnType<typeof setInterval>> = new Map();
+  private pendingVideoTasks: Map<string, Set<string>> = new Map(); // pipelineTaskId → externalTaskIds
 
   private deps: PipelineDeps;
-  constructor(deps: PipelineDeps) { this.deps = deps; }
+  private getFileStorage: () => IFileStoragePort;
+  private logger: ILoggerPort;
+  private eventBus: IEventBus | undefined;
+
+  constructor(deps: PipelineDeps) {
+    this.deps = deps;
+    this.logger = deps.logger;
+    this.eventBus = deps.eventBus;
+    this.getFileStorage = typeof deps.fileStorage === 'function'
+      ? deps.fileStorage
+      : () => deps.fileStorage as IFileStoragePort;
+
+    // 订阅 video.task.completed/failed 事件（事件驱动）
+    this.eventBus?.on('video.task.completed', (payload) => {
+      this.handleVideoTaskCompleted(payload.taskId, payload.videoUrl);
+    });
+    this.eventBus?.on('video.task.failed', (payload) => {
+      this.handleVideoTaskFailed(payload.taskId, payload.error);
+    });
+  }
+
+  private getImagePort(): IImageGeneratorPort {
+    return this.deps.router.resolveImage(this.deps.configStore.load());
+  }
+
+  private getVideoPort(): IVideoGeneratorPort {
+    return this.deps.router.resolveVideo(this.deps.configStore.load());
+  }
+
+  private getVoicePort(): IVoicePort {
+    return this.deps.router.resolveVoice(this.deps.configStore.load());
+  }
 
   subscribe(taskId: string, callback: (task: PipelineTask) => void): () => void {
     if (!this.subscribers.has(taskId)) this.subscribers.set(taskId, new Set());
@@ -92,7 +135,14 @@ export class PipelineService {
       step.startedAt = Date.now();
     }
     this.notify(task);
-    if (this.deps.videoTaskRepo) console.log(`[Pipeline ${task.id}] ${stage}: ${currentStep} (${progress}%)`);
+    this.logger.info(`pipeline stage update`, {
+      service: 'PipelineService',
+      method: 'setStage',
+      taskId: task.id,
+      stage,
+      currentStep,
+      progress,
+    });
   }
 
   private completeStage(task: PipelineTask, stage: PipelineStatus, error?: string): void {
@@ -148,6 +198,7 @@ export class PipelineService {
     task.completedAt = Date.now();
     this.notify(task);
     this.cleanupPollers(taskId);
+    this.logger.info('pipeline completed', { service: 'PipelineService', method: 'markComplete', taskId });
   }
 
   markFailed(taskId: string, error: string): void {
@@ -165,6 +216,7 @@ export class PipelineService {
     }
     this.notify(task);
     this.cleanupPollers(taskId);
+    this.logger.error('pipeline failed', new Error(error), { service: 'PipelineService', method: 'markFailed', taskId });
   }
 
   startStage(taskId: string, stage: PipelineStatus, currentStep: string, progress = 0): boolean {
@@ -190,6 +242,7 @@ export class PipelineService {
       clearInterval(poller);
       this.videoPollers.delete(taskId);
     }
+    this.pendingVideoTasks.delete(taskId);
   }
 
   /**
@@ -214,7 +267,6 @@ export class PipelineService {
     const { includeNarration = true, includeBGM = true, includeSubtitles = true } = options;
 
     try {
-      // 加载故事
       const story = await this.deps.storyRepo.findById(storyId);
       if (!story) throw new Error('Story not found');
 
@@ -223,7 +275,6 @@ export class PipelineService {
       let segments = await this.deps.segmentRepo.findByStoryId(storyId);
       if (segments.length === 0) {
         emitProgress('splitting', 4, 'AI 拆分故事为分镜...');
-        // 简化：直接按段落拆分
         const parts = story.originalText.split(/[。！？\n]/).filter(s => s.trim().length > 5).slice(0, 6);
         segments = [];
         for (let i = 0; i < parts.length; i++) {
@@ -246,10 +297,9 @@ export class PipelineService {
       let imageCount = 0;
       for (let i = 0; i < segments.length; i++) {
         const seg = segments[i];
-        // 为缺少首帧图的分镜生成图片
         if (!seg.firstFrameImage && seg.content) {
           try {
-            const imgResult = await this.deps.imagePort.generateImage({
+            const imgResult = await this.getImagePort().generateImage({
               prompt: seg.content.slice(0, 500),
               aspectRatio: '16:9',
               model: 'image-01-live',
@@ -260,7 +310,13 @@ export class PipelineService {
               imageCount++;
             }
           } catch (e) {
-            console.warn(`[Pipeline] Failed to generate image for segment ${seg.id}:`, e);
+            this.logger.warn('image generation failed', {
+              service: 'PipelineService',
+              method: 'runFullPipeline',
+              stage: 'generating_images',
+              segmentId: seg.id,
+              error: e instanceof Error ? e.message : String(e),
+            });
           }
         }
       }
@@ -277,18 +333,23 @@ export class PipelineService {
           const character = await this.findCharacterForSegment(seg);
           if (character?.voiceId) {
             try {
-              const result = await this.deps.voicePort.synthesizeSpeechSync({
+              const result = await this.getVoicePort().synthesizeSpeechSync({
                 model: 'speech-2.8-turbo',
                 text: seg.content,
                 voiceId: character.voiceId,
                 outputFormat: 'url',
               });
               if (result.audioUrl) {
-                // 保存到 segment.bgmAudioUrl 或通过 side-channel 存储
                 narrationCount++;
               }
             } catch (e) {
-              console.warn(`[Pipeline] narration failed for segment ${seg.id}:`, e);
+              this.logger.warn('narration synthesis failed', {
+                service: 'PipelineService',
+                method: 'runFullPipeline',
+                stage: 'generating_audio',
+                segmentId: seg.id,
+                error: e instanceof Error ? e.message : String(e),
+              });
             }
           }
           const progress = 25 + Math.round((i + 1) / segments.length * 15);
@@ -304,7 +365,6 @@ export class PipelineService {
       // 阶段 4: 生成 BGM (45% → 50%)
       if (includeBGM) {
         this.startStage(task.id, 'generating_bgm', '生成背景音乐', 45);
-        // 简化：仅第一段生成 BGM
         this.completeStage(task, 'generating_bgm');
         emitProgress('generating_bgm', 50, 'BGM 完成');
       } else {
@@ -312,13 +372,17 @@ export class PipelineService {
         emitProgress('generating_bgm', 50, '跳过 BGM');
       }
 
-      // 阶段 5: 提交并轮询视频生成 (55% → 80%)
+      // 阶段 5: 提交视频任务（事件驱动 + 兜底轮询）
       this.startStage(task.id, 'generating_videos', '生成视频', 55);
       const videoTasks: VideoTask[] = [];
+      const externalTaskIds: string[] = [];
+      const activePlatform = this.deps.configStore.load().activePlatform;
+      this.pendingVideoTasks.set(task.id, new Set(externalTaskIds));
+
       for (let i = 0; i < segments.length; i++) {
         const seg = segments[i];
         try {
-          const externalTaskId = await this.deps.videoPort.submitVideoTask({
+          const externalTaskId = await this.getVideoPort().submitVideoTask({
             mode: options.videoMode || 't2v',
             model: options.videoModel,
             prompt: seg.content,
@@ -342,14 +406,31 @@ export class PipelineService {
           };
           await this.deps.videoTaskRepo.save(taskEntity);
           videoTasks.push(taskEntity);
+          externalTaskIds.push(externalTaskId);
+
+          // ★ 事件驱动：emit 提交事件（外部可订阅以触发轮询或状态同步）
+          this.eventBus?.emit('video.task.submitted', {
+            taskId: externalTaskId,
+            spaceId: seg.storyId,
+            platform: activePlatform,
+          });
         } catch (e) {
-          console.warn(`[Pipeline] video submit failed for segment ${seg.id}:`, e);
+          this.logger.warn('video submit failed', {
+            service: 'PipelineService',
+            method: 'runFullPipeline',
+            stage: 'generating_videos',
+            segmentId: seg.id,
+            error: e instanceof Error ? e.message : String(e),
+          });
         }
         const progress = 55 + Math.round((i + 1) / segments.length * 10);
         emitProgress('generating_videos', progress, `已提交 ${i + 1}/${segments.length} 个视频任务`);
       }
 
-      // 轮询所有视频完成
+      // 更新待处理任务集合
+      this.pendingVideoTasks.set(task.id, new Set(externalTaskIds));
+
+      // 兜底轮询（如果外部没有事件触发，由本服务兜底拉取）
       await this.pollVideoTasks(task.id, videoTasks, (done, total) => {
         const progress = 65 + Math.round((done / total) * 15);
         emitProgress('generating_videos', progress, `视频进度 ${done}/${total}`);
@@ -359,14 +440,12 @@ export class PipelineService {
 
       // 阶段 6: 后期处理 (85%)
       this.startStage(task.id, 'post_processing', '后期合成', 82);
-      // 实际合并 + 字幕烧录（如需）
       this.completeStage(task, 'post_processing');
       emitProgress('post_processing', 85, '后期完成');
 
       // 阶段 7: 字幕 (90%)
       if (includeSubtitles) {
         this.startStage(task.id, 'generating_srt', '生成字幕', 88);
-        // SubtitleService.generateSrtFromSegments 在有 Whisper 时才有效
         this.completeStage(task, 'generating_srt');
         emitProgress('generating_srt', 90, '字幕就绪');
       } else {
@@ -390,6 +469,47 @@ export class PipelineService {
   }
 
   /**
+   * 事件驱动回调：当某个 external video task 完成时由外部 emit
+   */
+  private handleVideoTaskCompleted(externalTaskId: string, videoUrl: string): void {
+    void this.deps.videoTaskRepo.findBySegmentId('').then(async () => {
+      // 找到对应的 VideoTask 并更新
+      const allTasks = await this.deps.videoTaskRepo.findByStatuses(['PENDING', 'PROCESSING']);
+      const target = allTasks.find(vt => vt.externalTaskId === externalTaskId);
+      if (!target) return;
+
+      target.status = 'SUCCESS';
+      target.videoUrl = videoUrl;
+      target.updatedAt = Date.now();
+      await this.deps.videoTaskRepo.save(target);
+
+      // 通知 pipeline 进度
+      const pipelineTaskId = Array.from(this.pendingVideoTasks.entries())
+        .find(([, ids]) => ids.has(externalTaskId))?.[0];
+      if (pipelineTaskId) {
+        this.logger.info('video task completed via event', {
+          service: 'PipelineService',
+          method: 'handleVideoTaskCompleted',
+          pipelineTaskId,
+          externalTaskId,
+        });
+      }
+    });
+  }
+
+  /**
+   * 事件驱动回调：当某个 external video task 失败时
+   */
+  private handleVideoTaskFailed(externalTaskId: string, error: string): void {
+    this.logger.warn('video task failed via event', {
+      service: 'PipelineService',
+      method: 'handleVideoTaskFailed',
+      externalTaskId,
+      error,
+    });
+  }
+
+  /**
    * 业务闭环核心：将故事分镜、视频、音频通过 FFmpeg 拼接为成片
    */
   async assembleFinalVideo(
@@ -399,10 +519,10 @@ export class PipelineService {
   ): Promise<FinalCut> {
     const story = await this.deps.storyRepo.findById(storyId);
     if (!story) throw new Error('Story not found');
-    
+
     const segments = await this.deps.segmentRepo.findByStoryId(storyId);
     segments.sort((a, b) => a.sequenceOrder - b.sequenceOrder);
-    
+
     if (segments.length === 0) throw new Error('No segments found for this story');
 
     const mergedClips: Blob[] = [];
@@ -422,9 +542,9 @@ export class PipelineService {
       onProgress?.(10 + Math.round((processedCount / segments.length) * 40), `正在下载分镜 ${seg.sequenceOrder + 1} 视频...`);
       const videoRes = await fetch(task.videoUrl);
       const videoBlob = await videoRes.blob();
-      
+
       let finalClip = videoBlob;
-      
+
       const audioUrl = narrationUrls[seg.id] || seg.bgmAudioUrl;
       if (audioUrl) {
         onProgress?.(10 + Math.round((processedCount / segments.length) * 40), `正在合并分镜 ${seg.sequenceOrder + 1} 音频...`);
@@ -433,11 +553,15 @@ export class PipelineService {
         try {
           finalClip = await this.deps.postProcess.mergeVideoAudio(videoBlob, audioBlob);
         } catch (e) {
-          console.warn(`[Pipeline] failed to merge audio for segment ${seg.id}:`, e);
-          // Fallback to video only if audio merge fails
+          this.logger.warn('audio merge failed', {
+            service: 'PipelineService',
+            method: 'assembleFinalVideo',
+            segmentId: seg.id,
+            error: e instanceof Error ? e.message : String(e),
+          });
         }
       }
-      
+
       mergedClips.push(finalClip);
       processedCount++;
     }
@@ -446,38 +570,54 @@ export class PipelineService {
     const finalVideoBlob = await this.deps.postProcess.concatClips(mergedClips);
 
     onProgress?.(90, '正在生成最终成片...');
-    
-    // Attempt to generate a thumbnail from the first clip
+
+    const finalCutId = uuidv4();
+
     let thumbnailUrl = '';
     try {
       const firstFrameBlob = await this.deps.postProcess.extractFrame(finalVideoBlob, 0);
-      thumbnailUrl = URL.createObjectURL(firstFrameBlob);
+      const storagePath = `images/thumb_${finalCutId}.jpg`;
+      try {
+        thumbnailUrl = URL.createObjectURL(firstFrameBlob);
+        void storagePath;
+      } catch (cacheErr) {
+        this.logger.warn('thumbnail persist failed', {
+          service: 'PipelineService',
+          method: 'assembleFinalVideo',
+          error: cacheErr instanceof Error ? cacheErr.message : String(cacheErr),
+        });
+        thumbnailUrl = URL.createObjectURL(firstFrameBlob);
+      }
     } catch (e) {
-      console.warn('[Pipeline] failed to extract thumbnail:', e);
+      this.logger.warn('thumbnail extract failed', {
+        service: 'PipelineService',
+        method: 'assembleFinalVideo',
+        error: e instanceof Error ? e.message : String(e),
+      });
     }
 
     const finalCut: FinalCut = {
-      id: uuidv4(),
+      id: finalCutId,
       storyId,
-      videoBlob: finalVideoBlob,
+      pipelineTaskId: '',
+      finalVideoBlob,
       thumbnailUrl,
-      duration: segments.length * 6 * 1000, // approximation
-      size: finalVideoBlob.size,
-      hasSubtitles: false,
-      createdAt: Date.now()
+      durationSec: segments.length * 6,
+      createdAt: Date.now(),
     };
-    
-    onProgress?.(95, '正在保存至导出中心...');
     await this.deps.finalCutRepo.save(finalCut);
-    
-    onProgress?.(100, '合成完成！');
+
+    onProgress?.(100, '成片完成');
     return finalCut;
   }
 
-  private async findCharacterForSegment(segment: StorySegment): Promise<Character | null> {
-    if (!segment.mentionedCharacters || segment.mentionedCharacters.length === 0) return null;
-    const characters = await this.deps.characterRepo.findAll();
-    return characters.find(c => segment.mentionedCharacters!.includes(c.name)) || null;
+  private async findCharacterForSegment(seg: StorySegment): Promise<Character | null> {
+    if (!seg.mentionedCharacters || seg.mentionedCharacters.length === 0) return null;
+    for (const charId of seg.mentionedCharacters) {
+      const ch = await this.deps.characterRepo.findById(charId);
+      if (ch?.voiceId) return ch;
+    }
+    return null;
   }
 
   private async pollVideoTasks(
@@ -503,7 +643,7 @@ export class PipelineService {
               continue;
             }
             if (!vt.externalTaskId) continue;
-            const status = await this.deps.videoPort.queryTaskStatus(vt.externalTaskId);
+            const status = await this.getVideoPort().queryTaskStatus(vt.externalTaskId);
             if (status.status === 'SUCCESS') {
               vt.status = 'SUCCESS';
               vt.videoUrl = status.videoUrl;
@@ -512,12 +652,23 @@ export class PipelineService {
               vt.videoHeight = status.videoHeight;
               vt.updatedAt = Date.now();
               await this.deps.videoTaskRepo.save(vt);
+
+              // emit 事件（让其他订阅者也能感知）
+              this.eventBus?.emit('video.task.completed', {
+                taskId: vt.externalTaskId,
+                videoUrl: status.videoUrl,
+              });
               done++;
             } else if (status.status === 'FAILED') {
               vt.status = 'FAILED';
               vt.errorMessage = status.errorMessage;
               vt.updatedAt = Date.now();
               await this.deps.videoTaskRepo.save(vt);
+
+              this.eventBus?.emit('video.task.failed', {
+                taskId: vt.externalTaskId,
+                error: status.errorMessage ?? 'Unknown error',
+              });
               done++;
             }
           }
@@ -535,6 +686,11 @@ export class PipelineService {
         } catch (e) {
           clearInterval(poller);
           this.videoPollers.delete(taskId);
+          this.logger.error('video polling failed', e, {
+            service: 'PipelineService',
+            method: 'pollVideoTasks',
+            taskId,
+          });
           reject(e);
         }
       }, POLL_INTERVAL_MS);

@@ -6,33 +6,49 @@ import type {
   VideoAgentContext,
   VideoAgentTaskResult,
 } from '../ports/OutboundPorts';
+import type { IApiConfigStore } from '../ports/PlatformPorts';
+import type { ILoggerPort } from '../ports/CrossCuttingPorts';
+import type { PlatformRouter } from './PlatformRouter';
 
 export class VideoLabService {
-  private videoPort: IVideoGeneratorPort;
+  private router: PlatformRouter;
+  private configStore: IApiConfigStore;
+  private logger: ILoggerPort;
   private activePollers = new Map<string, ReturnType<typeof setInterval>>();
 
-  constructor(videoPort: IVideoGeneratorPort) {
-    this.videoPort = videoPort;
+  constructor(
+    router: PlatformRouter,
+    configStore: IApiConfigStore,
+    logger: ILoggerPort,
+  ) {
+    this.router = router;
+    this.configStore = configStore;
+    this.logger = logger;
+  }
+
+  /** 获取当前配置对应的视频生成适配器 */
+  private getVideoPort(): IVideoGeneratorPort {
+    return this.router.resolveVideo(this.configStore.load());
   }
 
   async submitTask(context: VideoPromptContext): Promise<string> {
-    return this.videoPort.submitVideoTask(context);
+    return this.getVideoPort().submitVideoTask(context);
   }
 
   async submitAgentTask(context: VideoAgentContext): Promise<string> {
-    return this.videoPort.createAgentTask(context);
+    return this.getVideoPort().createAgentTask(context);
   }
 
   async queryTask(taskId: string): Promise<VideoTaskResult> {
-    return this.videoPort.queryTaskStatus(taskId);
+    return this.getVideoPort().queryTaskStatus(taskId);
   }
 
   async queryAgentTask(taskId: string): Promise<VideoAgentTaskResult> {
-    return this.videoPort.queryAgentTask(taskId);
+    return this.getVideoPort().queryAgentTask(taskId);
   }
 
   async downloadVideo(fileId: string): Promise<VideoDownloadResult> {
-    return this.videoPort.downloadVideo(fileId);
+    return this.getVideoPort().downloadVideo(fileId);
   }
 
   startPolling(

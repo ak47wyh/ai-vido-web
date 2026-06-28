@@ -153,3 +153,19 @@ All data is stored in the browser's IndexedDB (via Dexie.js), requiring no backe
 ## Detailed Documentation
 
 For complete code documentation, please refer to [CODE_WIKI_EN.md](./CODE_WIKI_EN.md)
+
+## License
+
+This project is open-sourced under the **Apache License 2.0**. See the [LICENSE](./LICENSE) file for the full text.
+
+- ✅ Commercial use
+- ✅ Modification & derivative works
+- ✅ Redistribution
+- ✅ Patent grant
+- ✅ Attribution required
+
+In short: you are free to use, modify, and commercialize this project. The only obligations are to retain the copyright notice and mark any files you modify. Pull requests for improvements are always welcome.
+
+### Third-Party Dependencies
+
+This project relies on a number of excellent open-source dependencies. See each `node_modules/*/LICENSE` file after `npm install`, plus `package.json`, for the full list and their respective licenses.

@@ -11,6 +11,10 @@ import type {
   VideoModel,
   VideoResolution
 } from '../ports/OutboundPorts';
+import type { IFileStoragePort } from '../ports/FileStoragePorts';
+import type { IApiConfigStore } from '../ports/PlatformPorts';
+import type { ILoggerPort } from '../ports/CrossCuttingPorts';
+import type { PlatformRouter } from './PlatformRouter';
 import { getErrorMessage } from '../../ui/utils/errorUtils';
 
 export interface VideoGenerationOptions {
@@ -23,12 +27,20 @@ export interface VideoGenerationOptions {
   lastFrameImage?: string;
 }
 
+/**
+ * VideoGenerationService
+ * - Phase 2 反转：依赖注入 IApiConfigStore + ILoggerPort，移除对
+ *   ApiConfigStore 单例和 defaultLogger 的硬编码引用。
+ */
 export class VideoGenerationService {
   videoTaskRepo: IVideoTaskRepository;
   segmentRepo: IStorySegmentRepository;
   characterRepo: ICharacterRepository;
   backgroundRepo: IBackgroundRepository;
-  videoGeneratorPort: IVideoGeneratorPort;
+  private router: PlatformRouter;
+  private configStore: IApiConfigStore;
+  private logger: ILoggerPort;
+  private getFileStorage: () => IFileStoragePort;
 
   private activePollers = new Map<string, ReturnType<typeof setInterval>>();
 
@@ -37,13 +49,30 @@ export class VideoGenerationService {
     segmentRepo: IStorySegmentRepository,
     characterRepo: ICharacterRepository,
     backgroundRepo: IBackgroundRepository,
-    videoGeneratorPort: IVideoGeneratorPort
+    router: PlatformRouter,
+    fileStorage: IFileStoragePort | (() => IFileStoragePort),
+    configStore: IApiConfigStore,
+    logger: ILoggerPort,
   ) {
     this.videoTaskRepo = videoTaskRepo;
     this.segmentRepo = segmentRepo;
     this.characterRepo = characterRepo;
     this.backgroundRepo = backgroundRepo;
-    this.videoGeneratorPort = videoGeneratorPort;
+    this.router = router;
+    this.getFileStorage = typeof fileStorage === 'function' ? fileStorage : () => fileStorage;
+    this.configStore = configStore;
+    this.logger = logger;
+  }
+
+  /** 获取当前配置对应的视频生成适配器 */
+  private getVideoPort(): IVideoGeneratorPort {
+    const config = this.configStore.load();
+    return this.router.resolve('video', config);
+  }
+
+  /** 公开访问器（供 UI 轮询 hook 使用） */
+  get videoGeneratorPort(): IVideoGeneratorPort {
+    return this.getVideoPort();
   }
 
   async generateVideo(
@@ -145,7 +174,9 @@ export class VideoGenerationService {
       background,
     };
 
-    this.processTask(task, context).catch(console.error);
+    this.processTask(task, context).catch(err => 
+      this.logger.error('processTask failed', err instanceof Error ? err : new Error(String(err)))
+    );
 
     return task;
   }
@@ -162,6 +193,13 @@ export class VideoGenerationService {
         this.pollTaskStatus(task.id, task.externalTaskId);
       }
     }
+    // 刷新后回填已完成但未缓存的视频（Phase 2-B）
+    const successTasks = await this.videoTaskRepo.findByStatuses(['SUCCESS']);
+    for (const task of successTasks) {
+      if (task.videoUrl && !task.videoStoragePath) {
+        this.cacheVideoInBackground(task);
+      }
+    }
   }
 
   /** Cancel all active polling intervals (call on app teardown) */
@@ -175,7 +213,8 @@ export class VideoGenerationService {
   private async processTask(task: VideoTask, context: VideoPromptContext) {
     try {
       await this.videoTaskRepo.updateStatus(task.id, 'PROCESSING');
-      const externalTaskId = await this.videoGeneratorPort.submitVideoTask(context);
+      const videoPort = this.getVideoPort();
+      const externalTaskId = await videoPort.submitVideoTask(context);
 
       task.externalTaskId = externalTaskId;
       await this.videoTaskRepo.save(task);
@@ -199,12 +238,22 @@ export class VideoGenerationService {
     const interval = setInterval(async () => {
       try {
         retries++;
-        const result = await this.videoGeneratorPort.queryTaskStatus(externalTaskId);
+        const videoPort = this.getVideoPort();
+        const result = await videoPort.queryTaskStatus(externalTaskId);
 
         if (result.status === 'SUCCESS' || result.status === 'FAILED') {
           clearInterval(interval);
           this.activePollers.delete(taskId);
           await this.videoTaskRepo.updateStatus(taskId, result.status, result.videoUrl, result.errorMessage);
+          // Phase 2-B：视频成功后异步缓存到 OPFS，避免外部 URL 过期失效
+          if (result.status === 'SUCCESS' && result.videoUrl) {
+            // updateStatus 已设置 url，重新通过 statuses 查找该任务构造 VideoTask 用于缓存
+            const candidates = await this.videoTaskRepo.findByStatuses(['SUCCESS']);
+            const fresh = candidates.find(t => t.id === taskId);
+            if (fresh && !fresh.videoStoragePath) {
+              this.cacheVideoInBackground(fresh);
+            }
+          }
         } else if (retries >= maxRetries) {
           clearInterval(interval);
           this.activePollers.delete(taskId);
@@ -219,5 +268,48 @@ export class VideoGenerationService {
     }, pollInterval);
 
     this.activePollers.set(taskId, interval);
+  }
+
+  /**
+   * 后台缓存视频到 OPFS（Phase 2-B）。
+   * - 不阻塞 UI，失败时保留 videoUrl 降级显示
+   * - 文件大小超过 200MB 时跳过，避免占用过多 OPFS 配额
+   */
+  private cacheVideoInBackground(task: VideoTask): void {
+    if (!task.videoUrl || task.videoStoragePath) return;
+
+    const storagePath = `video/${task.id}.mp4`;
+
+    (async () => {
+      try {
+        const res = await fetch(task.videoUrl!);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        if (blob.size > 200 * 1024 * 1024) {
+          this.logger.warn(`Video too large (${blob.size} bytes), skip caching`, { service: 'VideoGenerationService' });
+          return;
+        }
+        await this.getFileStorage().storeBlob(storagePath, blob);
+        task.videoStoragePath = storagePath;
+        await this.videoTaskRepo.save(task);
+      } catch (e) {
+        this.logger.warn(`Failed to cache video ${task.id}`, e instanceof Error ? e : new Error(String(e)));
+      }
+    })();
+  }
+
+  /**
+   * 优先从本地缓存读取视频 Blob URL，否则降级到外部 URL。
+   * UI 层播放视频时调用。
+   */
+  async getVideoPlaybackUrl(task: VideoTask): Promise<string> {
+    if (task.videoStoragePath) {
+      const fileStorage = this.getFileStorage();
+      const exists = await fileStorage.blobExists(task.videoStoragePath);
+      if (exists) {
+        return fileStorage.getObjectUrl(task.videoStoragePath);
+      }
+    }
+    return task.videoUrl || '';
   }
 }

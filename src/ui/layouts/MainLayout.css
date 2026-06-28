@@ -293,6 +293,28 @@
   background: var(--primary-color);
 }
 
+/* 禁用态：能力矩阵不支持该入口 */
+.nav-item-disabled {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  opacity: 0.4;
+  font-weight: 500;
+  font-size: 0.85rem;
+  border: 1px dashed var(--border-color, rgba(255, 255, 255, 0.08));
+  cursor: not-allowed;
+  user-select: none;
+  position: relative;
+}
+
+.nav-item-disabled:hover {
+  opacity: 0.6;
+  color: var(--text-muted);
+}
+
 .nav-icon {
   display: flex;
   align-items: center;
@@ -377,31 +399,8 @@
    Responsive
    ======================================== */
 
-@media (max-width: 768px) {
-  .sidebar {
-    width: 64px;
-    padding: 1rem 0.5rem;
-  }
-
-  .sidebar .logo-text,
-  .sidebar .space-switcher,
-  .sidebar .creation-flow,
-  .sidebar .nav-group-label,
-  .sidebar .nav-label,
-  .sidebar .sidebar-footer {
-    display: none;
-  }
-
-  .sidebar .nav-item {
-    justify-content: center;
-    padding: 0.6rem;
-  }
-
-  .sidebar .nav-icon {
-    width: 24px;
-    height: 24px;
-  }
-}
+/* 手机模式下侧边栏作为抽屉使用（.sidebar-mobile 已定义 280px 宽度），
+   保留默认的「图标 + 文字」横向布局：文字描述展示在图标右侧。 */
 
 /* ========================================
    Mobile Layout (< 768px)

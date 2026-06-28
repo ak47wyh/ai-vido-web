@@ -1,27 +1,79 @@
 import type { ISavedImageRepository, ISavedVoiceRepository, ISavedPromptRepository, AssetQueryParams } from '../ports/AssetLibraryPorts';
-import type { SavedImage, SavedVoice, SavedPrompt, SavedImageSource, SavedVoiceSource, PromptCategory, SavedPromptSource } from '../entities/models';
-import { offlineCache } from '../../utils/offlineCache';
+import type { IFileStoragePort, IGeneratedFileRepository } from '../ports/FileStoragePorts';
+import type { SavedImage, SavedVoice, SavedPrompt, SavedImageSource, SavedVoiceSource, PromptCategory, SavedPromptSource, GeneratedFile } from '../entities/models';
 
 function generateId(): string {
   return `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 }
 
+/**
+ * 素材库服务 — 管理用户保存的图片、语音、提示词资产。
+ *
+ * 二进制文件通过 IFileStoragePort 存储（OPFS 或 IndexedDB 降级），
+ * 元数据通过 Dexie 仓储持久化。
+ *
+ * fileStorage 和 fileRepo 支持延迟获取（lazy accessor），
+ * 允许在 DI 容器异步初始化完成前构造本服务。
+ *
+ * 路径约定：
+ *   图片 → images/{id}
+ *   语音 → audio/{id}
+ */
 export class AssetLibraryService {
   private imageRepo: ISavedImageRepository;
   private voiceRepo: ISavedVoiceRepository;
   private promptRepo: ISavedPromptRepository;
+  private getFileStorage: () => IFileStoragePort;
+  private getFileRepo: () => IGeneratedFileRepository;
+
   constructor(
     imageRepo: ISavedImageRepository,
     voiceRepo: ISavedVoiceRepository,
     promptRepo: ISavedPromptRepository,
+    fileStorage: IFileStoragePort | (() => IFileStoragePort),
+    fileRepo: IGeneratedFileRepository | (() => IGeneratedFileRepository),
   ) {
     this.imageRepo = imageRepo;
     this.voiceRepo = voiceRepo;
     this.promptRepo = promptRepo;
+    // 支持直接传入实例或延迟获取函数
+    this.getFileStorage = typeof fileStorage === 'function' ? fileStorage : () => fileStorage;
+    this.getFileRepo = typeof fileRepo === 'function' ? fileRepo : () => fileRepo;
   }
 
   // ===== Image Assets =====
 
+  /**
+   * 把 data URI（"data:image/png;base64,..."）解码为 Blob。
+   * 不调用任何外部 API，纯 atob + Uint8Array。
+   */
+  private dataUriToBlob(dataUri: string): Blob {
+    const m = /^data:([^;]+)(;base64)?,(.*)$/s.exec(dataUri);
+    if (!m) {
+      throw new Error(`[AssetLibrary] 不是合法的 data URI: ${dataUri.slice(0, 60)}...`);
+    }
+    const mime = m[1] || 'application/octet-stream';
+    const isBase64 = !!m[2];
+    const payload = m[3];
+    if (isBase64) {
+      const bytes = atob(payload);
+      const arr = new Uint8Array(bytes.length);
+      for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+      return new Blob([arr], { type: mime });
+    }
+    return new Blob([decodeURIComponent(payload)], { type: mime });
+  }
+
+  /**
+   * 保存图片到素材库。
+   *
+   * imageUrl 接受两种来源：
+   *   1. data URI（"data:image/png;base64,..."）—— 直接解码为 Blob 后写入，
+   *      不发起任何外部请求，**规避 CORS**。绝大多数图片生成 API 都支持
+   *      base64 返回，这是首选方式。
+   *   2. http(s) URL —— 仅在浏览器能直接 fetch（无 CORS 限制）时使用；
+   *      否则抛出明确错误，引导调用方改传 Blob 或 data URI。
+   */
   async saveImageFromUrl(params: {
     spaceId: string;
     name: string;
@@ -33,15 +85,89 @@ export class AssetLibraryService {
     sourceType: SavedImageSource;
     sourceId?: string;
   }): Promise<SavedImage> {
+    let blob: Blob;
+    let mime: string;
+
+    if (params.imageUrl.startsWith('data:')) {
+      // 走纯客户端解码，0 网络请求，0 CORS 风险
+      blob = this.dataUriToBlob(params.imageUrl);
+      mime = blob.type || 'image/png';
+    } else if (params.imageUrl.startsWith('blob:')) {
+      // 浏览器内 Object URL：调用方应该已经拿到 Blob，建议改用 saveImageFromBlob
+      // 这里做兼容处理
+      throw new Error(
+        '[AssetLibrary] imageUrl 是 blob: URL（仅在浏览器会话内有效）。' +
+        '请改用 saveImageFromBlob 直接传入 Blob。'
+      );
+    } else if (/^https?:\/\//.test(params.imageUrl)) {
+      // 外部 URL：尝试 fetch，但很可能因 CORS 失败
+      try {
+        const response = await fetch(params.imageUrl);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        blob = await response.blob();
+        mime = blob.type || 'image/png';
+      } catch (e) {
+        const reason = e instanceof Error ? e.message : String(e);
+        throw new Error(
+          `[AssetLibrary] 无法从 "${params.imageUrl.slice(0, 80)}..." 拉取图片：${reason}。` +
+          `外部图片 URL（OSS/云存储）通常被 CORS 策略阻断。` +
+          `解决方案：① 让图片生成 API 直接返回 base64 / data URI；② 在生成时把 Blob 缓存下来后用 saveImageFromBlob 保存。`,
+          { cause: e }
+        );
+      }
+    } else {
+      throw new Error(`[AssetLibrary] 无法识别的 imageUrl 协议：${params.imageUrl.slice(0, 60)}...`);
+    }
+
+    return this.persistImageBlob({
+      spaceId: params.spaceId,
+      name: params.name,
+      blob,
+      mime,
+      prompt: params.prompt,
+      model: params.model,
+      aspectRatio: params.aspectRatio,
+      tags: params.tags,
+      sourceType: params.sourceType,
+      sourceId: params.sourceId,
+      originalUrl: params.imageUrl,
+    });
+  }
+
+  /** 内部共享：把 Blob 写入 fileStorage 并注册元数据。 */
+  private async persistImageBlob(params: {
+    spaceId: string;
+    name: string;
+    blob: Blob;
+    mime: string;
+    prompt: string;
+    model: string;
+    aspectRatio: string;
+    tags?: string[];
+    sourceType: SavedImageSource;
+    sourceId?: string;
+    originalUrl?: string;
+  }): Promise<SavedImage> {
+    const fileStorage = this.getFileStorage();
+    const fileRepo = this.getFileRepo();
     const id = generateId();
-    const blobKey = `asset:image:${id}`;
+    const storagePath = `images/${id}`;
 
-    // Fetch URL → Blob
-    const response = await fetch(params.imageUrl);
-    if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`);
-    const blob = await response.blob();
+    await fileStorage.storeBlob(storagePath, params.blob);
 
-    await offlineCache.setCachedBlob(blobKey, blob);
+    await this.registerFile(fileRepo, {
+      id: `file_${id}`,
+      spaceId: params.spaceId,
+      fileType: 'image',
+      mimeType: params.mime,
+      fileName: `${params.name || id}.png`,
+      fileSize: params.blob.size,
+      storagePath,
+      originalUrl: params.originalUrl,
+      sourceEntityType: 'saved_image',
+      sourceEntityId: id,
+      tags: params.tags || [],
+    });
 
     const item: SavedImage = {
       id,
@@ -50,7 +176,7 @@ export class AssetLibraryService {
       prompt: params.prompt,
       model: params.model,
       aspectRatio: params.aspectRatio,
-      blobKey,
+      blobKey: storagePath,
       tags: params.tags || [],
       sourceType: params.sourceType,
       sourceId: params.sourceId,
@@ -72,33 +198,23 @@ export class AssetLibraryService {
     sourceType: SavedImageSource;
     sourceId?: string;
   }): Promise<SavedImage> {
-    const id = generateId();
-    const blobKey = `asset:image:${id}`;
-
-    await offlineCache.setCachedBlob(blobKey, params.blob);
-
-    const item: SavedImage = {
-      id,
+    return this.persistImageBlob({
       spaceId: params.spaceId,
       name: params.name,
+      blob: params.blob,
+      mime: params.blob.type || 'image/png',
       prompt: params.prompt,
       model: params.model,
       aspectRatio: params.aspectRatio,
-      blobKey,
-      tags: params.tags || [],
+      tags: params.tags,
       sourceType: params.sourceType,
       sourceId: params.sourceId,
-      createdAt: Date.now(),
-    };
-
-    await this.imageRepo.save(item);
-    return item;
+    });
   }
 
   async getImageBlobUrl(savedImage: SavedImage): Promise<string> {
-    const blob = await offlineCache.getCachedBlob(savedImage.blobKey);
-    if (!blob) throw new Error(`Image blob not found for key: ${savedImage.blobKey}`);
-    return URL.createObjectURL(blob);
+    const fileStorage = this.getFileStorage();
+    return fileStorage.getObjectUrl(savedImage.blobKey);
   }
 
   async queryImages(params: AssetQueryParams): Promise<SavedImage[]> {
@@ -106,11 +222,14 @@ export class AssetLibraryService {
   }
 
   async deleteImage(id: string): Promise<void> {
+    const fileStorage = this.getFileStorage();
+    const fileRepo = this.getFileRepo();
     const item = await this.imageRepo.getById(id);
     if (item) {
-      await offlineCache.removeCached(item.blobKey);
+      await fileStorage.deleteBlob(item.blobKey);
+      await fileRepo.delete(`file_${id}`);
       if (item.thumbnailBlobKey) {
-        await offlineCache.removeCached(item.thumbnailBlobKey);
+        await fileStorage.deleteBlob(item.thumbnailBlobKey);
       }
       await this.imageRepo.delete(id);
     }
@@ -130,14 +249,30 @@ export class AssetLibraryService {
     sourceType: SavedVoiceSource;
     sourceId?: string;
   }): Promise<SavedVoice> {
+    const fileStorage = this.getFileStorage();
+    const fileRepo = this.getFileRepo();
     const id = generateId();
-    const audioBlobKey = `asset:voice:${id}`;
+    const storagePath = `audio/${id}`;
 
     const response = await fetch(params.audioUrl);
     if (!response.ok) throw new Error(`Failed to fetch audio: ${response.status}`);
     const blob = await response.blob();
 
-    await offlineCache.setCachedBlob(audioBlobKey, blob);
+    await fileStorage.storeBlob(storagePath, blob);
+
+    await this.registerFile(fileRepo, {
+      id: `file_${id}`,
+      spaceId: params.spaceId,
+      fileType: 'audio',
+      mimeType: blob.type || 'audio/mpeg',
+      fileName: `${params.name || id}.mp3`,
+      fileSize: blob.size,
+      storagePath,
+      originalUrl: params.audioUrl,
+      sourceEntityType: 'saved_voice',
+      sourceEntityId: id,
+      tags: params.tags || [],
+    });
 
     const item: SavedVoice = {
       id,
@@ -147,7 +282,7 @@ export class AssetLibraryService {
       model: params.model,
       speed: params.speed,
       sampleText: params.sampleText,
-      audioBlobKey,
+      audioBlobKey: storagePath,
       tags: params.tags || [],
       sourceType: params.sourceType,
       sourceId: params.sourceId,
@@ -170,10 +305,25 @@ export class AssetLibraryService {
     sourceType: SavedVoiceSource;
     sourceId?: string;
   }): Promise<SavedVoice> {
+    const fileStorage = this.getFileStorage();
+    const fileRepo = this.getFileRepo();
     const id = generateId();
-    const audioBlobKey = `asset:voice:${id}`;
+    const storagePath = `audio/${id}`;
 
-    await offlineCache.setCachedBlob(audioBlobKey, params.blob);
+    await fileStorage.storeBlob(storagePath, params.blob);
+
+    await this.registerFile(fileRepo, {
+      id: `file_${id}`,
+      spaceId: params.spaceId,
+      fileType: 'audio',
+      mimeType: params.blob.type || 'audio/mpeg',
+      fileName: `${params.name || id}.mp3`,
+      fileSize: params.blob.size,
+      storagePath,
+      sourceEntityType: 'saved_voice',
+      sourceEntityId: id,
+      tags: params.tags || [],
+    });
 
     const item: SavedVoice = {
       id,
@@ -183,7 +333,7 @@ export class AssetLibraryService {
       model: params.model,
       speed: params.speed,
       sampleText: params.sampleText,
-      audioBlobKey,
+      audioBlobKey: storagePath,
       tags: params.tags || [],
       sourceType: params.sourceType,
       sourceId: params.sourceId,
@@ -195,9 +345,8 @@ export class AssetLibraryService {
   }
 
   async getVoiceBlobUrl(savedVoice: SavedVoice): Promise<string> {
-    const blob = await offlineCache.getCachedBlob(savedVoice.audioBlobKey);
-    if (!blob) throw new Error(`Voice blob not found for key: ${savedVoice.audioBlobKey}`);
-    return URL.createObjectURL(blob);
+    const fileStorage = this.getFileStorage();
+    return fileStorage.getObjectUrl(savedVoice.audioBlobKey);
   }
 
   async queryVoices(params: AssetQueryParams): Promise<SavedVoice[]> {
@@ -205,9 +354,12 @@ export class AssetLibraryService {
   }
 
   async deleteVoice(id: string): Promise<void> {
+    const fileStorage = this.getFileStorage();
+    const fileRepo = this.getFileRepo();
     const item = await this.voiceRepo.getById(id);
     if (item) {
-      await offlineCache.removeCached(item.audioBlobKey);
+      await fileStorage.deleteBlob(item.audioBlobKey);
+      await fileRepo.delete(`file_${id}`);
       await this.voiceRepo.delete(id);
     }
   }
@@ -245,5 +397,55 @@ export class AssetLibraryService {
 
   async deletePrompt(id: string): Promise<void> {
     await this.promptRepo.delete(id);
+  }
+
+  // ===== 文件存储管理 =====
+
+  /** 获取文件存储统计信息 */
+  async getStorageStats() {
+    return this.getFileStorage().getStats();
+  }
+
+  /** 清空文件存储 */
+  async clearFileStorage(): Promise<void> {
+    await this.getFileStorage().clearAll();
+  }
+
+  /** 获取底层存储类型 */
+  getStorageType(): 'opfs' | 'indexeddb' | 'local' {
+    return this.getFileStorage().getStorageType();
+  }
+
+  // ===== Private helpers =====
+
+  private async registerFile(fileRepo: IGeneratedFileRepository, params: {
+    id: string;
+    spaceId: string;
+    fileType: 'image' | 'audio';
+    mimeType: string;
+    fileName: string;
+    fileSize: number;
+    storagePath: string;
+    originalUrl?: string;
+    sourceEntityType?: string;
+    sourceEntityId?: string;
+    tags: string[];
+  }): Promise<void> {
+    const file: GeneratedFile = {
+      id: params.id,
+      spaceId: params.spaceId,
+      fileType: params.fileType,
+      mimeType: params.mimeType,
+      fileName: params.fileName,
+      fileSize: params.fileSize,
+      storagePath: params.storagePath,
+      originalUrl: params.originalUrl,
+      sourceEntityType: params.sourceEntityType,
+      sourceEntityId: params.sourceEntityId,
+      tags: params.tags,
+      lastAccessedAt: Date.now(),
+      createdAt: Date.now(),
+    };
+    await fileRepo.save(file);
   }
 }
