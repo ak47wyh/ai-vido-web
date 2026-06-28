@@ -62,12 +62,14 @@ const STORAGE_KEY = 'ai_video_studio_api_config';
 
 // ===== 默认值 =====
 
+// 所有平台默认直连完整外部 URL,DEV 与 PROD 行为一致。
+// 若某平台不支持 CORS,用户可在配置中心手动填入自建反代地址。
 const DEFAULT_CONFIG: ApiConfig = {
   // MiniMax 默认值
   minimaxApiKey: '',
   minimaxGroupId: '',
   minimaxBaseUrl: 'https://api.minimaxi.com/v1',
-  minimaxAnthropicBaseUrl: import.meta.env.DEV ? '/anthropic' : 'https://api.minimaxi.com/anthropic',
+  minimaxAnthropicBaseUrl: 'https://api.minimaxi.com/anthropic',
 
   // 火山方舟默认值
   volcArkApiKey: '',
@@ -81,24 +83,24 @@ const DEFAULT_CONFIG: ApiConfig = {
   // 可灵 Kling 默认值
   klingAccessKey: '',
   klingSecretKey: '',
-  klingBaseUrl: import.meta.env.DEV ? '/kling' : 'https://api.klingai.com',
+  klingBaseUrl: 'https://api.klingai.com',
 
   // 通义万相 Wan 默认值
   wanApiKey: '',
-  wanBaseUrl: import.meta.env.DEV ? '/wan' : 'https://dashscope.aliyuncs.com/api/v1',
+  wanBaseUrl: 'https://dashscope.aliyuncs.com/api/v1',
 
   // 腾讯混元 Hunyuan 默认值
   hunyuanSecretId: '',
   hunyuanSecretKey: '',
-  hunyuanBaseUrl: import.meta.env.DEV ? '/hunyuan' : 'https://hunyuan.tencentcloudapi.com',
+  hunyuanBaseUrl: 'https://hunyuan.tencentcloudapi.com',
 
   // 智谱 Zhipu 默认值
   zhipuApiKey: '',
-  zhipuBaseUrl: import.meta.env.DEV ? '/zhipu' : 'https://open.bigmodel.cn/api/paas/v4',
+  zhipuBaseUrl: 'https://open.bigmodel.cn/api/paas/v4',
 
   // Vidu 默认值
   viduApiKey: '',
-  viduBaseUrl: import.meta.env.DEV ? '/vidu' : 'https://api.vidu.cn',
+  viduBaseUrl: 'https://api.vidu.cn',
 
   // 默认激活 MiniMax
   activePlatform: 'minimax',
@@ -107,16 +109,35 @@ const DEFAULT_CONFIG: ApiConfig = {
   theme: 'dark' as ThemeId,
 };
 
+// 旧版 DEV 代理路径 → 完整外部 URL 的迁移映射。
+// 直连架构下不再使用代理路径,需把 localStorage 中残留的旧值替换为默认完整 URL。
+const PROXY_PATH_MIGRATIONS: Record<string, Partial<ApiConfig>> = {
+  '/anthropic': { minimaxAnthropicBaseUrl: DEFAULT_CONFIG.minimaxAnthropicBaseUrl },
+  '/kling': { klingBaseUrl: DEFAULT_CONFIG.klingBaseUrl },
+  '/wan': { wanBaseUrl: DEFAULT_CONFIG.wanBaseUrl },
+  '/hunyuan': { hunyuanBaseUrl: DEFAULT_CONFIG.hunyuanBaseUrl },
+  '/zhipu': { zhipuBaseUrl: DEFAULT_CONFIG.zhipuBaseUrl },
+  '/vidu': { viduBaseUrl: DEFAULT_CONFIG.viduBaseUrl },
+  '/volcengine-ark': { volcArkBaseUrl: DEFAULT_CONFIG.volcArkBaseUrl },
+  '/coze': { cozeBaseUrl: DEFAULT_CONFIG.cozeBaseUrl },
+};
+
 export const ApiConfigStore = {
   load(): ApiConfig {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return { ...DEFAULT_CONFIG };
       const config = { ...DEFAULT_CONFIG, ...JSON.parse(raw) };
-      // 开发环境强制使用 Vite 代理，避免 CORS
-      if (import.meta.env.DEV) {
-        config.minimaxAnthropicBaseUrl = '/anthropic';
-      }
+      // 迁移:把旧版 DEV 代理路径(如 /anthropic、/kling)替换为完整外部 URL
+      (Object.keys(PROXY_PATH_MIGRATIONS) as Array<keyof typeof PROXY_PATH_MIGRATIONS>)
+        .forEach(proxyPath => {
+          const migration = PROXY_PATH_MIGRATIONS[proxyPath];
+          (Object.keys(migration) as Array<keyof ApiConfig>).forEach(field => {
+            if (config[field] === proxyPath) {
+              config[field] = migration[field]!;
+            }
+          });
+        });
       return config;
     } catch {
       return { ...DEFAULT_CONFIG };

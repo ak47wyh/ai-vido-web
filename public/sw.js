@@ -14,8 +14,8 @@
 //   - 解包成 Blob 后用 new Response() 重新构造，加上
 //     'Access-Control-Allow-Origin: *' 头，主线程就能正常读 .blob()
 
-const STATIC_CACHE_NAME = 'ai-vido-web-v2';
-const MEDIA_CACHE_NAME = 'ai-vido-media-v2';
+const STATIC_CACHE_NAME = 'minimax-video-studio-v3';
+const MEDIA_CACHE_NAME = 'ai-vido-media-v3';
 const STATIC_ASSETS = ['/', '/index.html', '/manifest.json'];
 const MAX_MEDIA_ENTRIES = 200;
 
@@ -59,15 +59,33 @@ self.addEventListener('fetch', (event) => {
 
   // 跨域媒体 URL：拦截 + 缓存 + 包装 CORS 头
   if (url.origin !== self.location.origin && MEDIA_EXT_RE.test(url.pathname)) {
-    event.respondWith(handleCrossOriginMedia(request));
+    // 带 Authorization 或 Cookie 的请求:需要鉴权,SW no-cors 无法携带这些头,
+    // 直接放行让浏览器原生 fetch 处理(适配器侧已用 axios 带 Authorization
+    // 下载并转 Blob URL)。若强行用 no-cors 拦截,会因鉴权失败返回空响应,
+    // 最终在下方 blob.size===0 分支返回 502。
+    const authHeader = request.headers.get('Authorization');
+    const cookieHeader = request.headers.get('Cookie');
+    if (!authHeader && !cookieHeader) {
+      event.respondWith(handleCrossOriginMedia(request));
+    }
     return;
   }
 
   // 跳过 API（避免缓存动态数据）
   if (url.pathname.startsWith('/api/')) return;
 
-  // 跳过 OSS 代理端点（动态代理，不应缓存）
-  if (url.pathname.startsWith('/__oss-proxy')) return;
+  // 跳过 Vite dev 模式的 JS 模块与 HMR:
+  // dev 模式下模块 URL 不带 hash,cache-first 会返回旧版 React 等,
+  // 导致 React 实例不一致(useContext null)。让这些请求直接走网络。
+  if (
+    url.pathname.startsWith('/src/') ||
+    url.pathname.startsWith('/node_modules/.vite/') ||
+    url.pathname.startsWith('/@vite/') ||
+    url.pathname.startsWith('/@react-refresh') ||
+    url.pathname.includes('?t=')  // Vite 时间戳戳记
+  ) {
+    return;
+  }
 
   // 同源资源：cache-first
   if (

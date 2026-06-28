@@ -184,35 +184,17 @@ export const offlineCache = new OfflineCache();
  * Service Worker registration helper.
  * Returns null if SW API is not available.
  */
-const BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '/';
-const resolvedScope = BASE_URL.endsWith('/') ? BASE_URL : `${BASE_URL}/`;
-
-export async function registerServiceWorker(
-  swPath = `${resolvedScope}sw.js`,
-): Promise<ServiceWorkerRegistration | null> {
+export async function registerServiceWorker(swPath = '/sw.js'): Promise<ServiceWorkerRegistration | null> {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
     console.warn('Service Worker not supported');
     return null;
   }
   try {
-    const registration = await navigator.serviceWorker.register(swPath, {
-      scope: resolvedScope,
-      updateViaCache: 'none',
-    });
-    // 检查是否有新版本等待激活，有则立即触发
-    if (registration.waiting) {
-      registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-    }
-    registration.addEventListener('updatefound', () => {
-      const newWorker = registration.installing;
-      if (newWorker) {
-        newWorker.addEventListener('statechange', () => {
-          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            newWorker.postMessage({ type: 'SKIP_WAITING' });
-          }
-        });
-      }
-    });
+    // scope 必须在 SW 脚本路径之下。base 为 '/ai-vido-web/' 时,
+    // swPath 为 '/ai-vido-web/sw.js',scope 应为 '/ai-vido-web/'。
+    // 之前 scope:'/' 会导致 "not under max scope" 注册失败。
+    const scope = import.meta.env.BASE_URL;
+    const registration = await navigator.serviceWorker.register(swPath, { scope });
     console.log('[SW] Registered with scope:', registration.scope);
     return registration;
   } catch (e) {

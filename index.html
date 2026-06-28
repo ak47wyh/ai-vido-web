@@ -20,6 +20,26 @@
       }
     })();
   </script>
+  <script>
+    // 主动卸载所有旧 Service Worker
+    // 旧 SW 的 cache-first 策略会缓存 dev 模式下的 JS 模块(如 react.js),
+    // 代码更新后返回旧版 React,导致 React 实例不一致,
+    // 触发 "Cannot read properties of null (reading 'useContext')"。
+    // index.html 走 network-first,能拿到新版,在此卸载旧 SW 后刷新页面。
+    (function() {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(regs) {
+          if (regs.length > 0) {
+            Promise.all(regs.map(function(r) { return r.unregister(); }))
+              .then(function() {
+                console.log('[SW] 旧 Service Worker 已卸载,刷新页面以加载新代码');
+                window.location.reload();
+              });
+          }
+        }).catch(function() { /* ignore */ });
+      }
+    })();
+  </script>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 
