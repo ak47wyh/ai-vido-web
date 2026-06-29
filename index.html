@@ -21,11 +21,18 @@
     })();
   </script>
   <script>
-    // 主动卸载所有旧 Service Worker
-    // 旧 SW 的 cache-first 策略会缓存 dev 模式下的 JS 模块(如 react.js),
-    // 代码更新后返回旧版 React,导致 React 实例不一致,
-    // 触发 "Cannot read properties of null (reading 'useContext')"。
-    // index.html 走 network-first,能拿到新版,在此卸载旧 SW 后刷新页面。
+    // 主动卸载所有旧 Service Worker（双保险）
+    //
+    // 背景：方案 A 已完全移除 SW 注册（main.tsx 不再调用 registerServiceWorker），
+    // 但老用户浏览器里仍残留旧版 SW（cache-first + 跨域媒体拦截），
+    // 会破坏 <img>/<audio>/<video> 的原生渲染，导致预览异常。
+    //
+    // 本脚本 + public/sw.js 自毁版本 共同完成一次性清理：
+    //   - 本脚本：检测到任意已注册 SW → unregister 全部 → reload
+    //   - sw.js：新部署后被旧浏览器拉取时，activate 中自毁 + 清空缓存
+    //
+    // 清理完成后，main.tsx 不会再注册新 SW，此脚本因 regs.length===0 不再触发 reload，
+    // 不会形成"卸载-注册"循环。
     (function() {
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistrations().then(function(regs) {

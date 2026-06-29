@@ -183,6 +183,12 @@ export const offlineCache = new OfflineCache();
 /**
  * Service Worker registration helper.
  * Returns null if SW API is not available.
+ *
+ * 注意：方案 A 已不再调用此函数。
+ * 历史上启用 SW 做跨域媒体缓存，但 cache-first + 跨域拦截策略
+ * 破坏了 <img>/<audio>/<video> 的原生渲染，导致预览异常。
+ * 函数保留以兼容 API，但不应再被调用。
+ * 老用户的 SW 由 public/sw.js 自毁版本一次性清理。
  */
 export async function registerServiceWorker(swPath = '/sw.js'): Promise<ServiceWorkerRegistration | null> {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
