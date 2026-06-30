@@ -23,7 +23,11 @@ export type ThemeChangeEvent = {
 type ThemeListener = (event: ThemeChangeEvent) => void;
 
 class ThemeEventBus {
-  constructor(private logger: ILoggerPort) {}
+  private logger: ILoggerPort;
+
+  constructor(logger: ILoggerPort) {
+    this.logger = logger;
+  }
 
   private listeners = new Set<ThemeListener>();
 
@@ -53,7 +57,11 @@ export function createThemeEventBus(logger?: ILoggerPort): ThemeEventBus {
 export const themeEventBus: ThemeEventBus = createThemeEventBus();
 
 class ReactThemeAdapter implements IThemePort {
-  constructor(private eventBus: ThemeEventBus = themeEventBus) {}
+  private eventBus: ThemeEventBus;
+
+  constructor(eventBus: ThemeEventBus = themeEventBus) {
+    this.eventBus = eventBus;
+  }
 
   getCurrentMode(): ThemeMode {
     const config = ApiConfigStore.load();

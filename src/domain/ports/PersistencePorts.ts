@@ -11,6 +11,7 @@
  */
 
 import type { Timeline } from './PostProcessPorts';
+export type { Timeline } from './PostProcessPorts';
 
 // ==========================================
 // 空间快照实体（由 SnapshotService 定义，此处只引用类型）

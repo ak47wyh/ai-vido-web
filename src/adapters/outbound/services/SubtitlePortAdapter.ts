@@ -7,11 +7,15 @@
 
 import type { ISubtitlePort } from '../../../domain/ports/DomainServicePorts';
 import type { StorySegment } from '../../../domain/entities/models';
-import type { SrtEntry } from '../../../domain/ports/PostProcessPorts';
+import type { SrtEntry } from '../../../domain/ports/DomainServicePorts';
 import { SubtitleService } from '../../../domain/services/SubtitleService';
 
 export class SubtitlePortAdapter implements ISubtitlePort {
-  constructor(private inner: SubtitleService) {}
+  private inner: SubtitleService;
+
+  constructor(inner: SubtitleService) {
+    this.inner = inner;
+  }
 
   async generateSrt(
     audio: Blob | string,
@@ -22,8 +26,8 @@ export class SubtitlePortAdapter implements ISubtitlePort {
       // 纯文本场景：直接解析+格式化
       const entries: SrtEntry[] = segments.map((seg, i) => ({
         index: i + 1,
-        startSec: (i * 5),
-        endSec: ((i + 1) * 5),
+        startMs: i * 5 * 1000,
+        endMs: (i + 1) * 5 * 1000,
         text: seg.content,
       }));
       return this.inner.formatSrt(entries);

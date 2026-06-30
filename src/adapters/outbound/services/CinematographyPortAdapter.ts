@@ -10,7 +10,11 @@ import type { StorySegment } from '../../../domain/entities/models';
 import { CinematographyService } from '../../../domain/services/CinematographyService';
 
 export class CinematographyPortAdapter implements ICinematographyPort {
-  constructor(private inner: CinematographyService) {}
+  private inner: CinematographyService;
+
+  constructor(inner: CinematographyService) {
+    this.inner = inner;
+  }
 
   suggestShots(segment: StorySegment, characterNames: string[]): Promise<ShotSuggestion[]> {
     return this.inner.suggestShots(segment, characterNames);

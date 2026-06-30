@@ -9,7 +9,11 @@ import type { IAutoEditPort, KeyframeInfo, CutSuggestion } from '../../../domain
 import { AutoEditService } from '../../../domain/services/AutoEditService';
 
 export class AutoEditPortAdapter implements IAutoEditPort {
-  constructor(private inner: AutoEditService) {}
+  private inner: AutoEditService;
+
+  constructor(inner: AutoEditService) {
+    this.inner = inner;
+  }
 
   detectKeyframes(video: Blob, sampleIntervalSec?: number): Promise<KeyframeInfo[]> {
     return this.inner.detectKeyframes(video, sampleIntervalSec);

@@ -18,8 +18,8 @@ describe('MemoryEventBusAdapter', () => {
     const handler = vi.fn();
     bus.on('platform.changed', handler);
 
-    bus.emit('platform.changed', { from: 'minimax', to: 'kling' });
-    expect(handler).toHaveBeenCalledWith({ from: 'minimax', to: 'kling' });
+    bus.emit('platform.changed', { type: 'platform.changed' as const, from: 'minimax', to: 'kling' });
+    expect(handler).toHaveBeenCalledWith({ type: 'platform.changed' as const, from: 'minimax', to: 'kling' });
   });
 
   it('routes events to the correct handler by type', () => {
@@ -30,12 +30,12 @@ describe('MemoryEventBusAdapter', () => {
     bus.on('platform.changed', changeHandler);
     bus.on('space.deleted', deleteHandler);
 
-    bus.emit('platform.changed', { from: 'a', to: 'b' });
+    bus.emit('platform.changed', { type: 'platform.changed' as const, from: 'a', to: 'b' });
     expect(changeHandler).toHaveBeenCalledTimes(1);
     expect(deleteHandler).not.toHaveBeenCalled();
 
-    bus.emit('space.deleted', { spaceId: 's1' });
-    expect(deleteHandler).toHaveBeenCalledWith({ spaceId: 's1' });
+    bus.emit('space.deleted', { type: 'space.deleted' as const, spaceId: 's1' });
+    expect(deleteHandler).toHaveBeenCalledWith({ type: 'space.deleted' as const, spaceId: 's1' });
   });
 
   it('returns an unsubscribe function that stops the listener', () => {
@@ -43,11 +43,11 @@ describe('MemoryEventBusAdapter', () => {
     const handler = vi.fn();
     const unsub = bus.on('video.task.completed', handler);
 
-    bus.emit('video.task.completed', { taskId: 't1', videoUrl: 'v1' });
+    bus.emit('video.task.completed', { type: 'video.task.completed' as const, taskId: 't1', videoUrl: 'v1' });
     expect(handler).toHaveBeenCalledTimes(1);
 
     unsub();
-    bus.emit('video.task.completed', { taskId: 't2', videoUrl: 'v2' });
+    bus.emit('video.task.completed', { type: 'video.task.completed' as const, taskId: 't2', videoUrl: 'v2' });
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
@@ -56,8 +56,8 @@ describe('MemoryEventBusAdapter', () => {
     const handler = vi.fn();
     bus.onAny(handler);
 
-    bus.emit('platform.changed', { from: 'a', to: 'b' });
-    bus.emit('video.task.failed', { taskId: 't', error: 'e' });
+    bus.emit('platform.changed', { type: 'platform.changed' as const, from: 'a', to: 'b' });
+    bus.emit('video.task.failed', { type: 'video.task.failed' as const, taskId: 't', error: 'e' });
 
     expect(handler).toHaveBeenCalledTimes(2);
   });
@@ -70,7 +70,7 @@ describe('MemoryEventBusAdapter', () => {
     bus.on('platform.changed', () => { throw new Error('boom'); });
     bus.on('platform.changed', goodHandler);
 
-    bus.emit('platform.changed', { from: 'a', to: 'b' });
+    bus.emit('platform.changed', { type: 'platform.changed' as const, from: 'a', to: 'b' });
     expect(consoleSpy).toHaveBeenCalled();
     expect(goodHandler).toHaveBeenCalledTimes(1);
 
@@ -85,7 +85,7 @@ describe('MemoryEventBusAdapter', () => {
     bus.on('voice.cloned', h1);
     bus.on('voice.cloned', h2);
 
-    bus.emit('voice.cloned', { voiceId: 'v1' });
+    bus.emit('voice.cloned', { type: 'voice.cloned' as const, voiceId: 'v1' });
     expect(h1).toHaveBeenCalledTimes(1);
     expect(h2).toHaveBeenCalledTimes(1);
   });

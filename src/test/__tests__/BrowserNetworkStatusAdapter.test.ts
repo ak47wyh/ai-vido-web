@@ -70,14 +70,14 @@ describe('BrowserNetworkStatusAdapter', () => {
 
   it('window.online event triggers status change', () => {
     // 在浏览器实现中：window.addEventListener('online', () => updateStatus('online'))
-    // 这里直接验证事件机制
-    const event = new Event('online');
+    // 先触发 offline 确保状态变化，再触发 online 验证事件传递
     let received = false;
     const off = networkEventBus.subscribe(() => { received = true; });
-    window.dispatchEvent(event);
+    window.dispatchEvent(new Event('offline'));
+    received = false;
+    window.dispatchEvent(new Event('online'));
     // 适配器在收到事件后调用 networkEventBus.emit('online')
-    // 由于适配器在加载时已注册，本测试间接验证 dispatchEvent 不会抛错
-    expect(received === true || received === false).toBe(true); // 至少不抛错
+    expect(received).toBe(true);
     off();
   });
 

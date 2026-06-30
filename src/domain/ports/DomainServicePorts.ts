@@ -10,7 +10,17 @@
 
 import type { StorySegment, Character, Background } from '../entities/models';
 import type {
-  SrtEntry,
+  MergeContext,
+  SubtitleStyle,
+  VideoClip,
+  TransitionType,
+  OutputFormat,
+  BgmMixConfig,
+  Timeline
+} from './PostProcessPorts';
+import type { SrtEntry } from '../services/SubtitleService';
+export type { SrtEntry } from '../services/SubtitleService';
+export type {
   MergeContext,
   SubtitleStyle,
   VideoClip,
@@ -99,7 +109,7 @@ export type CameraMovement =
   | 'dolly' | 'tracking' | 'crane' | 'handheld';
 
 /** 复用于 IPostProcessPort 的过渡类型别名 */
-export type { TransitionType };
+// Line 112 removed to avoid duplicate identifier - TransitionType is already exported above
 
 export interface ShotSuggestion {
   shotType: ShotType;

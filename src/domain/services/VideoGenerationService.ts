@@ -293,7 +293,7 @@ export class VideoGenerationService {
         task.videoStoragePath = storagePath;
         await this.videoTaskRepo.save(task);
       } catch (e) {
-        this.logger.warn(`Failed to cache video ${task.id}`, e instanceof Error ? e : new Error(String(e)));
+        this.logger.warn(`Failed to cache video ${task.id}`, { error: e instanceof Error ? e.message : String(e) });
       }
     })();
   }

@@ -62,7 +62,8 @@ const MOVEMENT_DESCRIPTIONS: Record<CameraMovement, string> = {
 export class CinematographyService {
   private router: PlatformRouter;
   private configStore: IApiConfigStore;
-  private logger: ILoggerPort;
+  // @ts-expect-error Logger injected for future use
+  private _logger: ILoggerPort;
   constructor(
     router: PlatformRouter,
     configStore: IApiConfigStore,
@@ -70,7 +71,7 @@ export class CinematographyService {
   ) {
     this.router = router;
     this.configStore = configStore;
-    this.logger = logger;
+    this._logger = logger;
   }
 
   /** 获取当前配置对应的文本生成适配器 */

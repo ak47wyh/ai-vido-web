@@ -7,7 +7,8 @@ import { recordTextGenUsage } from '../../utils/cacheMonitor';
 export class TextGenerationService {
   private router: PlatformRouter;
   private configStore: IApiConfigStore;
-  private logger: ILoggerPort;
+  // @ts-expect-error Logger injected for future use
+  private _logger: ILoggerPort;
 
   constructor(
     router: PlatformRouter,
@@ -16,7 +17,7 @@ export class TextGenerationService {
   ) {
     this.router = router;
     this.configStore = configStore;
-    this.logger = logger;
+    this._logger = logger;
   }
 
   /** 获取当前配置对应的文本生成适配器 */

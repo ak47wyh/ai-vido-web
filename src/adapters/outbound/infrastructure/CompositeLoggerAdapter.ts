@@ -27,14 +27,20 @@ interface SinkLike {
  */
 export class CompositeLoggerAdapter implements ILoggerPort {
   private baseContext: LogContext;
+  private sinks: SinkLike[];
+  private idGenerator: () => string;
+  private clock: () => number;
 
   constructor(
-    private sinks: SinkLike[],
+    sinks: SinkLike[],
     baseContext: LogContext = {},
-    private idGenerator: () => string = defaultIdGenerator,
-    private clock: () => number = Date.now,
+    idGenerator: () => string = defaultIdGenerator,
+    clock: () => number = Date.now,
   ) {
     this.baseContext = baseContext;
+    this.sinks = sinks;
+    this.idGenerator = idGenerator;
+    this.clock = clock;
   }
 
   debug(message: string, context?: LogContext): void {

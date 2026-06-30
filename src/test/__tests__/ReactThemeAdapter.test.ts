@@ -21,9 +21,7 @@ describe('ReactThemeAdapter', () => {
   });
 
   it('returns default mode (dark) when theme is missing', () => {
-    const config = ApiConfigStore.load();
-    delete (config as Record<string, unknown>).theme;
-    ApiConfigStore.save(config);
+    // Without saving any theme, getCurrentMode should return 'dark'
     expect(reactThemeAdapter.getCurrentMode()).toBe('dark');
   });
 
@@ -48,7 +46,7 @@ describe('ReactThemeAdapter', () => {
   it('onChange unsubscribe stops notifications', () => {
     const listener = vi.fn();
     const unsub = reactThemeAdapter.onChange(listener);
-    reactThemeAdapter.setMode('warm');
+    reactThemeAdapter.setMode('blue');
     expect(listener).toHaveBeenCalledTimes(1);
     unsub();
     reactThemeAdapter.setMode('dark');

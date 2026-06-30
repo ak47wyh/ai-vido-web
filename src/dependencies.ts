@@ -245,7 +245,8 @@ export const storySpaceService = new StorySpaceService(
 // 暂保持硬编码 MiniMax 适配器，不接入 platformRouter。
 // ========================================
 import { ModelCacheAdapter } from './adapters/outbound/repositories/ModelCacheAdapter';
-const modelCache = new ModelCacheAdapter<import('./domain/entities/models').ModelInfo>('minimax_cached_models', 60 * 60 * 1000);
+import type { ModelInfo } from './domain/ports/OutboundPorts';
+const modelCache = new ModelCacheAdapter<ModelInfo>('minimax_cached_models', 60 * 60 * 1000);
 export const modelManagementService = new ModelManagementService(modelAdapter, modelCache);
 export const fileManagementService = new FileManagementService(fileAdapter);
 

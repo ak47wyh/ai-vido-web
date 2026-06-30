@@ -109,7 +109,8 @@ export async function clearAllMediaCache(): Promise<boolean> {
   if (isServiceWorkerAvailable()) {
     try {
       const reg = await navigator.serviceWorker.getRegistration();
-      if (reg?.active) {
+      const activeSW = reg?.active;
+      if (activeSW) {
         const cleared = await new Promise<boolean>((resolve) => {
           const channel = new MessageChannel();
           const timer = setTimeout(() => resolve(false), 3000);
@@ -117,7 +118,7 @@ export async function clearAllMediaCache(): Promise<boolean> {
             clearTimeout(timer);
             resolve(e.data?.type === 'CLEARED' ? !!e.data.deleted : false);
           };
-          reg.active.postMessage({ type: 'CLEAR_MEDIA_CACHE' }, [channel.port2]);
+          activeSW.postMessage({ type: 'CLEAR_MEDIA_CACHE' }, [channel.port2]);
         });
         return cleared;
       }
@@ -146,7 +147,8 @@ export async function getMediaCacheStats(): Promise<MediaCacheStats> {
   if (isServiceWorkerAvailable()) {
     try {
       const reg = await navigator.serviceWorker.getRegistration();
-      if (reg?.active) {
+      const activeSW = reg?.active;
+      if (activeSW) {
         const stats = await new Promise<MediaCacheStats | null>((resolve) => {
           const channel = new MessageChannel();
           const timer = setTimeout(() => resolve(null), 3000);
@@ -163,7 +165,7 @@ export async function getMediaCacheStats(): Promise<MediaCacheStats> {
               resolve(null);
             }
           };
-          reg.active.postMessage({ type: 'MEDIA_CACHE_STATS' }, [channel.port2]);
+          activeSW.postMessage({ type: 'MEDIA_CACHE_STATS' }, [channel.port2]);
         });
         if (stats) return stats;
       }

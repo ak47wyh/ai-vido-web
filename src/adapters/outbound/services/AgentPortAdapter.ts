@@ -12,7 +12,11 @@ import type { IAgentPort, AgentContext, AgentResponse, AgentResponseDelta } from
 import { AgentService, type AgentMessage } from '../../../domain/services/AgentService';
 
 export class AgentPortAdapter implements IAgentPort {
-  constructor(private inner: AgentService) {}
+  private inner: AgentService;
+
+  constructor(inner: AgentService) {
+    this.inner = inner;
+  }
 
   async chat(context: AgentContext): Promise<AgentResponse> {
     // 把 AgentContext 转换为 AgentMessage 列表

@@ -26,7 +26,8 @@ export class SubtitleService {
   private whisperPort: IWhisperPort;
   private router: PlatformRouter;
   private configStore: IApiConfigStore;
-  private logger: ILoggerPort;
+  // @ts-expect-error Logger injected for future use
+  private _logger: ILoggerPort;
 
   constructor(
     whisperPort: IWhisperPort,
@@ -37,7 +38,7 @@ export class SubtitleService {
     this.whisperPort = whisperPort;
     this.router = router;
     this.configStore = configStore;
-    this.logger = logger;
+    this._logger = logger;
   }
 
   /** 获取当前配置对应的文本生成适配器 */

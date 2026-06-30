@@ -92,7 +92,7 @@ export class ConsoleLoggerAdapter implements ILoggerPort {
     parts.push(message);
 
     // 构造 context 字符串：跳过 service/method 标识字段，对剩余递归脱敏
-    const safeContext = redactObject(merged, ['service', 'method']);
+    const safeContext = redactObject(merged, ['service', 'method']) as Record<string, unknown>;
     if (Object.keys(safeContext).length > 0) {
       try {
         parts.push(JSON.stringify(safeContext));

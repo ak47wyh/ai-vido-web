@@ -71,7 +71,6 @@ export class PipelineService {
   private pendingVideoTasks: Map<string, Set<string>> = new Map(); // pipelineTaskId → externalTaskIds
 
   private deps: PipelineDeps;
-  private getFileStorage: () => IFileStoragePort;
   private logger: ILoggerPort;
   private eventBus: IEventBus | undefined;
 
@@ -79,9 +78,6 @@ export class PipelineService {
     this.deps = deps;
     this.logger = deps.logger;
     this.eventBus = deps.eventBus;
-    this.getFileStorage = typeof deps.fileStorage === 'function'
-      ? deps.fileStorage
-      : () => deps.fileStorage as IFileStoragePort;
 
     // 订阅 video.task.completed/failed 事件（事件驱动）
     this.eventBus?.on('video.task.completed', (payload) => {
@@ -410,9 +406,10 @@ export class PipelineService {
 
           // ★ 事件驱动：emit 提交事件（外部可订阅以触发轮询或状态同步）
           this.eventBus?.emit('video.task.submitted', {
+            type: 'video.task.submitted' as const,
             taskId: externalTaskId,
             spaceId: seg.storyId,
-            platform: activePlatform,
+            platform: activePlatform as string,
           });
         } catch (e) {
           this.logger.warn('video submit failed', {
@@ -600,9 +597,11 @@ export class PipelineService {
       id: finalCutId,
       storyId,
       pipelineTaskId: '',
-      finalVideoBlob,
+      videoBlob: finalVideoBlob!,
       thumbnailUrl,
-      durationSec: segments.length * 6,
+      duration: segments.length * 6,
+      size: finalVideoBlob!.size,
+      hasSubtitles: false,
       createdAt: Date.now(),
     };
     await this.deps.finalCutRepo.save(finalCut);
@@ -655,8 +654,9 @@ export class PipelineService {
 
               // emit 事件（让其他订阅者也能感知）
               this.eventBus?.emit('video.task.completed', {
+                type: 'video.task.completed' as const,
                 taskId: vt.externalTaskId,
-                videoUrl: status.videoUrl,
+                videoUrl: status.videoUrl ?? '',
               });
               done++;
             } else if (status.status === 'FAILED') {
@@ -666,6 +666,7 @@ export class PipelineService {
               await this.deps.videoTaskRepo.save(vt);
 
               this.eventBus?.emit('video.task.failed', {
+                type: 'video.task.failed' as const,
                 taskId: vt.externalTaskId,
                 error: status.errorMessage ?? 'Unknown error',
               });

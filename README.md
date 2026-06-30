@@ -79,7 +79,13 @@ npm run lint
 ### API 配置
 
 1. 启动后访问 `http://localhost:5173`
-2. 进入 **设置** 页面配置 MiniMax API Key 和 Group ID
+2. 进入 **设置** 页面配置 MiniMax API Key
+
+### 注意事项
+合并到github前需执行以下命令
+npm run lint
+npm run typecheck
+npm run test
 
 ## 项目结构
 

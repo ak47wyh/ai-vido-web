@@ -14,7 +14,11 @@ import { ConsoleLoggerAdapter } from '../infrastructure/ConsoleLoggerAdapter';
 type LocaleListener = (locale: LocaleCode) => void;
 
 class LocaleEventBus {
-  constructor(private logger: ILoggerPort) {}
+  private logger: ILoggerPort;
+
+  constructor(logger: ILoggerPort) {
+    this.logger = logger;
+  }
 
   private listeners = new Set<LocaleListener>();
 
@@ -43,10 +47,15 @@ export function createLocaleEventBus(logger?: ILoggerPort): LocaleEventBus {
 export const localeEventBus: LocaleEventBus = createLocaleEventBus();
 
 class I18nextTranslationAdapter implements ITranslationPort {
+  private eventBus: LocaleEventBus;
+  private logger: ILoggerPort;
+
   constructor(
-    private eventBus: LocaleEventBus = localeEventBus,
-    private logger: ILoggerPort = new ConsoleLoggerAdapter({ service: 'I18nextTranslationAdapter' }),
+    eventBus: LocaleEventBus = localeEventBus,
+    logger: ILoggerPort = new ConsoleLoggerAdapter({ service: 'I18nextTranslationAdapter' }),
   ) {
+    this.eventBus = eventBus;
+    this.logger = logger;
     // i18next 内部变化时转发到事件总线
     i18n.on('languageChanged', (lng: string) => {
       this.eventBus.emit(lng as LocaleCode);
