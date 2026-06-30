@@ -100,6 +100,9 @@ export class VideoTaskRepositoryAdapter implements IVideoTaskRepository {
   async save(task: VideoTask): Promise<void> {
     await db.videoTasks.put(task);
   }
+  async findById(taskId: string): Promise<VideoTask | null> {
+    return (await db.videoTasks.get(taskId)) ?? null;
+  }
   async findBySegmentId(segmentId: string): Promise<VideoTask[]> {
     return db.videoTasks.where('segmentId').equals(segmentId).toArray();
   }

@@ -1,6 +1,6 @@
 import React, { useMemo, useEffect, useRef, useCallback, useReducer } from 'react';
 import { storyService, videoGenerationService, imageAdapter, voiceService, musicService, textGenerationService, pipelineService, assetLibraryService } from '../../dependencies';
-import { Spline, Sparkles, AlertTriangle, ImagePlus, PlayCircle, Film } from 'lucide-react';
+import { Spline, Sparkles, AlertTriangle, ImagePlus, PlayCircle, Film, Scissors } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { VideoTask, Character, SavedImage, SavedPrompt } from '../../domain/entities/models';
@@ -621,6 +621,15 @@ export const StoryWorkbench: React.FC = () => {
                 disabled={ws.isAssembling || progressStats?.success !== progressStats?.total}>
                 <Film size={12} />
                 {ws.isAssembling ? (ws.assembleProgress?.message || t('workbench.assembling', '合成中...')) : t('workbench.assembleBtn', '一键合成导出')}
+              </button>
+              <button
+                className="btn btn-secondary btn-xs"
+                onClick={() => ws.selectedStoryId && navigate(`/editor?storyId=${ws.selectedStoryId}`)}
+                disabled={!ws.selectedStoryId}
+                title={t('workbench.openEditor', '打开剪辑工作台')}
+              >
+                <Scissors size={12} />
+                {t('workbench.openEditor', '剪辑')}
               </button>
               <div className="workbench-toolbar-divider" />
               <select className="form-select btn-xs" style={{ width: '90px' }}

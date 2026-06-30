@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { Character, Background, Story, StorySegment, StorySpace, VideoTask, PipelineTask, FinalCut, SavedImage, SavedVoice, SavedPrompt, GeneratedFile } from '../../../domain/entities/models';
+import type { Character, Background, Story, StorySegment, StorySpace, VideoTask, PipelineTask, FinalCut, SavedImage, SavedVoice, SavedPrompt, SavedVideo, GeneratedFile } from '../../../domain/entities/models';
 import type { SpaceSnapshot, Timeline } from '../../../domain/ports/PersistencePorts';
 
 export class AiVideoDatabase extends Dexie {
@@ -14,6 +14,7 @@ export class AiVideoDatabase extends Dexie {
   savedImages!: Table<SavedImage, string>;
   savedVoices!: Table<SavedVoice, string>;
   savedPrompts!: Table<SavedPrompt, string>;
+  savedVideos!: Table<SavedVideo, string>;
   snapshots!: Table<SpaceSnapshot, string>;
   timelines!: Table<Timeline, string>;
   generatedFiles!: Table<GeneratedFile, string>;
@@ -145,6 +146,24 @@ export class AiVideoDatabase extends Dexie {
       savedImages: 'id, spaceId, name, sourceType, createdAt',
       savedVoices: 'id, spaceId, name, sourceType, createdAt',
       savedPrompts: 'id, spaceId, name, category, createdAt',
+      snapshots: 'id, spaceId, createdAt',
+      timelines: 'id, storyId, createdAt, updatedAt',
+      generatedFiles: 'id, spaceId, fileType, sourceEntityType, sourceEntityId, storagePath, createdAt, lastAccessedAt'
+    });
+    // Version 11: Add savedVideos table (视频剪辑渲染产物 / 用户导入视频统一资产管理)
+    this.version(11).stores({
+      storySpaces: 'id, name, createdAt',
+      characters: 'id, spaceId, name, createdAt',
+      backgrounds: 'id, spaceId, name, createdAt',
+      stories: 'id, spaceId, status, createdAt',
+      segments: 'id, storyId, sequenceOrder',
+      videoTasks: 'id, segmentId, status, createdAt',
+      pipelineTasks: 'id, storyId, status, createdAt',
+      finalCuts: 'id, storyId, pipelineTaskId, createdAt',
+      savedImages: 'id, spaceId, name, sourceType, createdAt',
+      savedVoices: 'id, spaceId, name, sourceType, createdAt',
+      savedPrompts: 'id, spaceId, name, category, createdAt',
+      savedVideos: 'id, spaceId, name, sourceType, createdAt',
       snapshots: 'id, spaceId, createdAt',
       timelines: 'id, storyId, createdAt, updatedAt',
       generatedFiles: 'id, spaceId, fileType, sourceEntityType, sourceEntityId, storagePath, createdAt, lastAccessedAt'

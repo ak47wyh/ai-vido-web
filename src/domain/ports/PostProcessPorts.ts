@@ -45,7 +45,7 @@ export interface IFFmpegPort {
   concat(clips: VideoClip[]): Promise<Blob>;
   burnSubtitles(video: Blob, srt: string, style?: SubtitleStyle): Promise<Blob>;
   mixAudio(voice: Blob, bgm: Blob, config: BgmMixConfig): Promise<Blob>;
-  applyTransition(clip1: Blob, clip2: Blob, transition: TransitionType, duration: number): Promise<Blob>;
+  applyTransition(clip1: Blob, clip2: Blob, transition: TransitionType, duration: number, offsetSec?: number): Promise<Blob>;
   compress(video: Blob, crf?: number): Promise<Blob>;
   convertFormat(input: Blob, format: OutputFormat): Promise<Blob>;
   changeSpeed(video: Blob, speed: number): Promise<Blob>;
@@ -76,13 +76,36 @@ export interface IWhisperPort {
 
 export type TimelineClipType = 'video' | 'audio' | 'subtitle' | 'transition';
 
+/**
+ * 时间线片段的素材来源引用语义。
+ *
+ * 渲染时根据 kind + refId 解析为实际 Blob/URL：
+ * - videoTask: 来自故事分镜的 VideoTask（refId = task.id）
+ * - savedVideo: 资产库的 SavedVideo（refId = video.id）
+ * - finalCut: 已有成片作为单段素材（refId = finalCut.id）
+ * - savedImage: 资产库图片作为静态帧（refId = image.id）
+ * - savedVoice: 资产库语音（refId = voice.id）
+ *
+ * inPointSec/outPointSec 用于源素材裁切（入/出点，秒）。
+ */
+export interface TimelineClipSource {
+  kind: 'videoTask' | 'savedVideo' | 'finalCut' | 'savedImage' | 'savedVoice';
+  refId: string;
+  storagePath?: string;
+  inPointSec?: number;
+  outPointSec?: number;
+}
+
 export interface TimelineClip {
   id: string;
   type: TimelineClipType;
   trackId: string;
   startTime: number;
   duration: number;
+  /** 显示名称（旧字段，保留兼容） */
   source?: string;
+  /** 素材来源引用（渲染时解析为 Blob） */
+  sourceRef?: TimelineClipSource;
   text?: string;
   transition?: TransitionType | 'none';
 }

@@ -197,8 +197,8 @@ export interface IPostProcessPort {
   extractFrame(video: Blob, atSec: number, format?: 'png' | 'jpg'): Promise<Blob>;
   /** 混音（人声 + BGM） */
   mixBgm(voice: Blob, bgm: Blob, config: BgmMixConfig): Promise<Blob>;
-  /** 应用转场 */
-  applyTransition(clip1: Blob, clip2: Blob, transition: TransitionType, duration: number): Promise<Blob>;
+  /** 应用转场（offsetSec 可选：前一段时长 - 转场时长，默认由实现按内部规则推导） */
+  applyTransition(clip1: Blob, clip2: Blob, transition: TransitionType, duration: number, offsetSec?: number): Promise<Blob>;
   /** 编码最终视频（按 export options 合成所有要素） */
   exportFinalVideo(storyId: string, options: ExportOptions): Promise<Blob>;
   /** 检查 FFmpeg 是否已加载 */

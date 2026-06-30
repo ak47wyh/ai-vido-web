@@ -1,6 +1,6 @@
-import type { ISavedImageRepository, ISavedVoiceRepository, ISavedPromptRepository, AssetQueryParams } from '../ports/AssetLibraryPorts';
+import type { ISavedImageRepository, ISavedVoiceRepository, ISavedPromptRepository, ISavedVideoRepository, AssetQueryParams } from '../ports/AssetLibraryPorts';
 import type { IFileStoragePort, IGeneratedFileRepository } from '../ports/FileStoragePorts';
-import type { SavedImage, SavedVoice, SavedPrompt, SavedImageSource, SavedVoiceSource, PromptCategory, SavedPromptSource, GeneratedFile } from '../entities/models';
+import type { SavedImage, SavedVoice, SavedPrompt, SavedVideo, SavedImageSource, SavedVoiceSource, PromptCategory, SavedPromptSource, SavedVideoSource, GeneratedFile, GeneratedFileType } from '../entities/models';
 
 function generateId(): string {
   return `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
@@ -23,6 +23,7 @@ export class AssetLibraryService {
   private imageRepo: ISavedImageRepository;
   private voiceRepo: ISavedVoiceRepository;
   private promptRepo: ISavedPromptRepository;
+  private videoRepo: ISavedVideoRepository;
   private getFileStorage: () => IFileStoragePort;
   private getFileRepo: () => IGeneratedFileRepository;
 
@@ -30,12 +31,14 @@ export class AssetLibraryService {
     imageRepo: ISavedImageRepository,
     voiceRepo: ISavedVoiceRepository,
     promptRepo: ISavedPromptRepository,
+    videoRepo: ISavedVideoRepository,
     fileStorage: IFileStoragePort | (() => IFileStoragePort),
     fileRepo: IGeneratedFileRepository | (() => IGeneratedFileRepository),
   ) {
     this.imageRepo = imageRepo;
     this.voiceRepo = voiceRepo;
     this.promptRepo = promptRepo;
+    this.videoRepo = videoRepo;
     // 支持直接传入实例或延迟获取函数
     this.getFileStorage = typeof fileStorage === 'function' ? fileStorage : () => fileStorage;
     this.getFileRepo = typeof fileRepo === 'function' ? fileRepo : () => fileRepo;
@@ -364,6 +367,93 @@ export class AssetLibraryService {
     }
   }
 
+  // ===== Video Assets =====
+
+  /**
+   * 保存视频到素材库（渲染产物 / 用户导入统一入口）。
+   * 二进制写入 OPFS（video/ 目录），元数据进 Dexie savedVideos。
+   * durationSec/width/height 由调用方探测后传入（可用 TimelineRenderService.probeDuration）。
+   */
+  async saveVideoFromBlob(params: {
+    spaceId: string;
+    name: string;
+    blob: Blob;
+    durationSec: number;
+    width?: number;
+    height?: number;
+    mimeType?: string;
+    tags?: string[];
+    sourceType: SavedVideoSource;
+    sourceId?: string;
+  }): Promise<SavedVideo> {
+    const fileStorage = this.getFileStorage();
+    const fileRepo = this.getFileRepo();
+    const id = generateId();
+    const ext = (params.mimeType || 'video/mp4').includes('webm') ? 'webm' : 'mp4';
+    const storagePath = `video/${id}.${ext}`;
+    const mimeType = params.mimeType || params.blob.type || 'video/mp4';
+
+    await fileStorage.storeBlob(storagePath, params.blob);
+
+    await this.registerFile(fileRepo, {
+      id: `file_${id}`,
+      spaceId: params.spaceId,
+      fileType: 'video',
+      mimeType,
+      fileName: `${params.name || id}.${ext}`,
+      fileSize: params.blob.size,
+      storagePath,
+      sourceEntityType: 'saved_video',
+      sourceEntityId: id,
+      tags: params.tags || [],
+    });
+
+    const item: SavedVideo = {
+      id,
+      spaceId: params.spaceId,
+      name: params.name,
+      durationSec: params.durationSec,
+      width: params.width,
+      height: params.height,
+      mimeType,
+      blobKey: storagePath,
+      tags: params.tags || [],
+      sourceType: params.sourceType,
+      sourceId: params.sourceId,
+      createdAt: Date.now(),
+    };
+
+    await this.videoRepo.save(item);
+    return item;
+  }
+
+  async getVideoBlobUrl(savedVideo: SavedVideo): Promise<string> {
+    const fileStorage = this.getFileStorage();
+    return fileStorage.getObjectUrl(savedVideo.blobKey);
+  }
+
+  async queryVideos(params: AssetQueryParams): Promise<SavedVideo[]> {
+    return this.videoRepo.query(params);
+  }
+
+  async getVideoById(id: string): Promise<SavedVideo | undefined> {
+    return this.videoRepo.getById(id);
+  }
+
+  async deleteVideo(id: string): Promise<void> {
+    const fileStorage = this.getFileStorage();
+    const fileRepo = this.getFileRepo();
+    const item = await this.videoRepo.getById(id);
+    if (item) {
+      await fileStorage.deleteBlob(item.blobKey);
+      if (item.thumbnailBlobKey) {
+        await fileStorage.deleteBlob(item.thumbnailBlobKey);
+      }
+      await fileRepo.delete(`file_${id}`);
+      await this.videoRepo.delete(id);
+    }
+  }
+
   // ===== Prompt Assets =====
 
   async savePrompt(params: {
@@ -421,7 +511,7 @@ export class AssetLibraryService {
   private async registerFile(fileRepo: IGeneratedFileRepository, params: {
     id: string;
     spaceId: string;
-    fileType: 'image' | 'audio';
+    fileType: GeneratedFileType;
     mimeType: string;
     fileName: string;
     fileSize: number;

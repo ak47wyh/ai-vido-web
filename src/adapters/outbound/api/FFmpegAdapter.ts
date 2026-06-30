@@ -195,7 +195,7 @@ export class FFmpegAdapter implements IFFmpegPort {
     }
   }
 
-  async applyTransition(clip1: Blob, clip2: Blob, transition: TransitionType, duration: number): Promise<Blob> {
+  async applyTransition(clip1: Blob, clip2: Blob, transition: TransitionType, duration: number, offsetSec?: number): Promise<Blob> {
     await this.load();
     const ffmpeg = this.ensureLoaded();
     const clip1Name = 'c1.mp4';
@@ -204,11 +204,13 @@ export class FFmpegAdapter implements IFFmpegPort {
     try {
       await this.writeFile(clip1Name, clip1);
       await this.writeFile(clip2Name, clip2);
-      const offsetSec = 3;
+      // 转场起始 offset：调用方按 clip1 实际时长计算后传入，
+      // 未传时回退到 3 秒（保留旧行为兼容，但推荐显式传入 offsetSec = clip1Duration - duration）
+      const offset = offsetSec ?? 3;
       await ffmpeg.exec([
         '-i', clip1Name,
         '-i', clip2Name,
-        '-filter_complex', `[0][1]xfade=transition=${transition}:duration=${duration}:offset=${offsetSec}`,
+        '-filter_complex', `[0][1]xfade=transition=${transition}:duration=${duration}:offset=${offset}`,
         '-c:v', 'libx264',
         '-crf', '23',
         outName

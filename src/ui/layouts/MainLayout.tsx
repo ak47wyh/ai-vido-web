@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Image as ImageIcon, BookOpen, Settings,
-  FolderOpen, Download, Mic, MessageSquare, Sparkles, Film,
+  FolderOpen, Download, Mic, MessageSquare, Sparkles, Film, Scissors,
   ChevronLeft, ChevronRight, Plus, Zap, Palette, Music as MusicIcon, X, Menu, Eraser
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -95,6 +95,7 @@ export const MainLayout: React.FC = () => {
         { to: '/characters', icon: <Users size={18} />, label: t('nav.characters') },
         { to: '/backgrounds', icon: <Palette size={18} />, label: t('nav.backgrounds') },
         { to: '/workbench', icon: <BookOpen size={18} />, label: t('nav.workbench') },
+        { to: '/editor', icon: <Scissors size={18} />, label: t('nav.editor', '视频剪辑') },
         { to: '/export', icon: <Download size={18} />, label: t('nav.export', '导出中心') },
       ],
     },
@@ -108,6 +109,7 @@ export const MainLayout: React.FC = () => {
         { to: '/labs/music', icon: <MusicIcon size={18} />, label: t('nav.musicLab', '音乐生成'), capability: 'music' },
         { to: '/labs/text', icon: <MessageSquare size={18} />, label: t('nav.textLab', '文本润色'), capability: 'text' },
         { to: '/labs/watermark', icon: <Eraser size={18} />, label: '去水印' },
+        { to: '/labs/enhance', icon: <Sparkles size={18} />, label: '清晰度提升' },
       ],
     },
     {

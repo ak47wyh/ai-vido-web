@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Download, Trash2, Film, Filter, RefreshCw, FilmIcon } from 'lucide-react';
+import { Download, Trash2, Film, Filter, RefreshCw, FilmIcon, Scissors } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { finalCutRepo } from '../../dependencies';
 import { useSpaceScopedStories, useSpaceScopedFinalCuts } from '../hooks/useSpaceScopedQuery';
@@ -16,6 +17,7 @@ export const ExportCenter: React.FC = () => {
   const { t } = useTranslation();
   const { showToast } = useToast();
   const { confirm } = useConfirm();
+  const navigate = useNavigate();
   const [filterRange, setFilterRange] = useState<FilterRange>('all');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [previewCutId, setPreviewCutId] = useState<string | null>(null);
@@ -187,6 +189,14 @@ export const ExportCenter: React.FC = () => {
                   onClick={() => handleDownload(cut)}
                 >
                   <Download size={14} /> {t('export.downloadBtn')}
+                </button>
+                <button
+                  className="btn btn-secondary btn-xs"
+                  style={{ padding: '0.3rem 0.5rem' }}
+                  onClick={() => navigate(`/editor?storyId=${cut.storyId}`)}
+                  title={t('export.openEditor', '在剪辑工作台编辑')}
+                >
+                  <Scissors size={14} />
                 </button>
                 <button
                   className="btn btn-secondary"

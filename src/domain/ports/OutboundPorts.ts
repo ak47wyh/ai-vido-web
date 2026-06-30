@@ -42,6 +42,7 @@ export interface IStorySegmentRepository {
 
 export interface IVideoTaskRepository {
   save(task: VideoTask): Promise<void>;
+  findById(taskId: string): Promise<VideoTask | null>;
   findBySegmentId(segmentId: string): Promise<VideoTask[]>;
   findLatestBySegmentId(segmentId: string): Promise<VideoTask | null>;
   findByStatuses(statuses: VideoTaskStatus[]): Promise<VideoTask[]>;
