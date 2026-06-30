@@ -40,8 +40,8 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
           textAlign: 'left',
           transition: 'background var(--transition-fast)',
         }}
-        onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-panel-hover)') as any}
-        onMouseLeave={e => (e.currentTarget.style.background = 'transparent') as any}
+        onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-panel-hover)'; }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
       >
         {/* 图标 */}
         <span style={{ color: 'var(--primary-color)' }}>{icon}</span>

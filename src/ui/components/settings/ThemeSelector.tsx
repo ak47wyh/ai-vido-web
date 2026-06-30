@@ -1,5 +1,6 @@
 import React from 'react';
-import { useTheme, THEMES, type ThemeId } from '../../contexts/ThemeContext';
+import { useTheme } from '../../contexts/ThemeContext';
+import { THEMES, type ThemeId } from '../../contexts/theme-types';
 
 export const ThemeSelector: React.FC = () => {
   const { currentTheme, setTheme } = useTheme();

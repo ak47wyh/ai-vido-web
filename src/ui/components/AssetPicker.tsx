@@ -72,7 +72,7 @@ export const AssetPicker: React.FC<AssetPickerProps> = ({
     } catch {
       // ignore
     }
-  }, [type]);
+  }, [type, t, imagesQuery, voicesQuery, promptsQuery]);
 
   const handleOverlayClick = useCallback((e: React.MouseEvent) => {
     if (e.target === e.currentTarget) onClose();
@@ -128,8 +128,9 @@ function ImageList({ images, selectedIds, onSelect, onDelete, loading, t }: {
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
 
   useEffect(() => {
+    let cancelled = false;
+    const urls: Record<string, string> = {};
     const loadUrls = async () => {
-      const urls: Record<string, string> = {};
       for (const img of images) {
         try {
           urls[img.id] = await assetLibraryService.getImageBlobUrl(img);
@@ -137,11 +138,13 @@ function ImageList({ images, selectedIds, onSelect, onDelete, loading, t }: {
           urls[img.id] = '';
         }
       }
-      setImageUrls(urls);
+      if (!cancelled) setImageUrls(urls);
     };
     if (images.length > 0) loadUrls();
     return () => {
-      Object.values(imageUrls).forEach(url => {
+      cancelled = true;
+      // 撤销本次 effect 内创建的 URL（用局部变量跟踪，避免依赖 imageUrls state）
+      Object.values(urls).forEach(url => {
         if (url) URL.revokeObjectURL(url);
       });
     };
@@ -188,8 +191,9 @@ function VoiceList({ voices, selectedIds, onSelect, onDelete, loading, t }: {
   const [audioUrls, setAudioUrls] = useState<Record<string, string>>({});
 
   useEffect(() => {
+    let cancelled = false;
+    const urls: Record<string, string> = {};
     const loadUrls = async () => {
-      const urls: Record<string, string> = {};
       for (const v of voices) {
         try {
           urls[v.id] = await assetLibraryService.getVoiceBlobUrl(v);
@@ -197,11 +201,13 @@ function VoiceList({ voices, selectedIds, onSelect, onDelete, loading, t }: {
           urls[v.id] = '';
         }
       }
-      setAudioUrls(urls);
+      if (!cancelled) setAudioUrls(urls);
     };
     if (voices.length > 0) loadUrls();
     return () => {
-      Object.values(audioUrls).forEach(url => {
+      cancelled = true;
+      // 撤销本次 effect 内创建的 URL（用局部变量跟踪，避免依赖 audioUrls state）
+      Object.values(urls).forEach(url => {
         if (url) URL.revokeObjectURL(url);
       });
     };

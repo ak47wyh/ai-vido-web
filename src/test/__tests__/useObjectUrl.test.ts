@@ -23,19 +23,27 @@ describe('useObjectUrl', () => {
     originalCreate = URL.createObjectURL;
     originalRevoke = URL.revokeObjectURL;
     // jsdom 不提供 URL.createObjectURL，直接覆盖
-    (URL as any).createObjectURL = (blob: Blob) => {
+    const urlMock = URL as unknown as {
+      createObjectURL: (blob: Blob) => string;
+      revokeObjectURL: (url: string) => void;
+    };
+    urlMock.createObjectURL = (blob: Blob) => {
       const id = `blob:test/${createdUrls.length}-${blob.size}`;
       createdUrls.push(id);
       return id;
     };
-    (URL as any).revokeObjectURL = (url: string) => {
+    urlMock.revokeObjectURL = (url: string) => {
       revokedUrls.push(url);
     };
   });
 
   afterEach(() => {
-    if (originalCreate) (URL as any).createObjectURL = originalCreate;
-    if (originalRevoke) (URL as any).revokeObjectURL = originalRevoke;
+    const urlMock = URL as unknown as {
+      createObjectURL: typeof URL.createObjectURL;
+      revokeObjectURL: typeof URL.revokeObjectURL;
+    };
+    if (originalCreate) urlMock.createObjectURL = originalCreate;
+    if (originalRevoke) urlMock.revokeObjectURL = originalRevoke;
     vi.restoreAllMocks();
   });
 

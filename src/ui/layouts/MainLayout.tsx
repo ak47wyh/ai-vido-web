@@ -60,10 +60,12 @@ export const MainLayout: React.FC = () => {
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  // Close mobile menu on route change
-  useEffect(() => {
+  // Close mobile menu on route change — 在渲染期间调整 state，避免 effect 内同步 setState
+  const [prevPathname, setPrevPathname] = useState(location.pathname);
+  if (location.pathname !== prevPathname) {
+    setPrevPathname(location.pathname);
     setMobileMenuOpen(false);
-  }, [location.pathname]);
+  }
 
   const handleSpaceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setCurrentSpaceId(e.target.value || null);
