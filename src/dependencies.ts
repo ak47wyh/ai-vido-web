@@ -216,20 +216,6 @@ export const musicLabService = new MusicLabService(
 
 export const postProcessService = new PostProcessService(ffmpegAdapter, whisperAdapter);
 
-// ========================================
-// 时间线渲染服务（剪辑工作台 → 最终视频）
-// - fileStorage 用 lazy accessor，支持应用启动时未完成异步初始化的场景
-// ========================================
-export const timelineRenderService = new TimelineRenderService({
-  ffmpegPort: ffmpegAdapter,
-  fileStorage: getFileStorage,
-  videoTaskRepo,
-  finalCutRepo,
-  savedVideoRepo,
-  savedVoiceRepo,
-  logger: defaultLogger.child({ service: 'TimelineRenderService' }),
-});
-
 export const timelineService = new TimelineService({
   timelineRepo,
   storyRepo,
@@ -307,6 +293,21 @@ export const assetLibraryService = new AssetLibraryService(
   getFileStorage,        // 传入函数引用，延迟获取
   () => generatedFileRepo,  // 传入函数引用，延迟获取
 );
+
+// ========================================
+// 时间线渲染服务（剪辑工作台 → 最终视频）
+// - fileStorage 用 lazy accessor，支持应用启动时未完成异步初始化的场景
+// - 必须在 savedVideoRepo / savedVoiceRepo 声明之后
+// ========================================
+export const timelineRenderService = new TimelineRenderService({
+  ffmpegPort: ffmpegAdapter,
+  fileStorage: getFileStorage,
+  videoTaskRepo,
+  finalCutRepo,
+  savedVideoRepo,
+  savedVoiceRepo,
+  logger: defaultLogger.child({ service: 'TimelineRenderService' }),
+});
 
 // ==================== 快照服务（v2.0：使用 ISnapshotRepository） ====================
 import { SnapshotService } from './domain/services/SnapshotService';

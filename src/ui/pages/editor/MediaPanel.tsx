@@ -28,8 +28,8 @@ export const MediaPanel: React.FC<MediaPanelProps> = ({ spaceId, onAddToTimeline
   const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>('videos');
 
-  const videos = useSavedVideos(spaceId);
-  const voices = useSavedVoices(spaceId);
+  const { videos } = useSavedVideos(spaceId);
+  const { voices } = useSavedVoices(spaceId);
   const finalCuts = useSpaceScopedFinalCuts();
 
   // 派生 finalCuts 的 duration（来自 finalCut.duration，毫秒）
@@ -90,7 +90,7 @@ export const MediaPanel: React.FC<MediaPanelProps> = ({ spaceId, onAddToTimeline
             items={voices.map(v => ({
               id: v.id,
               label: v.name,
-              sub: v.textPreview?.slice(0, 30) ?? '',
+              sub: v.sampleText?.slice(0, 30) ?? '',
               onAdd: () => onAddToTimeline(
                 { kind: 'savedVoice', refId: v.id, storagePath: v.audioBlobKey },
                 v.name,

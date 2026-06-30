@@ -16,7 +16,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { AssetLibraryService } from '../../domain/services/AssetLibraryService';
-import type { ISavedImageRepository, ISavedVoiceRepository, ISavedPromptRepository } from '../../domain/ports/AssetLibraryPorts';
+import type { ISavedImageRepository, ISavedVoiceRepository, ISavedPromptRepository, ISavedVideoRepository } from '../../domain/ports/AssetLibraryPorts';
 import type { IFileStoragePort, IGeneratedFileRepository } from '../../domain/ports/FileStoragePorts';
 import type { SavedImage, GeneratedFile } from '../../domain/entities/models';
 
@@ -67,6 +67,7 @@ class MockFileRepo implements IGeneratedFileRepository {
 
 const mockVoiceRepo: ISavedVoiceRepository = {} as ISavedVoiceRepository;
 const mockPromptRepo: ISavedPromptRepository = {} as ISavedPromptRepository;
+const mockVideoRepo: ISavedVideoRepository = {} as ISavedVideoRepository;
 
 describe('AssetLibraryService.saveImageFromUrl —— data URI 处理（绕过 CORS）', () => {
   let service: AssetLibraryService;
@@ -77,7 +78,7 @@ describe('AssetLibraryService.saveImageFromUrl —— data URI 处理（绕过 C
     storage = new MockFileStorage();
     imgRepo = new MockImageRepo();
     service = new AssetLibraryService(
-      imgRepo, mockVoiceRepo, mockPromptRepo,
+      imgRepo, mockVoiceRepo, mockPromptRepo, mockVideoRepo,
       storage,
       new MockFileRepo(),
     );
@@ -172,7 +173,7 @@ describe('AssetLibraryService.saveImageFromUrl —— 外部 URL 失败时包装
   beforeEach(() => {
     storage = new MockFileStorage();
     service = new AssetLibraryService(
-      new MockImageRepo(), mockVoiceRepo, mockPromptRepo,
+      new MockImageRepo(), mockVoiceRepo, mockPromptRepo, mockVideoRepo,
       storage,
       new MockFileRepo(),
     );
@@ -225,7 +226,7 @@ describe('AssetLibraryService.saveImageFromBlob（基础流程回归）', () => 
     const storage = new MockFileStorage();
     const imgRepo = new MockImageRepo();
     const service = new AssetLibraryService(
-      imgRepo, mockVoiceRepo, mockPromptRepo,
+      imgRepo, mockVoiceRepo, mockPromptRepo, mockVideoRepo,
       storage, new MockFileRepo(),
     );
 
