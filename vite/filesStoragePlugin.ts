@@ -366,7 +366,6 @@ export function filesStoragePlugin(options: FilesStoragePluginOptions = {}): Plu
       };
 
       // Vite 5+ 用 server.middlewares
-      // @ts-expect-error Vite 中间件类型为 Connect.Server
       server.middlewares.use(middleware);
 
       server.config.logger.info(
