@@ -5,6 +5,10 @@ import { filesStoragePlugin } from './vite/filesStoragePlugin'
 // https://vite.dev/config/
 export default defineConfig({
   base: '/ai-vido-web/',
+  // dev server 启动后自动打开浏览器到 base 路径
+  server: {
+    open: '/ai-vido-web/',
+  },
   plugins: [
     react(),
     // 本地文件存储插件 —— 为前端提供 POST /__files/upload 等路由，

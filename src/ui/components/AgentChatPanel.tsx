@@ -5,6 +5,7 @@ import { agentService } from '../../dependencies';
 import { useToast } from '../contexts/ToastContext';
 import { getErrorMessage } from '../utils/errorUtils';
 import type { AgentMessage } from '../../domain/services/AgentService';
+import { TextAreaWithCounter } from './TextAreaWithCounter';
 
 interface AgentChatMessage {
   id: string;
@@ -173,9 +174,8 @@ export const AgentChatPanel: React.FC = () => {
         padding: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.08)',
         display: 'flex', gap: '0.5rem', alignItems: 'flex-end',
       }}>
-        <textarea
+        <TextAreaWithCounter
           ref={textareaRef}
-          className="form-input"
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -183,6 +183,7 @@ export const AgentChatPanel: React.FC = () => {
           rows={2}
           style={{ resize: 'none', flex: 1, fontSize: '0.875rem' }}
           disabled={isLoading}
+          maxLength={500}
         />
         <button
           className="btn btn-primary"

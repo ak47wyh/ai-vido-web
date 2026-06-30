@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Image as ImageIcon, BookOpen, Settings,
   FolderOpen, Download, Mic, MessageSquare, Sparkles, Film,
-  ChevronLeft, ChevronRight, Plus, Zap, Palette, Music as MusicIcon, X, Menu
+  ChevronLeft, ChevronRight, Plus, Zap, Palette, Music as MusicIcon, X, Menu, Eraser
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAllSpaces } from '../hooks/useSpaceScopedQuery';
@@ -107,6 +107,7 @@ export const MainLayout: React.FC = () => {
         { to: '/labs/voice', icon: <Mic size={18} />, label: t('nav.voiceLab', '音色与配音'), capability: 'voice' },
         { to: '/labs/music', icon: <MusicIcon size={18} />, label: t('nav.musicLab', '音乐生成'), capability: 'music' },
         { to: '/labs/text', icon: <MessageSquare size={18} />, label: t('nav.textLab', '文本润色'), capability: 'text' },
+        { to: '/labs/watermark', icon: <Eraser size={18} />, label: '去水印' },
       ],
     },
     {

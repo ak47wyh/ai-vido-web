@@ -11,6 +11,8 @@ import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useImageUpload, useCopyToSpace } from '../hooks/useSharedForm';
 import { getErrorMessage } from '../utils/errorUtils';
+import { TextAreaWithCounter } from '../components/TextAreaWithCounter';
+import { InputWithCounter } from '../components/InputWithCounter';
 
 export const BackgroundManagement: React.FC = () => {
   const { t } = useTranslation();
@@ -141,11 +143,24 @@ export const BackgroundManagement: React.FC = () => {
           </h3>
           <div className="form-group">
             <label className="form-label">{t('background.nameLabel')}</label>
-            <input className="form-input" value={name} onChange={e => setName(e.target.value)} required placeholder={t('background.namePlaceholder')} />
+            <InputWithCounter
+              className="form-input"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              required
+              placeholder={t('background.namePlaceholder')}
+              maxLength={100}
+            />
           </div>
           <div className="form-group">
             <label className="form-label">{t('background.envLabel')}</label>
-            <textarea className="form-textarea" value={environmentPrompt} onChange={e => setEnvironmentPrompt(e.target.value)} placeholder={t('background.envPlaceholder')} />
+            <TextAreaWithCounter
+              className="form-textarea"
+              value={environmentPrompt}
+              onChange={e => setEnvironmentPrompt(e.target.value)}
+              placeholder={t('background.envPlaceholder')}
+              maxLength={1000}
+            />
             <button
               type="button"
               className="btn btn-secondary btn-xs"

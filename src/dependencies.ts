@@ -333,3 +333,15 @@ export const autoEditPort: import('./domain/ports/DomainServicePorts').IAutoEdit
 export const assetExportPort: import('./domain/ports/DomainServicePorts').IAssetExportPort = new AssetExportAdapter(
   spaceRepo, characterRepo, backgroundRepo, storyRepo, segmentRepo, videoTaskRepo, finalCutRepo
 );
+
+// ========================================
+// 去水印服务（浏览器端本地处理）
+// ========================================
+import { CanvasInpaintAdapter } from './adapters/outbound/api/inpaint/CanvasInpaintAdapter';
+import { PdfWatermarkAdapter } from './adapters/outbound/api/inpaint/PdfWatermarkAdapter';
+import { FFmpegVideoInpaintAdapter } from './adapters/outbound/api/inpaint/FFmpegVideoInpaintAdapter';
+import type { IImageInpaintPort, IPdfWatermarkPort, IVideoInpaintPort } from './domain/ports/WatermarkRemovalPorts';
+
+export const imageInpaintAdapter: IImageInpaintPort = new CanvasInpaintAdapter();
+export const pdfWatermarkAdapter: IPdfWatermarkPort = new PdfWatermarkAdapter();
+export const videoInpaintAdapter: IVideoInpaintPort = new FFmpegVideoInpaintAdapter(ffmpegAdapter);
