@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { assetLibraryService } from '../../dependencies';
-import type { SavedImage, SavedVoice, SavedPrompt } from '../../domain/entities/models';
+import type { SavedImage, SavedVoice, SavedPrompt, SavedVideo } from '../../domain/entities/models';
 import type { AssetQueryParams } from '../../domain/ports/AssetLibraryPorts';
 
 /** 查询当前空间下保存的图片素材 */
@@ -104,4 +104,38 @@ export function useSavedPrompts(spaceId: string, params?: Omit<AssetQueryParams,
   }, [refetch, paramsKey]);
 
   return { prompts, loading, error, refetch };
+}
+
+/** 查询当前空间下保存的视频素材 */
+export function useSavedVideos(spaceId: string, params?: Omit<AssetQueryParams, 'spaceId'>) {
+  const [videos, setVideos] = useState<SavedVideo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const paramsKey = JSON.stringify(params);
+
+  const paramsRef = useRef(params);
+  useEffect(() => {
+    paramsRef.current = params;
+  });
+
+  const refetch = useCallback(async () => {
+    if (!spaceId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const results = await assetLibraryService.queryVideos({ spaceId, ...paramsRef.current });
+      setVideos(results);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load videos');
+    } finally {
+      setLoading(false);
+    }
+  }, [spaceId]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    refetch();
+  }, [refetch, paramsKey]);
+
+  return { videos, loading, error, refetch };
 }

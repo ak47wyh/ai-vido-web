@@ -47,6 +47,8 @@ import { AgentService } from './domain/services/AgentService';
 import { AutoEditService } from './domain/services/AutoEditService';
 import { CinematographyService } from './domain/services/CinematographyService';
 import { BGMRecommendationService } from './domain/services/BGMRecommendationService';
+import { TimelineRenderService } from './domain/services/TimelineRenderService';
+import { TimelineService } from './domain/services/TimelineService';
 
 // ==================== 平台路由 ====================
 import { platformRouter } from './domain/services/PlatformRouter';
@@ -214,6 +216,27 @@ export const musicLabService = new MusicLabService(
 
 export const postProcessService = new PostProcessService(ffmpegAdapter, whisperAdapter);
 
+// ========================================
+// 时间线渲染服务（剪辑工作台 → 最终视频）
+// - fileStorage 用 lazy accessor，支持应用启动时未完成异步初始化的场景
+// ========================================
+export const timelineRenderService = new TimelineRenderService({
+  ffmpegPort: ffmpegAdapter,
+  fileStorage: getFileStorage,
+  videoTaskRepo,
+  finalCutRepo,
+  savedVideoRepo,
+  savedVoiceRepo,
+  logger: defaultLogger.child({ service: 'TimelineRenderService' }),
+});
+
+export const timelineService = new TimelineService({
+  timelineRepo,
+  storyRepo,
+  segmentRepo,
+  videoTaskRepo,
+});
+
 export const subtitleService = new SubtitleService(
   whisperAdapter, platformRouter, apiConfigStoreAdapter,
   defaultLogger.child({ service: 'SubtitleService' })
@@ -269,17 +292,18 @@ export const bgmRecommendationService = new BGMRecommendationService(
 
 // ==================== 素材库（离线存储） ====================
 import { AssetLibraryService } from './domain/services/AssetLibraryService';
-import { SavedImageRepository, SavedVoiceRepository, SavedPromptRepository } from './adapters/outbound/repositories/AssetLibraryRepositories';
+import { SavedImageRepository, SavedVoiceRepository, SavedPromptRepository, SavedVideoRepository } from './adapters/outbound/repositories/AssetLibraryRepositories';
 
 export const savedImageRepo = new SavedImageRepository();
 export const savedVoiceRepo = new SavedVoiceRepository();
 export const savedPromptRepo = new SavedPromptRepository();
+export const savedVideoRepo = new SavedVideoRepository();
 
 // AssetLibraryService 使用延迟获取模式（lazy accessor），
 // 允许在模块加载时构造，但实际调用方法时才获取 fileStorage。
 // 确保在调用 assetLibraryService 的方法前已执行 await initializeFileStorage()。
 export const assetLibraryService = new AssetLibraryService(
-  savedImageRepo, savedVoiceRepo, savedPromptRepo,
+  savedImageRepo, savedVoiceRepo, savedPromptRepo, savedVideoRepo,
   getFileStorage,        // 传入函数引用，延迟获取
   () => generatedFileRepo,  // 传入函数引用，延迟获取
 );
@@ -305,8 +329,18 @@ import { SubtitlePortAdapter } from './adapters/outbound/services/SubtitlePortAd
 export const agentPort: import('./domain/ports/DomainServicePorts').IAgentPort = new AgentPortAdapter(agentService);
 export const bgmPort: import('./domain/ports/DomainServicePorts').IBGMRecommendationPort = new BGMPortAdapter(bgmRecommendationService);
 export const cinematographyPort: import('./domain/ports/DomainServicePorts').ICinematographyPort = new CinematographyPortAdapter(cinematographyService);
-export const postProcessPort: import('./domain/ports/DomainServicePorts').IPostProcessPort = new PostProcessPortAdapter(postProcessService);
+export const postProcessPort: import('./domain/ports/DomainServicePorts').IPostProcessPort = new PostProcessPortAdapter(
+  postProcessService,
+  timelineRenderService,
+  timelineService,
+);
 export const subtitlePort: import('./domain/ports/DomainServicePorts').ISubtitlePort = new SubtitlePortAdapter(subtitleService);
+
+// ========================================
+// 时间线渲染 Port（供剪辑工作台 UI 注入）
+// ========================================
+import { TimelineRenderPortAdapter } from './adapters/outbound/services/TimelineRenderPortAdapter';
+export const timelineRenderPort: import('./domain/ports/TimelineRenderPorts').ITimelineRenderPort = new TimelineRenderPortAdapter(timelineRenderService);
 
 // ========================================
 // UI 副作用 Port 适配器（Service 主动弹 Toast / Confirm）
@@ -345,3 +379,16 @@ import type { IImageInpaintPort, IPdfWatermarkPort, IVideoInpaintPort } from './
 export const imageInpaintAdapter: IImageInpaintPort = new CanvasInpaintAdapter();
 export const pdfWatermarkAdapter: IPdfWatermarkPort = new PdfWatermarkAdapter();
 export const videoInpaintAdapter: IVideoInpaintPort = new FFmpegVideoInpaintAdapter(ffmpegAdapter);
+
+// ========================================
+// 清晰度提升服务（浏览器端本地处理）
+// 与去水印服务并列，复用 FFmpegAdapter
+// ========================================
+import { CanvasImageEnhanceAdapter } from './adapters/outbound/api/enhance/CanvasImageEnhanceAdapter';
+import { PdfEnhanceAdapter } from './adapters/outbound/api/enhance/PdfEnhanceAdapter';
+import { FFmpegVideoEnhanceAdapter } from './adapters/outbound/api/enhance/FFmpegVideoEnhanceAdapter';
+import type { IImageEnhancePort, IPdfEnhancePort, IVideoEnhancePort } from './domain/ports/EnhancementPorts';
+
+export const imageEnhanceAdapter: IImageEnhancePort = new CanvasImageEnhanceAdapter();
+export const pdfEnhanceAdapter: IPdfEnhancePort = new PdfEnhanceAdapter();
+export const videoEnhanceAdapter: IVideoEnhancePort = new FFmpegVideoEnhanceAdapter(ffmpegAdapter);

@@ -122,19 +122,24 @@ export class AutoEditService {
   }
 
   /**
-   * Probe video duration using ffmpeg log inspection.
-   * Currently returns a default duration as a placeholder.
-   * Real implementation would use ffprobe.wasm.
+   * 探测视频时长（秒）。
+   * 使用 HTMLVideoElement 读取元数据（轻量，无需 ffprobe.wasm，仅读 metadata 不下载全片）。
+   * 失败时回退到 0（调用方据此跳过处理）。
    */
-  private async probeVideoDuration(_video: Blob): Promise<number> {
+  private async probeVideoDuration(video: Blob): Promise<number> {
     return new Promise<number>(resolve => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        // Placeholder: real probe would use ffprobe.wasm
-        resolve(10);
+      const url = URL.createObjectURL(video);
+      const el = document.createElement('video');
+      el.preload = 'metadata';
+      el.onloadedmetadata = () => {
+        URL.revokeObjectURL(url);
+        resolve(Number.isFinite(el.duration) ? el.duration : 0);
       };
-      reader.onerror = () => resolve(0);
-      reader.readAsArrayBuffer(_video.slice(0, 1024));
+      el.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(0);
+      };
+      el.src = url;
     });
   }
 

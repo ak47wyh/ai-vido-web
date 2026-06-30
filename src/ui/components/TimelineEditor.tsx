@@ -1,7 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Play, Pause, ZoomIn, ZoomOut, Scissors, Volume2, VolumeX, Lock, Unlock } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { Timeline, TimelineClip, TransitionType } from '../../domain/ports/PostProcessPorts';
+import type { Timeline, TimelineClip, TimelineTrack, TransitionType } from '../../domain/ports/PostProcessPorts';
+import {
+  moveClip, resizeClip, trimClipLeft, removeClip,
+  setClipTransition, splitClipAtPlayhead,
+} from '../hooks/useTimeline';
 
 export interface TimelineEditorProps {
   timeline: Timeline;
@@ -9,33 +13,47 @@ export interface TimelineEditorProps {
   onPlay?: () => void;
   onPause?: () => void;
   onClipSelect?: (clip: TimelineClip | null) => void;
+  /** 外部播放头时间（ms），传入后由外部驱动；不传则内部自维护 */
+  currentTimeMs?: number;
+  /** 外部播放头变更回调 */
+  onSeek?: (ms: number) => void;
 }
 
 const DEFAULT_PX_PER_SECOND = 60;
 const MIN_PX_PER_SECOND = 20;
 const MAX_PX_PER_SECOND = 240;
+/** 吸附阈值（像素）：拖动到该距离内自动吸附到其他 clip 边缘 / 播放头 */
+const SNAP_THRESHOLD_PX = 8;
 
 export const TimelineEditor: React.FC<TimelineEditorProps> = React.memo(({
   timeline,
   onChange,
   onPlay,
   onPause,
-  onClipSelect
+  onClipSelect,
+  currentTimeMs: externalTimeMs,
+  onSeek,
 }) => {
   const { t } = useTranslation();
   const [pxPerSecond, setPxPerSecond] = useState(DEFAULT_PX_PER_SECOND);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTimeMs, setCurrentTimeMs] = useState(0);
+  const [internalTimeMs, setInternalTimeMs] = useState(0);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [draggingClipId, setDraggingClipId] = useState<string | null>(null);
   const [dragStartX, setDragStartX] = useState(0);
   const [dragStartTime, setDragStartTime] = useState(0);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  // 持有 currentTimeMs 的最新值，供 rAF tick 读取（避免 effect 依赖该值导致重建）
+
+  // 外部受控 / 内部自维护播放头
+  const currentTimeMs = externalTimeMs ?? internalTimeMs;
   const currentTimeMsRef = useRef(currentTimeMs);
   useEffect(() => {
     currentTimeMsRef.current = currentTimeMs;
   }, [currentTimeMs]);
+  const setCurrentTimeMs = useCallback((ms: number) => {
+    if (onSeek) onSeek(ms);
+    else setInternalTimeMs(ms);
+  }, [onSeek]);
 
   const totalWidth = Math.max(timeline.duration, 5000) / 1000 * pxPerSecond;
 
@@ -67,9 +85,9 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = React.memo(({
     }
   }, [isPlaying, onPlay, onPause]);
 
+  // 内部播放头驱动（外部受控时不启用）
   useEffect(() => {
-    if (!isPlaying) return;
-    // 用 ref 持有 currentTimeMs 最新值，避免被列入依赖数组导致 effect 反复重建
+    if (!isPlaying || externalTimeMs != null) return;
     let rafId: number;
     let lastFrameTime = performance.now();
     const tick = (now: number) => {
@@ -78,35 +96,50 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = React.memo(({
       const next = currentTimeMsRef.current + delta;
       if (next >= timeline.duration) {
         currentTimeMsRef.current = timeline.duration;
-        setCurrentTimeMs(timeline.duration);
+        setInternalTimeMs(timeline.duration);
         setIsPlaying(false);
         onPause?.();
         return;
       }
       currentTimeMsRef.current = next;
-      setCurrentTimeMs(next);
+      setInternalTimeMs(next);
       rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
-  }, [isPlaying, timeline.duration, onPause]);
+  }, [isPlaying, timeline.duration, onPause, externalTimeMs]);
 
-  const updateClipStartTime = (clipId: string, newStartTime: number) => {
-    const newTracks = timeline.tracks.map(track => ({
-      ...track,
-      clips: track.clips.map(c => c.id === clipId ? { ...c, startTime: newStartTime } : c)
-    }));
-    onChange({ ...timeline, tracks: newTracks });
-  };
+  // ===== 吸附：收集所有可作为吸附点的 X 坐标 =====
+  const collectSnapPoints = useCallback((excludeClipId: string | null): number[] => {
+    const points: number[] = [0];
+    // 播放头
+    points.push((currentTimeMsRef.current / 1000) * pxPerSecond);
+    for (const track of timeline.tracks) {
+      if (track.locked) continue;
+      for (const c of track.clips) {
+        if (c.id === excludeClipId) continue;
+        points.push((c.startTime / 1000) * pxPerSecond);
+        points.push(((c.startTime + c.duration) / 1000) * pxPerSecond);
+      }
+    }
+    return points;
+  }, [timeline.tracks, pxPerSecond]);
 
-  const updateClipDuration = (clipId: string, newDuration: number) => {
-    const newTracks = timeline.tracks.map(track => ({
-      ...track,
-      clips: track.clips.map(c => c.id === clipId ? { ...c, duration: Math.max(100, newDuration) } : c)
-    }));
-    onChange({ ...timeline, tracks: newTracks });
-  };
+  const snap = useCallback((targetPx: number, excludeClipId?: string): number => {
+    const points = collectSnapPoints(excludeClipId ?? null);
+    let best = targetPx;
+    let bestDelta = SNAP_THRESHOLD_PX;
+    for (const p of points) {
+      const d = Math.abs(p - targetPx);
+      if (d < bestDelta) {
+        bestDelta = d;
+        best = p;
+      }
+    }
+    return best;
+  }, [collectSnapPoints]);
 
+  // ===== clip 拖动（带吸附） =====
   const handleClipMouseDown = (e: React.MouseEvent, clip: TimelineClip) => {
     if (e.button !== 0) return;
     e.stopPropagation();
@@ -121,9 +154,12 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = React.memo(({
     if (!draggingClipId) return;
     const handleMouseMove = (e: MouseEvent) => {
       const deltaPx = e.clientX - dragStartX;
-      const deltaMs = (deltaPx / pxPerSecond) * 1000;
-      const newStartTime = Math.max(0, dragStartTime + deltaMs);
-      updateClipStartTime(draggingClipId, newStartTime);
+      // 原始新位置（px）
+      const rawTargetPx = (dragStartTime / 1000) * pxPerSecond + deltaPx;
+      // 吸附后位置
+      const snappedPx = Math.max(0, snap(rawTargetPx, draggingClipId));
+      const newStartTime = (snappedPx / pxPerSecond) * 1000;
+      onChange(moveClip(timeline, draggingClipId, newStartTime));
     };
     const handleMouseUp = () => {
       setDraggingClipId(null);
@@ -134,20 +170,24 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = React.memo(({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draggingClipId, dragStartX, dragStartTime, pxPerSecond]);
+  }, [draggingClipId, dragStartX, dragStartTime, pxPerSecond, timeline, onChange, snap]);
 
-  const removeClip = (clipId: string) => {
-    const newTracks = timeline.tracks.map(track => ({
-      ...track,
-      clips: track.clips.filter(c => c.id !== clipId)
-    }));
-    onChange({ ...timeline, tracks: newTracks });
+  const handleClipResize = useCallback((clipId: string, newDuration: number) => {
+    onChange(resizeClip(timeline, clipId, newDuration));
+  }, [timeline, onChange]);
+
+  /** 左边缘裁切：deltaMs>0 缩短左侧，<0 向左扩展 */
+  const handleClipTrimLeft = useCallback((clipId: string, deltaMs: number) => {
+    onChange(trimClipLeft(timeline, clipId, deltaMs));
+  }, [timeline, onChange]);
+
+  const handleRemoveClip = useCallback((clipId: string) => {
+    onChange(removeClip(timeline, clipId));
     if (selectedClipId === clipId) {
       setSelectedClipId(null);
       onClipSelect?.(null);
     }
-  };
+  }, [timeline, onChange, selectedClipId, onClipSelect]);
 
   const toggleTrackMute = (trackId: string) => {
     const newTracks = timeline.tracks.map(t =>
@@ -163,30 +203,72 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = React.memo(({
     onChange({ ...timeline, tracks: newTracks });
   };
 
-  const splitClipAtPlayhead = () => {
+  const handleSplitAtPlayhead = useCallback(() => {
     if (!selectedClipId) return;
-    const newTracks = timeline.tracks.map(track => ({
-      ...track,
-      clips: track.clips.flatMap(c => {
-        if (c.id !== selectedClipId) return [c];
-        if (currentTimeMs <= c.startTime || currentTimeMs >= c.startTime + c.duration) return [c];
-        const splitOffset = currentTimeMs - c.startTime;
-        return [
-          { ...c, duration: splitOffset },
-          { ...c, id: `${c.id}_split_${Date.now()}`, startTime: currentTimeMs, duration: c.duration - splitOffset }
-        ];
-      })
-    }));
-    onChange({ ...timeline, tracks: newTracks });
+    onChange(splitClipAtPlayhead(timeline, selectedClipId, currentTimeMsRef.current));
+  }, [selectedClipId, timeline, onChange]);
+
+  const handleSetTransition = useCallback((clipId: string, transition: TransitionType | 'none') => {
+    onChange(setClipTransition(timeline, clipId, transition));
+  }, [timeline, onChange]);
+
+  // ===== 轨道点击：定位播放头 =====
+  const handleTrackClick = (e: React.MouseEvent, track: TimelineTrack) => {
+    if (track.locked) return;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const ms = (x / pxPerSecond) * 1000;
+    setCurrentTimeMs(Math.max(0, Math.min(ms, timeline.duration)));
   };
 
-  const setTransition = (clipId: string, transition: TransitionType) => {
-    const newTracks = timeline.tracks.map(track => ({
-      ...track,
-      clips: track.clips.map(c => c.id === clipId ? { ...c, transition } : c)
-    }));
-    onChange({ ...timeline, tracks: newTracks });
-  };
+  // ===== 键盘快捷键 =====
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const handleKey = (e: KeyboardEvent) => {
+      // 输入框中不拦截
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
+      switch (e.key) {
+        case ' ':
+          e.preventDefault();
+          handlePlayPause();
+          break;
+        case 'Delete':
+        case 'Backspace':
+          if (selectedClipId) {
+            e.preventDefault();
+            handleRemoveClip(selectedClipId);
+          }
+          break;
+        case 's':
+        case 'S':
+          if (selectedClipId) {
+            e.preventDefault();
+            handleSplitAtPlayhead();
+          }
+          break;
+        case 'ArrowLeft': {
+          e.preventDefault();
+          const step = e.shiftKey ? 1000 : 100; // Shift+← 1s，← 100ms
+          setCurrentTimeMs(Math.max(0, currentTimeMsRef.current - step));
+          break;
+        }
+        case 'ArrowRight': {
+          e.preventDefault();
+          const step = e.shiftKey ? 1000 : 100;
+          setCurrentTimeMs(Math.min(timeline.duration, currentTimeMsRef.current + step));
+          break;
+        }
+        default:
+          break;
+      }
+    };
+    el.addEventListener('keydown', handleKey);
+    return () => el.removeEventListener('keydown', handleKey);
+  }, [containerRef, selectedClipId, handlePlayPause, handleRemoveClip, handleSplitAtPlayhead, timeline.duration, setCurrentTimeMs]);
 
   const renderRuler = () => {
     const ticks: React.ReactElement[] = [];
@@ -213,7 +295,11 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = React.memo(({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', background: 'rgba(0,0,0,0.4)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+    <div
+      ref={containerRef}
+      tabIndex={0}
+      style={{ display: 'flex', flexDirection: 'column', background: 'rgba(0,0,0,0.4)', borderRadius: 'var(--radius-md)', overflow: 'hidden', outline: 'none' }}
+    >
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', background: 'rgba(255,255,255,0.05)' }}>
         <button className="btn btn-primary" style={{ padding: '0.3rem 0.6rem' }} onClick={handlePlayPause}>
           {isPlaying ? <Pause size={14} /> : <Play size={14} />}
@@ -222,7 +308,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = React.memo(({
           {formatTime(currentTimeMs)} / {formatTime(timeline.duration)}
         </span>
         <div style={{ flex: 1 }} />
-        <button className="btn btn-secondary" style={{ padding: '0.3rem 0.5rem' }} onClick={splitClipAtPlayhead} disabled={!selectedClipId} title={t('timeline.splitAtPlayhead')}>
+        <button className="btn btn-secondary" style={{ padding: '0.3rem 0.5rem' }} onClick={handleSplitAtPlayhead} disabled={!selectedClipId} title={t('timeline.splitAtPlayhead') + ' (S)'}>
           <Scissors size={14} />
         </button>
         <button className="btn btn-secondary" style={{ padding: '0.3rem 0.5rem' }} onClick={handleZoomOut} title={t('timeline.zoomOut')}>
@@ -234,7 +320,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = React.memo(({
         </button>
       </div>
 
-      <div ref={containerRef} style={{ overflowX: 'auto', overflowY: 'hidden', padding: '0.5rem' }}>
+      <div style={{ overflowX: 'auto', overflowY: 'hidden', padding: '0.5rem' }}>
         <div style={{ minWidth: totalWidth, position: 'relative' }}>
           <div style={{
             position: 'relative',
@@ -277,15 +363,26 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = React.memo(({
                   {track.locked ? <Lock size={10} /> : <Unlock size={10} />}
                 </button>
               </div>
-              <div style={{
-                position: 'relative',
-                flex: 1,
-                height: '50px',
-                background: 'rgba(255,255,255,0.03)',
-                borderRadius: 'var(--radius-sm)',
-                overflow: 'hidden',
-                opacity: track.muted ? 0.4 : 1
-              }}>
+              <div
+                style={{
+                  position: 'relative',
+                  flex: 1,
+                  height: '50px',
+                  background: 'rgba(255,255,255,0.03)',
+                  borderRadius: 'var(--radius-sm)',
+                  overflow: 'hidden',
+                  opacity: track.muted ? 0.4 : 1,
+                  cursor: track.locked ? 'not-allowed' : 'text',
+                }}
+                onMouseDown={(e) => {
+                  // 点击轨道空白处：定位播放头 + 取消选中
+                  if (e.target === e.currentTarget) {
+                    handleTrackClick(e, track);
+                    setSelectedClipId(null);
+                    onClipSelect?.(null);
+                  }
+                }}
+              >
                 {track.clips.map(clip => (
                   <ClipView
                     key={clip.id}
@@ -293,10 +390,10 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = React.memo(({
                     pxPerSecond={pxPerSecond}
                     selected={selectedClipId === clip.id}
                     onMouseDown={(e) => handleClipMouseDown(e, clip)}
-                    onResizeStart={() => { /* future: handle resize */ }}
-                    onTransitionChange={(tr) => setTransition(clip.id, tr)}
-                    onRemove={() => removeClip(clip.id)}
-                    onResize={(newDuration) => updateClipDuration(clip.id, newDuration)}
+                    onResize={(newDuration) => handleClipResize(clip.id, newDuration)}
+                    onTrimLeft={(deltaMs) => handleClipTrimLeft(clip.id, deltaMs)}
+                    onTransitionChange={(tr) => handleSetTransition(clip.id, tr)}
+                    onRemove={() => handleRemoveClip(clip.id)}
                   />
                 ))}
               </div>
@@ -326,10 +423,11 @@ interface ClipViewProps {
   pxPerSecond: number;
   selected: boolean;
   onMouseDown: (e: React.MouseEvent) => void;
-  onResizeStart: () => void;
   onResize: (newDuration: number) => void;
+  /** 左边缘裁切：deltaMs>0 缩短左侧，<0 向左扩展 */
+  onTrimLeft: (deltaMs: number) => void;
   onRemove: () => void;
-  onTransitionChange: (transition: TransitionType) => void;
+  onTransitionChange: (transition: TransitionType | 'none') => void;
 }
 
 const ClipView: React.FC<ClipViewProps> = ({
@@ -338,12 +436,17 @@ const ClipView: React.FC<ClipViewProps> = ({
   selected,
   onMouseDown,
   onResize,
-  onRemove
+  onTrimLeft,
+  onRemove,
 }) => {
   const left = (clip.startTime / 1000) * pxPerSecond;
   const width = (clip.duration / 1000) * pxPerSecond;
+  // 右边缘 resize
   const [resizing, setResizing] = useState(false);
   const [resizeStart, setResizeStart] = useState({ x: 0, duration: 0 });
+  // 左边缘 trim
+  const [trimming, setTrimming] = useState(false);
+  const [trimStart, setTrimStart] = useState({ x: 0 });
 
   const colorByType: Record<string, string> = {
     video: 'rgba(99,102,241,0.6)',
@@ -374,6 +477,33 @@ const ClipView: React.FC<ClipViewProps> = ({
       window.removeEventListener('mouseup', handleMouseUp);
     };
   }, [resizing, resizeStart, pxPerSecond, onResize]);
+
+  const handleTrimMouseDown = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setTrimming(true);
+    setTrimStart({ x: e.clientX });
+  };
+
+  useEffect(() => {
+    if (!trimming) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      const deltaPx = e.clientX - trimStart.x;
+      const deltaMs = (deltaPx / pxPerSecond) * 1000;
+      // 限制：trim 后时长不得低于 100ms
+      const maxDeltaMs = clip.duration - 100;
+      const clamped = Math.max(-Infinity, Math.min(deltaMs, maxDeltaMs));
+      onTrimLeft(clamped);
+      // 重置起点，使后续 delta 基于当前帧（增量式 trim）
+      setTrimStart({ x: e.clientX });
+    };
+    const handleMouseUp = () => setTrimming(false);
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [trimming, trimStart, pxPerSecond, onTrimLeft, clip.duration]);
 
   return (
     <div
@@ -407,6 +537,20 @@ const ClipView: React.FC<ClipViewProps> = ({
           ↪ {clip.transition}
         </span>
       )}
+      {/* 左边缘 trim 手柄 */}
+      <div
+        onMouseDown={handleTrimMouseDown}
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          width: '6px',
+          height: '100%',
+          cursor: 'ew-resize',
+          background: selected ? 'rgba(251,191,36,0.4)' : 'rgba(0,0,0,0.3)',
+        }}
+      />
+      {/* 右边缘 resize 手柄 */}
       <div
         onMouseDown={handleResizeMouseDown}
         style={{
@@ -416,7 +560,7 @@ const ClipView: React.FC<ClipViewProps> = ({
           width: '6px',
           height: '100%',
           cursor: 'ew-resize',
-          background: 'rgba(0,0,0,0.3)'
+          background: selected ? 'rgba(251,191,36,0.4)' : 'rgba(0,0,0,0.3)'
         }}
       />
     </div>

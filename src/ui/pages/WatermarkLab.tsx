@@ -386,7 +386,7 @@ const PdfWatermarkPanel: React.FC = () => {
     reset();
     // 渲染第一页作为预览
     try {
-      // @ts-ignore - CDN 动态导入，无类型声明
+      // @ts-expect-error - CDN 动态导入，无类型声明
       const pdfjs = await import(/* @vite-ignore */ 'https://unpkg.com/pdfjs-dist@4.8.69/build/pdf.min.mjs');
       pdfjs.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@4.8.69/build/pdf.worker.min.mjs';
       const buf = await f.arrayBuffer();
@@ -406,7 +406,7 @@ const PdfWatermarkPanel: React.FC = () => {
       const ctx = canvas.getContext('2d')!;
       await page.render({ canvasContext: ctx, viewport }).promise;
       setFirstPageUrl(canvas.toDataURL('image/png'));
-    } catch (e) {
+    } catch (_e) {
       showToast('error', 'PDF 预览失败');
     }
   };
@@ -431,7 +431,7 @@ const PdfWatermarkPanel: React.FC = () => {
       {!file ? (
         <div
           className="watermark-upload-zone"
-          onDrop={(e) => { e.preventDefault(); e.dataTransfer.files[0] && handleFileSelect(e.dataTransfer.files[0]); }}
+          onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files[0]) handleFileSelect(e.dataTransfer.files[0]); }}
           onDragOver={(e) => e.preventDefault()}
           onClick={() => fileInputRef.current?.click()}
         >
@@ -600,7 +600,7 @@ const VideoWatermarkPanel: React.FC = () => {
       {!file ? (
         <div
           className="watermark-upload-zone"
-          onDrop={(e) => { e.preventDefault(); e.dataTransfer.files[0] && handleFileSelect(e.dataTransfer.files[0]); }}
+          onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files[0]) handleFileSelect(e.dataTransfer.files[0]); }}
           onDragOver={(e) => e.preventDefault()}
           onClick={() => fileInputRef.current?.click()}
         >

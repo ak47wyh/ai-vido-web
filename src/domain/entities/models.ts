@@ -149,6 +149,7 @@ export type SavedImageSource = 'lab' | 'pipeline' | 'character' | 'background';
 export type SavedVoiceSource = 'lab' | 'clone' | 'pipeline';
 export type PromptCategory = 'image' | 'voice' | 'story' | 'scene' | 'narration' | 'other';
 export type SavedPromptSource = 'lab' | 'pipeline' | 'manual';
+export type SavedVideoSource = 'lab' | 'pipeline' | 'editor' | 'import';
 
 export interface SavedImage {
   id: string;
@@ -188,6 +189,31 @@ export interface SavedPrompt {
   category: PromptCategory;
   tags: string[];
   sourceType: SavedPromptSource;
+  createdAt: number;
+}
+
+/**
+ * 已保存视频资产（剪辑渲染产物 / 用户导入视频统一入口）。
+ *
+ * 二进制走 OPFS（video/ 目录），元数据进 Dexie savedVideos 表。
+ * blobKey 指向 OPFS 路径，如 `video/abc123.mp4`。
+ */
+export interface SavedVideo {
+  id: string;
+  spaceId: string;
+  name: string;
+  /** 视频时长（秒） */
+  durationSec: number;
+  width?: number;
+  height?: number;
+  mimeType: string;
+  /** OPFS 存储路径 */
+  blobKey: string;
+  /** 缩略图 OPFS 路径（可选） */
+  thumbnailBlobKey?: string;
+  tags: string[];
+  sourceType: SavedVideoSource;
+  sourceId?: string;
   createdAt: number;
 }
 

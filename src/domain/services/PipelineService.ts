@@ -508,6 +508,12 @@ export class PipelineService {
 
   /**
    * 业务闭环核心：将故事分镜、视频、音频通过 FFmpeg 拼接为成片
+   *
+   * PRD §10：接入真实后期处理：
+   * - 段间应用 fade 转场（offsetSec = 前段时长 - 0.5s）
+   * - 旁白 / BGM 优先从 OPFS 读取（narrationAudioStoragePath / bgmStoragePath），降级到远程 URL
+   * - 字幕：用 segment.content 作为字幕文本，按时序生成 SRT 并烧录
+   * - 真实时长：累加各段视频时长（扣除转场重叠）
    */
   async assembleFinalVideo(
     storyId: string,
@@ -522,7 +528,12 @@ export class PipelineService {
 
     if (segments.length === 0) throw new Error('No segments found for this story');
 
-    const mergedClips: Blob[] = [];
+    const TRANSITION_DUR_SEC = 0.5;
+    const fileStorage = typeof this.deps.fileStorage === 'function' ? this.deps.fileStorage() : this.deps.fileStorage;
+
+    // 收集每段的视频 Blob + 音频 Blob + 时长 + 字幕文本
+    interface SegmentClip { video: Blob; audio?: Blob; durationSec: number; subtitleText: string; startSec: number; }
+    const segmentClips: SegmentClip[] = [];
     let processedCount = 0;
 
     if (!this.deps.postProcess.isFFmpegLoaded()) {
@@ -536,35 +547,136 @@ export class PipelineService {
         throw new Error(`分镜 ${seg.sequenceOrder + 1} 的视频未生成`);
       }
 
-      onProgress?.(10 + Math.round((processedCount / segments.length) * 40), `正在下载分镜 ${seg.sequenceOrder + 1} 视频...`);
-      const videoRes = await fetch(task.videoUrl);
-      const videoBlob = await videoRes.blob();
+      onProgress?.(10 + Math.round((processedCount / segments.length) * 30), `正在下载分镜 ${seg.sequenceOrder + 1} 视频...`);
 
-      let finalClip = videoBlob;
+      // 视频优先 OPFS，降级远程 URL
+      let videoBlob: Blob;
+      if (task.videoStoragePath) {
+        const opfsBlob = await fileStorage.getBlob(task.videoStoragePath);
+        if (opfsBlob) videoBlob = opfsBlob;
+        else {
+          const res = await fetch(task.videoUrl);
+          videoBlob = await res.blob();
+        }
+      } else {
+        const res = await fetch(task.videoUrl);
+        videoBlob = await res.blob();
+      }
 
-      const audioUrl = narrationUrls[seg.id] || seg.bgmAudioUrl;
-      if (audioUrl) {
-        onProgress?.(10 + Math.round((processedCount / segments.length) * 40), `正在合并分镜 ${seg.sequenceOrder + 1} 音频...`);
-        const audioRes = await fetch(audioUrl);
-        const audioBlob = await audioRes.blob();
+      // 音频：旁白优先（narrationUrls 或 narrationAudioStoragePath），其次 BGM
+      let audioBlob: Blob | undefined;
+      const narrationUrl = narrationUrls[seg.id];
+      if (narrationUrl) {
         try {
-          finalClip = await this.deps.postProcess.mergeVideoAudio(videoBlob, audioBlob);
+          const audioRes = await fetch(narrationUrl);
+          audioBlob = await audioRes.blob();
         } catch (e) {
-          this.logger.warn('audio merge failed', {
-            service: 'PipelineService',
-            method: 'assembleFinalVideo',
-            segmentId: seg.id,
-            error: e instanceof Error ? e.message : String(e),
+          this.logger.warn('narration fetch failed', {
+            service: 'PipelineService', method: 'assembleFinalVideo',
+            segmentId: seg.id, error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      } else if (seg.narrationAudioStoragePath) {
+        audioBlob = await fileStorage.getBlob(seg.narrationAudioStoragePath) ?? undefined;
+      }
+      // BGM 作为辅助混音
+      let bgmBlob: Blob | undefined;
+      if (seg.bgmStoragePath) {
+        bgmBlob = await fileStorage.getBlob(seg.bgmStoragePath) ?? undefined;
+      } else if (seg.bgmAudioUrl) {
+        try {
+          const bgmRes = await fetch(seg.bgmAudioUrl);
+          bgmBlob = await bgmRes.blob();
+        } catch (e) {
+          this.logger.warn('bgm fetch failed', {
+            service: 'PipelineService', method: 'assembleFinalVideo',
+            segmentId: seg.id, error: e instanceof Error ? e.message : String(e),
           });
         }
       }
 
-      mergedClips.push(finalClip);
+      // 音频混音：旁白 + BGM
+      let finalAudio: Blob | undefined;
+      if (audioBlob && bgmBlob) {
+        try {
+          finalAudio = await this.deps.postProcess.mixBGM(audioBlob, bgmBlob, 0.3);
+        } catch (e) {
+          this.logger.warn('mixBGM failed, fallback to narration only', {
+            service: 'PipelineService', method: 'assembleFinalVideo',
+            segmentId: seg.id, error: e instanceof Error ? e.message : String(e),
+          });
+          finalAudio = audioBlob;
+        }
+      } else {
+        finalAudio = audioBlob ?? bgmBlob;
+      }
+
+      // 视频 + 音频 merge
+      let finalClip = videoBlob;
+      if (finalAudio) {
+        onProgress?.(10 + Math.round((processedCount / segments.length) * 30), `正在合并分镜 ${seg.sequenceOrder + 1} 音频...`);
+        try {
+          finalClip = await this.deps.postProcess.mergeVideoAudio(videoBlob, finalAudio);
+        } catch (e) {
+          this.logger.warn('audio merge failed', {
+            service: 'PipelineService', method: 'assembleFinalVideo',
+            segmentId: seg.id, error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+
+      segmentClips.push({
+        video: finalClip,
+        durationSec: task.duration ?? 6,
+        subtitleText: seg.content?.trim() ?? '',
+        startSec: 0, // 后面计算
+      });
       processedCount++;
     }
 
-    onProgress?.(60, '正在拼接所有分镜...');
-    const finalVideoBlob = await this.deps.postProcess.concatClips(mergedClips);
+    // 段间应用 fade 转场，并累加真实时长
+    onProgress?.(55, '正在应用段间转场...');
+    let finalVideoBlob: Blob = segmentClips[0].video;
+    let cursorSec = segmentClips[0].durationSec;
+    segmentClips[0].startSec = 0;
+
+    for (let i = 1; i < segmentClips.length; i++) {
+      const prev = segmentClips[i - 1];
+      const cur = segmentClips[i];
+      // offset = 前段时长 - 转场时长（修复原 offset 硬编码 3s 的 bug）
+      const offsetSec = Math.max(0, prev.durationSec - TRANSITION_DUR_SEC);
+      try {
+        finalVideoBlob = await this.deps.postProcess.applyTransition(
+          finalVideoBlob, cur.video, 'fade', TRANSITION_DUR_SEC, offsetSec,
+        );
+      } catch (e) {
+        this.logger.warn('transition failed, fallback to concat', {
+          service: 'PipelineService', method: 'assembleFinalVideo',
+          error: e instanceof Error ? e.message : String(e),
+        });
+        finalVideoBlob = await this.deps.postProcess.concatClips([finalVideoBlob, cur.video]);
+      }
+      // 转场重叠后实际推进 = 当前段时长 - 转场时长
+      cur.startSec = cursorSec - TRANSITION_DUR_SEC;
+      cursorSec = cur.startSec + cur.durationSec;
+    }
+    const realDurationSec = Math.max(1, cursorSec);
+
+    // 烧录字幕（基于 segment.content + 时序）
+    onProgress?.(75, '正在烧录字幕...');
+    let hasSubtitles = false;
+    const srt = this.buildSrtFromSegments(segmentClips);
+    if (srt) {
+      try {
+        finalVideoBlob = await this.deps.postProcess.burnSubtitles(finalVideoBlob, srt);
+        hasSubtitles = true;
+      } catch (e) {
+        this.logger.warn('burn subtitles failed', {
+          service: 'PipelineService', method: 'assembleFinalVideo',
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
 
     onProgress?.(90, '正在生成最终成片...');
 
@@ -599,15 +711,35 @@ export class PipelineService {
       pipelineTaskId: '',
       videoBlob: finalVideoBlob!,
       thumbnailUrl,
-      duration: segments.length * 6,
+      duration: Math.round(realDurationSec * 1000),
       size: finalVideoBlob!.size,
-      hasSubtitles: false,
+      hasSubtitles,
       createdAt: Date.now(),
     };
     await this.deps.finalCutRepo.save(finalCut);
 
     onProgress?.(100, '成片完成');
     return finalCut;
+  }
+
+  /** 从分镜内容生成 SRT 字幕（按时序累加） */
+  private buildSrtFromSegments(clips: Array<{ subtitleText: string; startSec: number; durationSec: number }>): string {
+    const entries = clips
+      .filter(c => c.subtitleText && c.subtitleText.trim())
+      .map((c, i) => {
+        const start = this.formatSrtTime(c.startSec);
+        const end = this.formatSrtTime(c.startSec + c.durationSec);
+        return `${i + 1}\n${start} --> ${end}\n${c.subtitleText}`;
+      });
+    return entries.join('\n\n');
+  }
+
+  private formatSrtTime(sec: number): string {
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = Math.floor(sec % 60);
+    const ms = Math.floor((sec - Math.floor(sec)) * 1000);
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')},${String(ms).padStart(3, '0')}`;
   }
 
   private async findCharacterForSegment(seg: StorySegment): Promise<Character | null> {

@@ -35,8 +35,8 @@ export class PostProcessService {
     return this.ffmpegPort.mixAudio(voice, bgm, config);
   }
 
-  async applyTransition(clip1: Blob, clip2: Blob, transition: TransitionType, duration = 0.5): Promise<Blob> {
-    return this.ffmpegPort.applyTransition(clip1, clip2, transition, duration);
+  async applyTransition(clip1: Blob, clip2: Blob, transition: TransitionType, duration = 0.5, offsetSec?: number): Promise<Blob> {
+    return this.ffmpegPort.applyTransition(clip1, clip2, transition, duration, offsetSec);
   }
 
   async concatClips(clips: Blob[]): Promise<Blob> {

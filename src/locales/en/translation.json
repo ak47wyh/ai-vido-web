@@ -10,13 +10,15 @@
     "characters": "Characters",
     "backgrounds": "Backgrounds",
     "workbench": "Story Workbench",
+    "editor": "Video Editor",
     "spaces": "Story Spaces",
     "settings": "Settings",
     "export": "Export Center",
     "imageLab": "Image Generation",
     "videoLab": "Video Generation",
     "voiceLab": "Voice & Dubbing",
-    "musicLab": "Music Generation"
+    "musicLab": "Music Generation",
+    "enhanceLab": "Enhancement"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -263,7 +265,8 @@
     "editResetToDraft": "Story content modified, status reset to draft. Re-split required.",
     "generateDraftImage": "Generate Image",
     "generatingDraftImage": "Generating...",
-    "draftImageGenerated": "Image generated"
+    "draftImageGenerated": "Image generated",
+    "openEditor": "Edit"
   },
   "space": {
     "title": "Story Space Management",
@@ -529,6 +532,61 @@
     "lock": "Lock",
     "unlock": "Unlock"
   },
+  "editor": {
+    "title": "Video Editor",
+    "selectStory": "Select a story…",
+    "selectStoryHint": "Please select a story in the toolbar to start editing",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "save": "Save",
+    "saveFailed": "Save failed",
+    "rebuild": "Rebuild timeline from segments",
+    "rebuilt": "Timeline rebuilt from segments",
+    "rebuildFailed": "Rebuild failed",
+    "noTargetTrack": "No available track",
+    "media": {
+      "videos": "Videos",
+      "finalCuts": "Final Cuts",
+      "voices": "Voices",
+      "finalCutLabel": "Final Cut",
+      "noVideos": "No video assets",
+      "noFinalCuts": "No final cuts",
+      "noVoices": "No voice assets"
+    },
+    "preview": {
+      "empty": "Select a timeline clip to preview",
+      "loadFailed": "Preview load failed"
+    },
+    "inspector": {
+      "title": "Clip Properties",
+      "empty": "Select a clip to edit properties",
+      "startTime": "Start Time (s)",
+      "duration": "Duration (s)",
+      "inPoint": "In Point (s)",
+      "outPoint": "Out Point (s)",
+      "transition": "Transition",
+      "text": "Subtitle Text",
+      "textPlaceholder": "Enter subtitle text...",
+      "source": "Source",
+      "remove": "Remove"
+    },
+    "export": {
+      "title": "Export Video",
+      "resolution": "Resolution",
+      "resolutionOriginal": "Original",
+      "quality": "Quality",
+      "qualityHigh": "High (large file)",
+      "qualityMedium": "Medium (recommended)",
+      "qualityLow": "Low (small file)",
+      "burnSubtitles": "Burn subtitle track",
+      "start": "Start Render",
+      "starting": "Initializing",
+      "success": "Render complete",
+      "failed": "Render failed",
+      "retry": "Retry",
+      "download": "Download Video"
+    }
+  },
   "export": {
     "title": "Export Center",
     "subtitle": "Manage your final cuts and downloads",
@@ -553,7 +611,8 @@
     "closePreview": "Close preview",
     "withSubs": "With subtitles",
     "noSubs": "No subtitles",
-    "untitledStory": "Untitled story"
+    "untitledStory": "Untitled story",
+    "openEditor": "Edit in Video Editor"
   },
   "agent": {
     "title": "AI Assistant",
