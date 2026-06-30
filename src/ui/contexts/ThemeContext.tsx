@@ -1,55 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
-
-export type ThemeId = 'dark' | 'light' | 'blue';
-
-export interface ThemeConfig {
-  id: ThemeId;
-  name: string;
-  icon: string;
-  previewColors: {
-    primary: string;
-    secondary: string;
-    background: string;
-    surface: string;
-  };
-}
-
-export const THEMES: ThemeConfig[] = [
-  {
-    id: 'dark',
-    name: '深邃暗夜',
-    icon: '🌙',
-    previewColors: {
-      primary: '#6366f1',
-      secondary: '#ec4899',
-      background: '#0a0a0f',
-      surface: 'rgba(255,255,255,0.05)',
-    },
-  },
-  {
-    id: 'light',
-    name: '简约日光',
-    icon: '☀️',
-    previewColors: {
-      primary: '#6366f1',
-      secondary: '#ec4899',
-      background: '#f8fafc',
-      surface: 'rgba(255,255,255,0.85)',
-    },
-  },
-  {
-    id: 'blue',
-    name: '静谧蓝海',
-    icon: '🌊',
-    previewColors: {
-      primary: '#3b82f6',
-      secondary: '#06b6d4',
-      background: '#0c1929',
-      surface: 'rgba(30,58,95,0.6)',
-    },
-  },
-];
+import { THEMES, type ThemeId, type ThemeConfig } from './theme-types';
 
 interface ThemeContextValue {
   currentTheme: ThemeId;
@@ -90,6 +41,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// useTheme 不是组件，但 react-refresh 规则允许导出 hook：将其拆到单独文件会增加调用方负担，
+// 这里使用 eslint-disable 局部豁免（仅此一行），保留单文件聚合 API。
+// eslint-disable-next-line react-refresh/only-export-components
 export function useTheme(): ThemeContextValue {
   const context = useContext(ThemeContext);
   if (!context) {

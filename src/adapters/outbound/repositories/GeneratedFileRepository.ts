@@ -17,7 +17,7 @@ export class GeneratedFileRepository implements IGeneratedFileRepository {
   }
 
   async query(params: FileStorageQuery): Promise<GeneratedFile[]> {
-    let collection = this.table.toCollection();
+    const collection = this.table.toCollection();
 
     // 按条件过滤（Dexie 复合查询使用 filter）
     const results = await collection.filter(file => {

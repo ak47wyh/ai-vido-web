@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { assetLibraryService } from '../../dependencies';
 import type { SavedImage, SavedVoice, SavedPrompt } from '../../domain/entities/models';
 import type { AssetQueryParams } from '../../domain/ports/AssetLibraryPorts';
@@ -10,24 +10,30 @@ export function useSavedImages(spaceId: string, params?: Omit<AssetQueryParams, 
   const [error, setError] = useState<string | null>(null);
   const paramsKey = JSON.stringify(params);
 
+  // 用 ref 保存最新 params，使 refetch 引用稳定但始终读取最新值
+  const paramsRef = useRef(params);
+  useEffect(() => {
+    paramsRef.current = params;
+  });
+
   const refetch = useCallback(async () => {
     if (!spaceId) return;
     setLoading(true);
     setError(null);
     try {
-      const results = await assetLibraryService.queryImages({ spaceId, ...params });
+      const results = await assetLibraryService.queryImages({ spaceId, ...paramsRef.current });
       setImages(results);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load images');
     } finally {
       setLoading(false);
     }
-  }, [spaceId, paramsKey]);
+  }, [spaceId]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     refetch();
-  }, [refetch]);
+  }, [refetch, paramsKey]);
 
   return { images, loading, error, refetch };
 }
@@ -39,24 +45,29 @@ export function useSavedVoices(spaceId: string, params?: Omit<AssetQueryParams, 
   const [error, setError] = useState<string | null>(null);
   const paramsKey = JSON.stringify(params);
 
+  const paramsRef = useRef(params);
+  useEffect(() => {
+    paramsRef.current = params;
+  });
+
   const refetch = useCallback(async () => {
     if (!spaceId) return;
     setLoading(true);
     setError(null);
     try {
-      const results = await assetLibraryService.queryVoices({ spaceId, ...params });
+      const results = await assetLibraryService.queryVoices({ spaceId, ...paramsRef.current });
       setVoices(results);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load voices');
     } finally {
       setLoading(false);
     }
-  }, [spaceId, paramsKey]);
+  }, [spaceId]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     refetch();
-  }, [refetch]);
+  }, [refetch, paramsKey]);
 
   return { voices, loading, error, refetch };
 }
@@ -68,24 +79,29 @@ export function useSavedPrompts(spaceId: string, params?: Omit<AssetQueryParams,
   const [error, setError] = useState<string | null>(null);
   const paramsKey = JSON.stringify(params);
 
+  const paramsRef = useRef(params);
+  useEffect(() => {
+    paramsRef.current = params;
+  });
+
   const refetch = useCallback(async () => {
     if (!spaceId) return;
     setLoading(true);
     setError(null);
     try {
-      const results = await assetLibraryService.queryPrompts({ spaceId, ...params });
+      const results = await assetLibraryService.queryPrompts({ spaceId, ...paramsRef.current });
       setPrompts(results);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load prompts');
     } finally {
       setLoading(false);
     }
-  }, [spaceId, paramsKey]);
+  }, [spaceId]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     refetch();
-  }, [refetch]);
+  }, [refetch, paramsKey]);
 
   return { prompts, loading, error, refetch };
 }

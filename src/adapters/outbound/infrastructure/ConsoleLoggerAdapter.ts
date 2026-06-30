@@ -23,7 +23,7 @@ const LEVEL_PREFIX: Record<LogLevel, string> = {
 const SENSITIVE_KEY_RE = /key|token|secret|password|authorization|auth|cookie|credential|jwt/i;
 
 /** 长字符串凭证模式（Bearer / sk- / ghp_ 等） */
-const SENSITIVE_VALUE_RE = /(Bearer\s+)?[A-Za-z0-9_\-]{20,}/g;
+const SENSITIVE_VALUE_RE = /(Bearer\s+)?[A-Za-z0-9_-]{20,}/g;
 
 /** 递归脱敏对象：按 key 名识别 + 嵌套处理 */
 function redactObject(value: unknown, skipKeys: readonly string[] = [], depth = 0): unknown {

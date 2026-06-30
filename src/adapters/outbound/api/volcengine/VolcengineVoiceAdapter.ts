@@ -68,7 +68,6 @@ export class VolcengineVoiceAdapter implements IVoicePort {
     };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   synthesizeSpeechStream(_context: T2ASyncContext, _callbacks: T2AStreamCallbacks): T2AStreamHandle {
     // 流式 TTS（火山引擎）需要 WebSocket，暂不实现
     return { abort: () => {} };
@@ -122,17 +121,14 @@ export class VolcengineVoiceAdapter implements IVoicePort {
 
   // ==================== 不支持的能力 ====================
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async uploadFile(_file: File, _purpose: 'voice_clone' | 'prompt_audio' | 't2a_async_input'): Promise<FileUploadResult> {
     throw new Error('VolcengineVoiceAdapter: voice_clone/prompt_audio upload not supported by Doubao TTS');
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async cloneVoice(_context: VoiceCloneContext): Promise<VoiceCloneResult> {
     throw new Error('VolcengineVoiceAdapter: voice cloning is not supported by Doubao TTS');
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   getFileUrl(_fileId: string): string {
     throw new Error('VolcengineVoiceAdapter: file URL retrieval not supported by Doubao TTS');
   }
@@ -142,12 +138,10 @@ export class VolcengineVoiceAdapter implements IVoicePort {
     return audioUrl;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async designVoice(_prompt: string, _previewText: string, _voiceId?: string, _aigcWatermark?: boolean): Promise<VoiceDesignResult> {
     throw new Error('VolcengineVoiceAdapter: voice design not supported by Doubao TTS');
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async getAvailableVoices(_voiceType: VoiceType): Promise<VoiceListResult> {
     // 提供预定义的几个常用声音
     return {
@@ -161,7 +155,6 @@ export class VolcengineVoiceAdapter implements IVoicePort {
     };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async deleteVoice(_voiceType: 'voice_cloning' | 'voice_generation', _voiceId: string): Promise<void> {
     throw new Error('VolcengineVoiceAdapter: voice deletion not supported by Doubao TTS');
   }

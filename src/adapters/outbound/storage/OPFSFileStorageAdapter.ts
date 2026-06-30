@@ -120,7 +120,7 @@ export class OPFSFileStorageAdapter implements IFileStoragePort {
       const fileType = this.dirToFileType(dirName);
       try {
         const dirHandle = await this.rootDir!.getDirectoryHandle(dirName);
-        for await (const entry of (dirHandle as any).values()) {
+        for await (const entry of dirHandle.values()) {
           if (entry.kind === 'file') {
             const file = await (entry as FileSystemFileHandle).getFile();
             stats.byType[fileType].count++;
@@ -146,7 +146,7 @@ export class OPFSFileStorageAdapter implements IFileStoragePort {
     for (const dirName of OPFSFileStorageAdapter.DIRECTORIES) {
       try {
         const dirHandle = await this.rootDir!.getDirectoryHandle(dirName);
-        for await (const entry of (dirHandle as any).values()) {
+        for await (const entry of dirHandle.values()) {
           if (entry.kind === 'file') {
             const file = await (entry as FileSystemFileHandle).getFile();
             allFiles.push({
@@ -192,7 +192,7 @@ export class OPFSFileStorageAdapter implements IFileStoragePort {
       try {
         const dirHandle = await this.rootDir!.getDirectoryHandle(dirName);
         const entriesToDelete: string[] = [];
-        for await (const entry of (dirHandle as any).values()) {
+        for await (const entry of dirHandle.values()) {
           entriesToDelete.push(entry.name);
         }
         for (const name of entriesToDelete) {

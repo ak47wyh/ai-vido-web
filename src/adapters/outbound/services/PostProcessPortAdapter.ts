@@ -44,7 +44,6 @@ export class PostProcessPortAdapter implements IPostProcessPort {
     return this.inner.applyTransition(clip1, clip2, transition, duration);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async exportFinalVideo(_storyId: string, _options: ExportOptions): Promise<Blob> {
     // PostProcessService 暂未实现完整 story → 视频 编排
     // 留作占位，调用方可自行编排

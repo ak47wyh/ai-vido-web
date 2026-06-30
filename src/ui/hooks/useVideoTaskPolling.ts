@@ -180,7 +180,7 @@ export function useSingleVideoTaskPolling(
       cancelled = true;
       clearInterval(interval);
     };
-  }, [task?.id, task?.externalTaskId, task?.status, intervalMs, enabled]);
+  }, [task, intervalMs, enabled]);
 
   return status;
 }
