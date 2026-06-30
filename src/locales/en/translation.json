@@ -551,7 +551,27 @@
       "finalCutLabel": "Final Cut",
       "noVideos": "No video assets",
       "noFinalCuts": "No final cuts",
-      "noVoices": "No voice assets"
+      "noVoices": "No voice assets",
+      "import": {
+        "button": "Import Video",
+        "dropActive": "Release to upload",
+        "uploading": "Uploading: {{name}}",
+        "success": "Import succeeded",
+        "failed": "Upload failed",
+        "retry": "Retry",
+        "unsupportedFormat": "Unsupported format. Only MP4 / WebM / MOV are supported",
+        "tooLarge": "File too large ({{size}}MB), max 500MB",
+        "insufficientSpace": "Insufficient storage, please clean up the asset library first",
+        "metadataFailed": "Failed to read video metadata, the file may be corrupted",
+        "codecWarning": "This video codec may not preview in browser, but can still be placed on timeline and rendered"
+      },
+      "delete": {
+        "confirmTitle": "Delete Video",
+        "confirmWithRef": "This video is referenced {{count}} time(s) in the timeline. Deleting it will leave empty clips. Continue?",
+        "confirmNoRef": "This cannot be undone. Are you sure to delete this video?",
+        "success": "Deleted",
+        "failed": "Delete failed: {{reason}}"
+      }
     },
     "preview": {
       "empty": "Select a timeline clip to preview",

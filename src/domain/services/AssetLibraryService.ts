@@ -373,6 +373,7 @@ export class AssetLibraryService {
    * 保存视频到素材库（渲染产物 / 用户导入统一入口）。
    * 二进制写入 OPFS（video/ 目录），元数据进 Dexie savedVideos。
    * durationSec/width/height 由调用方探测后传入（可用 TimelineRenderService.probeDuration）。
+   * thumbnailBlob 可选：若提供则写入 OPFS thumbnails/ 目录并记录 thumbnailBlobKey。
    */
   async saveVideoFromBlob(params: {
     spaceId: string;
@@ -385,15 +386,32 @@ export class AssetLibraryService {
     tags?: string[];
     sourceType: SavedVideoSource;
     sourceId?: string;
+    thumbnailBlob?: Blob;
   }): Promise<SavedVideo> {
     const fileStorage = this.getFileStorage();
     const fileRepo = this.getFileRepo();
     const id = generateId();
-    const ext = (params.mimeType || 'video/mp4').includes('webm') ? 'webm' : 'mp4';
+    // MOV 归到 mp4 容器（FFmpeg 渲染时统一转 mp4）；webm 保留扩展名
+    const mt = params.mimeType || params.blob.type || 'video/mp4';
+    const ext = mt.includes('webm') ? 'webm'
+      : (mt.includes('quicktime') || mt.includes('mov')) ? 'mov'
+      : 'mp4';
     const storagePath = `video/${id}.${ext}`;
-    const mimeType = params.mimeType || params.blob.type || 'video/mp4';
+    const mimeType = mt;
 
     await fileStorage.storeBlob(storagePath, params.blob);
+
+    // 可选缩略图落盘
+    let thumbnailBlobKey: string | undefined;
+    if (params.thumbnailBlob) {
+      thumbnailBlobKey = `thumbnails/video_${id}.png`;
+      try {
+        await fileStorage.storeBlob(thumbnailBlobKey, params.thumbnailBlob);
+      } catch {
+        // 缩略图写入失败不阻塞主流程（PRD §7.1：缩略图非关键）
+        thumbnailBlobKey = undefined;
+      }
+    }
 
     await this.registerFile(fileRepo, {
       id: `file_${id}`,
@@ -417,6 +435,7 @@ export class AssetLibraryService {
       height: params.height,
       mimeType,
       blobKey: storagePath,
+      thumbnailBlobKey,
       tags: params.tags || [],
       sourceType: params.sourceType,
       sourceId: params.sourceId,

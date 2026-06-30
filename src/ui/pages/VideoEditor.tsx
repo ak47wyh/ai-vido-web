@@ -164,7 +164,7 @@ export const VideoEditor: React.FC = () => {
         <AsyncState loading={loading} error={error} onRetry={reload} empty={!timeline}>
           {timeline && currentSpaceId && (
             <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'stretch', minHeight: 500 }}>
-              <MediaPanel spaceId={currentSpaceId} onAddToTimeline={handleAddToTimeline} />
+              <MediaPanel spaceId={currentSpaceId} onAddToTimeline={handleAddToTimeline} timeline={timeline} />
               <PreviewStage
                 timeline={timeline}
                 selectedClip={selectedClip}

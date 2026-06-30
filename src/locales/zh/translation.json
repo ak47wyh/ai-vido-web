@@ -569,7 +569,27 @@
       "finalCutLabel": "成片",
       "noVideos": "暂无视频素材",
       "noFinalCuts": "暂无成片",
-      "noVoices": "暂无语音素材"
+      "noVoices": "暂无语音素材",
+      "import": {
+        "button": "导入视频",
+        "dropActive": "松开以上传",
+        "uploading": "上传中：{{name}}",
+        "success": "导入成功",
+        "failed": "上传失败",
+        "retry": "重试",
+        "unsupportedFormat": "不支持的格式，仅支持 MP4 / WebM / MOV",
+        "tooLarge": "文件过大（{{size}}MB），上限 500MB",
+        "insufficientSpace": "存储空间不足，请先清理素材库",
+        "metadataFailed": "视频元数据读取失败，文件可能已损坏",
+        "codecWarning": "该视频编码可能无法在浏览器预览，但仍可铺轨渲染导出"
+      },
+      "delete": {
+        "confirmTitle": "删除视频",
+        "confirmWithRef": "该视频已被时间线引用 {{count}} 处，删除后时间线对应片段将显示空素材，确认继续？",
+        "confirmNoRef": "删除后无法恢复，确认删除该视频？",
+        "success": "已删除",
+        "failed": "删除失败：{{reason}}"
+      }
     },
     "preview": {
       "empty": "选中时间线片段以预览",
