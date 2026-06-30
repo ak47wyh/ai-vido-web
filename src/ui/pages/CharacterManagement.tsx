@@ -14,6 +14,8 @@ import { SYSTEM_VOICES, VOICES_BY_LANGUAGE, LANGUAGE_LABELS } from '../../domain
 import { getErrorMessage } from '../utils/errorUtils';
 import { AssetPicker } from '../components/AssetPicker';
 import { useAssetPicker } from '../hooks/useAssetPicker';
+import { TextAreaWithCounter } from '../components/TextAreaWithCounter';
+import { InputWithCounter } from '../components/InputWithCounter';
 
 export const CharacterManagement: React.FC = () => {
   const { t } = useTranslation();
@@ -169,13 +171,27 @@ export const CharacterManagement: React.FC = () => {
             <div className="form-section-item">
               <div className="form-group">
                 <label className="form-label">{t('character.nameLabel')}</label>
-                <input className="form-input" value={name} onChange={e => setName(e.target.value)} required placeholder={t('character.namePlaceholder')} />
+                <InputWithCounter
+                  className="form-input"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  required
+                  placeholder={t('character.namePlaceholder')}
+                  maxLength={100}
+                />
               </div>
             </div>
             <div className="form-section-item">
               <div className="form-group">
                 <label className="form-label">{t('character.appearanceLabel')}</label>
-                <textarea className="form-textarea" value={appearance} onChange={e => setAppearance(e.target.value)} placeholder={t('character.appearancePlaceholder')} style={{ minHeight: '60px' }} />
+                <TextAreaWithCounter
+                  className="form-textarea"
+                  value={appearance}
+                  onChange={e => setAppearance(e.target.value)}
+                  placeholder={t('character.appearancePlaceholder')}
+                  style={{ minHeight: '60px' }}
+                  maxLength={1000}
+                />
                 <button type="button" className="btn btn-secondary character-form-refine-btn"
                   disabled={!appearance.trim() || refiningField === 'appearance'}
                   onClick={async () => {
@@ -192,7 +208,14 @@ export const CharacterManagement: React.FC = () => {
             <div className="form-section-item">
               <div className="form-group">
                 <label className="form-label">{t('character.personalityLabel')}</label>
-                <textarea className="form-textarea" value={personality} onChange={e => setPersonality(e.target.value)} placeholder={t('character.personalityPlaceholder')} style={{ minHeight: '60px' }} />
+                <TextAreaWithCounter
+                  className="form-textarea"
+                  value={personality}
+                  onChange={e => setPersonality(e.target.value)}
+                  placeholder={t('character.personalityPlaceholder')}
+                  style={{ minHeight: '60px' }}
+                  maxLength={1000}
+                />
                 <button type="button" className="btn btn-secondary character-form-refine-btn"
                   disabled={!personality.trim() || refiningField === 'personality'}
                   onClick={async () => {
@@ -209,7 +232,14 @@ export const CharacterManagement: React.FC = () => {
             <div className="form-section-item">
               <div className="form-group">
                 <label className="form-label">{t('character.backgroundLabel')}</label>
-                <textarea className="form-textarea" value={characterBackground} onChange={e => setCharacterBackground(e.target.value)} placeholder={t('character.backgroundPlaceholder')} style={{ minHeight: '60px' }} />
+                <TextAreaWithCounter
+                  className="form-textarea"
+                  value={characterBackground}
+                  onChange={e => setCharacterBackground(e.target.value)}
+                  placeholder={t('character.backgroundPlaceholder')}
+                  style={{ minHeight: '60px' }}
+                  maxLength={2000}
+                />
               </div>
             </div>
           </div>

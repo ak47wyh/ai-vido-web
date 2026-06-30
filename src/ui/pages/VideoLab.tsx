@@ -13,6 +13,7 @@ import type { VideoLabTask } from '../components/VideoTaskCard';
 import { LabPageLayout } from '../components/LabPageLayout';
 import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
 import { hasCapability } from '../../domain/services/platformCapabilities';
+import { TextAreaWithCounter } from '../components/TextAreaWithCounter';
 
 type VideoLabTab = 't2v' | 'i2v' | 'fl2v' | 's2v' | 'agent' | 'tasks';
 
@@ -428,17 +429,14 @@ export const VideoLab: React.FC = () => {
         <div className="glass-panel slide-up lab-tab-panel">
           <div>
             <label className="form-label">视频描述 (Prompt)</label>
-            <textarea
-              className="form-input lab-textarea-compact"
+            <TextAreaWithCounter
+              className="lab-textarea-compact"
               rows={4}
               value={t2vPrompt}
               onChange={e => setT2vPrompt(e.target.value)}
               placeholder="描述你想要生成的视频内容，支持 [运镜指令] 语法，例如：一个人拿起一本书 [推进], 然后阅读 [固定]"
               maxLength={2000}
             />
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem' }}>
-              <span className="lab-char-count">{t2vPrompt.length} / 2000</span>
-            </div>
             {MODEL_CONFIG[t2vModel]?.supportsCameraDirective && (
               <CameraDirectivePanel onInsert={d => insertDirective(setT2vPrompt, d)} style={{ marginTop: '0.5rem' }} />
             )}
@@ -477,7 +475,14 @@ export const VideoLab: React.FC = () => {
 
           <div>
             <label className="form-label">视频描述 (可选)</label>
-            <textarea className="form-input" rows={3} value={i2vPrompt} onChange={e => setI2vPrompt(e.target.value)} placeholder="描述视频内容，支持 [运镜指令]" maxLength={2000} />
+            <TextAreaWithCounter
+              className="form-input"
+              rows={3}
+              value={i2vPrompt}
+              onChange={e => setI2vPrompt(e.target.value)}
+              placeholder="描述视频内容，支持 [运镜指令]"
+              maxLength={2000}
+            />
             {MODEL_CONFIG[i2vModel]?.supportsCameraDirective && (
               <CameraDirectivePanel onInsert={d => insertDirective(setI2vPrompt, d)} style={{ marginTop: '0.5rem' }} />
             )}
@@ -536,7 +541,14 @@ export const VideoLab: React.FC = () => {
 
           <div>
             <label className="form-label">视频描述 (可选)</label>
-            <textarea className="form-input" rows={3} value={fl2vPrompt} onChange={e => setFl2vPrompt(e.target.value)} placeholder="描述视频内容，支持 [运镜指令]" maxLength={2000} />
+            <TextAreaWithCounter
+              className="form-input"
+              rows={3}
+              value={fl2vPrompt}
+              onChange={e => setFl2vPrompt(e.target.value)}
+              placeholder="描述视频内容，支持 [运镜指令]"
+              maxLength={2000}
+            />
             <CameraDirectivePanel onInsert={d => insertDirective(setFl2vPrompt, d)} style={{ marginTop: '0.5rem' }} />
           </div>
 
@@ -577,7 +589,14 @@ export const VideoLab: React.FC = () => {
 
           <div>
             <label className="form-label">视频描述 (必填)</label>
-            <textarea className="form-input" rows={3} value={s2vPrompt} onChange={e => setS2vPrompt(e.target.value)} placeholder="描述视频内容" maxLength={2000} />
+            <TextAreaWithCounter
+              className="form-input"
+              rows={3}
+              value={s2vPrompt}
+              onChange={e => setS2vPrompt(e.target.value)}
+              placeholder="描述视频内容"
+              maxLength={2000}
+            />
           </div>
 
           <div className="advanced-content">

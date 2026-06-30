@@ -11,6 +11,7 @@ import { ImageUploadField } from '../components/ImageUploadField';
 import { ImageGallery, type GalleryImage } from '../components/ImageGallery';
 import { ImageAdvancedSettings, type ImageAdvancedSettingsValue } from '../components/ImageAdvancedSettings';
 import { LabPageLayout } from '../components/LabPageLayout';
+import { TextAreaWithCounter } from '../components/TextAreaWithCounter';
 import {
   getCachedMediaBlob,
   triggerNativeDownload,
@@ -354,15 +355,14 @@ export const ImageLab: React.FC = () => {
         <div className="glass-panel slide-up lab-tab-panel">
           <div>
             <label className="form-label">{t('imageLab.prompt', '画面描述 (Prompt)')}</label>
-            <textarea
-              className="form-input lab-textarea-compact"
+            <TextAreaWithCounter
+              className="lab-textarea-compact"
               rows={4}
               placeholder={t('imageLab.promptPlaceholder', '描述您想要生成的画面细节，支持中英文...')}
               value={t2iPrompt}
               onChange={e => setT2iPrompt(e.target.value)}
               maxLength={1500}
             />
-            <div className="lab-char-count">{t2iPrompt.length} / 1500</div>
           </div>
 
           <div className="lab-model-config">
@@ -431,15 +431,14 @@ export const ImageLab: React.FC = () => {
 
           <div>
             <label className="form-label">{t('imageLab.prompt', '画面描述 (Prompt)')}</label>
-            <textarea
-              className="form-input lab-textarea-compact"
+            <TextAreaWithCounter
+              className="lab-textarea-compact"
               rows={4}
               placeholder={t('imageLab.promptPlaceholder', '描述您想要生成的画面细节，支持中英文...')}
               value={i2iPrompt}
               onChange={e => setI2iPrompt(e.target.value)}
               maxLength={1500}
             />
-            <div className="lab-char-count">{i2iPrompt.length} / 1500</div>
           </div>
 
           <div className="lab-model-config">

@@ -10,6 +10,8 @@ import { useSpace } from '../contexts/SpaceContext';
 import { AssetSaveDialog } from '../components/AssetPicker';
 import { AudioPreviewPlayer } from '../components/AudioPreviewPlayer';
 import { LabPageLayout } from '../components/LabPageLayout';
+import { TextAreaWithCounter } from '../components/TextAreaWithCounter';
+import { InputWithCounter } from '../components/InputWithCounter';
 
 type VoiceLabTab = 'tts' | 'clone' | 'design' | 'async' | 'manage';
 
@@ -435,11 +437,12 @@ export const VoiceLab: React.FC = () => {
         <div className="glass-panel slide-up lab-tab-panel">
           <div>
             <label className="form-label">配音文本</label>
-            <textarea
-              className="form-input lab-textarea-compact"
+            <TextAreaWithCounter
+              className="lab-textarea-compact"
               rows={4}
               value={ttsText}
               onChange={e => setTtsText(e.target.value)}
+              maxLength={5000}
             />
             {/* 语气词快捷插入 */}
             <div style={{ display: 'flex', gap: '0.3rem', marginTop: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -587,20 +590,41 @@ export const VoiceLab: React.FC = () => {
               <input id="promptFileInput" type="file" accept="audio/*" style={{ display: 'none' }} onChange={e => e.target.files && setPromptAudioFile(e.target.files[0])} />
             </div>
             {promptAudioFile && (
-              <input className="form-input" style={{ marginTop: '0.5rem' }} placeholder="示例音频对应文本（可选）" value={promptText} onChange={e => setPromptText(e.target.value)} />
+              <InputWithCounter
+                className="form-input"
+                style={{ marginTop: '0.5rem' }}
+                placeholder="示例音频对应文本（可选）"
+                value={promptText}
+                onChange={e => setPromptText(e.target.value)}
+                maxLength={500}
+              />
             )}
           </div>
 
           <div>
             <div style={{ flex: 1, minWidth: '200px' }}>
               <label className="form-label">音色名称</label>
-              <input type="text" className="form-input" placeholder="给这个新声音起个名字" value={cloneName} onChange={e => setCloneName(e.target.value)} />
+              <InputWithCounter
+                type="text"
+                className="form-input"
+                placeholder="给这个新声音起个名字"
+                value={cloneName}
+                onChange={e => setCloneName(e.target.value)}
+                maxLength={100}
+              />
             </div>
           </div>
 
           <div>
             <label className="form-label">试听文本</label>
-            <textarea className="form-input" rows={3} value={cloneText} onChange={e => setCloneText(e.target.value)} placeholder="将用克隆出的声音朗读这段话" />
+            <TextAreaWithCounter
+              className="form-input"
+              rows={3}
+              value={cloneText}
+              onChange={e => setCloneText(e.target.value)}
+              placeholder="将用克隆出的声音朗读这段话"
+              maxLength={500}
+            />
           </div>
 
           {/* 高级克隆选项 */}
