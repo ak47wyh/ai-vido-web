@@ -18,17 +18,6 @@ import axios from 'axios';
  */
 export class MiniMaxImageAdapter implements IImageGeneratorPort {
 
-  /**
-   * 将 OSS 签名 URL 改写为本地代理 URL，绕过浏览器 CORS 限制和 OSS 502 瞬时故障。
-   * 开发环境下通过 vite ossProxyPlugin 在 Node 端下载（无 CORS 限制）。
-   * 非开发环境（生产构建）直接返回原始 URL。
-   */
-  private rewriteOssUrl(url: string): string {
-    if (typeof import.meta === 'undefined' || !import.meta.env?.DEV) return url;
-    if (!url.startsWith('http')) return url;
-    return `/__oss-proxy?url=${encodeURIComponent(url)}`;
-  }
-
   async generateImage(context: ImageGenerationContext): Promise<ImageGenerationResult> {
     const config = ApiConfigStore.load();
 
@@ -151,9 +140,7 @@ export class MiniMaxImageAdapter implements IImageGeneratorPort {
       if (!imageUrls || imageUrls.length === 0) {
         throw new Error('MiniMax Image API did not return any image URLs.');
       }
-      // OSS 签名链接有 CORS 限制 + 502 瞬时故障，改写为本地代理 URL
-      const proxiedUrls = imageUrls.map(u => this.rewriteOssUrl(u));
-      return { imageUrls: proxiedUrls, metadata };
+      return { imageUrls, metadata };
     }
 
     // base64 format

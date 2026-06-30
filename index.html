@@ -20,6 +20,33 @@
       }
     })();
   </script>
+  <script>
+    // 主动卸载所有旧 Service Worker（双保险）
+    //
+    // 背景：方案 A 已完全移除 SW 注册（main.tsx 不再调用 registerServiceWorker），
+    // 但老用户浏览器里仍残留旧版 SW（cache-first + 跨域媒体拦截），
+    // 会破坏 <img>/<audio>/<video> 的原生渲染，导致预览异常。
+    //
+    // 本脚本 + public/sw.js 自毁版本 共同完成一次性清理：
+    //   - 本脚本：检测到任意已注册 SW → unregister 全部 → reload
+    //   - sw.js：新部署后被旧浏览器拉取时，activate 中自毁 + 清空缓存
+    //
+    // 清理完成后，main.tsx 不会再注册新 SW，此脚本因 regs.length===0 不再触发 reload，
+    // 不会形成"卸载-注册"循环。
+    (function() {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(regs) {
+          if (regs.length > 0) {
+            Promise.all(regs.map(function(r) { return r.unregister(); }))
+              .then(function() {
+                console.log('[SW] 旧 Service Worker 已卸载,刷新页面以加载新代码');
+                window.location.reload();
+              });
+          }
+        }).catch(function() { /* ignore */ });
+      }
+    })();
+  </script>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 

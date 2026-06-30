@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Wifi, WifiOff, Database, Trash2, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { offlineCache, registerServiceWorker } from '../../utils/offlineCache';
+import { offlineCache } from '../../utils/offlineCache';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import type { CacheEntry } from '../../utils/offlineCache';
 
@@ -27,15 +27,6 @@ export const OfflineCachePanel: React.FC = () => {
   const [entries, setEntries] = useState<CacheEntry[]>([]);
   const [totalSize, setTotalSize] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
-  const [swRegistered, setSwRegistered] = useState(false);
-
-  useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      registerServiceWorker().then(reg => {
-        if (reg) setSwRegistered(true);
-      });
-    }
-  }, []);
 
   const refresh = async () => {
     setIsLoading(true);
@@ -83,7 +74,6 @@ export const OfflineCachePanel: React.FC = () => {
       <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
         {t('network.totalCacheSize', { size: formatSize(totalSize), count: entries.length })}
         {!online && <span style={{ marginLeft: '0.5rem', color: '#fbbf24' }}>· {t('network.offlineMode')}</span>}
-        {swRegistered && <span style={{ marginLeft: '0.5rem', color: '#22c55e' }}>· {t('network.swActive')}</span>}
       </div>
 
       {entries.length === 0 ? (

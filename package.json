@@ -5,6 +5,9 @@
   "type": "module",
   "license": "Apache-2.0",
   "scripts": {
+    "start": "node scripts/lib/run-dev.mjs",
+    "start:win": "powershell -ExecutionPolicy Bypass -File scripts/start.ps1",
+    "start:unix": "bash scripts/start.sh",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
