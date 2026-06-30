@@ -25,6 +25,7 @@ const VoiceLab = lazy(() => import('./ui/pages/VoiceLab').then(m => ({ default: 
 const TextLab = lazy(() => import('./ui/pages/TextLab').then(m => ({ default: m.TextLab })));
 const VideoLab = lazy(() => import('./ui/pages/VideoLab').then(m => ({ default: m.VideoLab })));
 const MusicLab = lazy(() => import('./ui/pages/MusicLab').then(m => ({ default: m.MusicLab })));
+const WatermarkLab = lazy(() => import('./ui/pages/WatermarkLab').then(m => ({ default: m.WatermarkLab })));
 
 /**
  * Phase 4 性能优化 —— 首屏空闲时预加载核心页面 chunk
@@ -92,6 +93,7 @@ function App() {
                     <Route path="labs/text" element={<TextLab />} />
                     <Route path="labs/video" element={<VideoLab />} />
                     <Route path="labs/music" element={<MusicLab />} />
+                    <Route path="labs/watermark" element={<WatermarkLab />} />
                     <Route path="settings" element={<Settings />} />
                   </Route>
                 </Routes>
