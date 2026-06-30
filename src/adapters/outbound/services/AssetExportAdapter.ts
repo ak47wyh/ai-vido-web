@@ -48,15 +48,31 @@ import type { IVideoTaskRepository } from '../../../domain/ports/OutboundPorts';
 import type { IFinalCutRepository } from '../../../domain/ports/OutboundPorts';
 
 export class AssetExportAdapter implements IAssetExportPort {
+  private spaceRepo: IStorySpaceRepository;
+  private characterRepo: ICharacterRepository;
+  private backgroundRepo: IBackgroundRepository;
+  private storyRepo: IStoryRepository;
+  private segmentRepo: IStorySegmentRepository;
+  private videoTaskRepo: IVideoTaskRepository;
+  private finalCutRepo: IFinalCutRepository;
+
   constructor(
-    private spaceRepo: IStorySpaceRepository,
-    private characterRepo: ICharacterRepository,
-    private backgroundRepo: IBackgroundRepository,
-    private storyRepo: IStoryRepository,
-    private segmentRepo: IStorySegmentRepository,
-    private videoTaskRepo: IVideoTaskRepository,
-    private finalCutRepo: IFinalCutRepository
-  ) {}
+    spaceRepo: IStorySpaceRepository,
+    characterRepo: ICharacterRepository,
+    backgroundRepo: IBackgroundRepository,
+    storyRepo: IStoryRepository,
+    segmentRepo: IStorySegmentRepository,
+    videoTaskRepo: IVideoTaskRepository,
+    finalCutRepo: IFinalCutRepository,
+  ) {
+    this.spaceRepo = spaceRepo;
+    this.characterRepo = characterRepo;
+    this.backgroundRepo = backgroundRepo;
+    this.storyRepo = storyRepo;
+    this.segmentRepo = segmentRepo;
+    this.videoTaskRepo = videoTaskRepo;
+    this.finalCutRepo = finalCutRepo;
+  }
 
   async exportSpaceAsJson(spaceId: string): Promise<Blob> {
     const space = await this.spaceRepo.findById(spaceId);

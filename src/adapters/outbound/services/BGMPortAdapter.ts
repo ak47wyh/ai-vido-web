@@ -12,7 +12,11 @@ import type { IBGMRecommendationPort, BGMRecommendation, BGMCategory } from '../
 import { BGMRecommendationService } from '../../../domain/services/BGMRecommendationService';
 
 export class BGMPortAdapter implements IBGMRecommendationPort {
-  constructor(private inner: BGMRecommendationService) {}
+  private inner: BGMRecommendationService;
+
+  constructor(inner: BGMRecommendationService) {
+    this.inner = inner;
+  }
 
   recommend(segmentContent: string, characterNames: string[] = []): Promise<BGMRecommendation> {
     return this.inner.recommend(segmentContent, characterNames);

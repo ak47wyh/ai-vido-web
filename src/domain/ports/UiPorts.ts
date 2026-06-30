@@ -9,7 +9,7 @@
 // 主题
 // ==========================================
 
-export type ThemeMode = 'light' | 'warm' | 'dark' | 'blue';
+export type ThemeMode = 'light' | 'dark' | 'blue';
 
 export interface IThemePort {
   getCurrentMode(): ThemeMode;

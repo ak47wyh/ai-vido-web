@@ -131,11 +131,11 @@ describe('Phase 2 反转架构契约（ServiceArchitectureContract）', () => {
 
       // 验证字段声明与赋值
       expect(
-        /private\s+logger:\s*ILoggerPort\b|logger:\s*ILoggerPort\b/.test(src),
+        /private\s+_?logger:\s*ILoggerPort\b|_?logger:\s*ILoggerPort\b/.test(src),
         `${serviceFile} 应声明 logger 字段为 ILoggerPort 类型`
       ).toBe(true);
       expect(
-        /this\.logger\s*=\s*logger/.test(src) || /this\.logger\s*=\s*deps\.logger/.test(src),
+        /this\._?logger\s*=\s*logger/.test(src) || /this\._?logger\s*=\s*deps\.logger/.test(src),
         `${serviceFile} 应在构造函数中赋值 this.logger`
       ).toBe(true);
     });

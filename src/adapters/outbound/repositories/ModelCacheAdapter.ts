@@ -8,10 +8,16 @@
 import type { IModelCachePort, CachedModels } from '../../../domain/ports/ModelCachePort';
 
 export class ModelCacheAdapter<T = unknown> implements IModelCachePort<T> {
+  public readonly cacheKey: string;
+  public readonly ttlMs: number;
+
   constructor(
-    public readonly cacheKey: string,
-    public readonly ttlMs: number = 30 * 60 * 1000 // 默认 30 分钟
-  ) {}
+    cacheKey: string,
+    ttlMs: number = 30 * 60 * 1000 // 默认 30 分钟
+  ) {
+    this.cacheKey = cacheKey;
+    this.ttlMs = ttlMs;
+  }
 
   async read(): Promise<CachedModels<T> | null> {
     if (typeof localStorage === 'undefined') return null;

@@ -14,8 +14,10 @@ import type { ILogSinkPort, LogEntry } from '../../../domain/ports/LoggingPorts'
 export class RingBufferLogSinkAdapter implements ILogSinkPort {
   private buffer: LogEntry[] = [];
   private listeners = new Set<(e: LogEntry) => void>();
+  private capacity: number;
 
-  constructor(private capacity: number = 1000) {
+  constructor(capacity: number = 1000) {
+    this.capacity = capacity;
     if (capacity < 1) {
       throw new Error('RingBufferLogSinkAdapter: capacity must be >= 1');
     }

@@ -17,7 +17,6 @@ describe('ApiConfigStoreAdapter', () => {
   beforeEach(() => {
     // 清空测试数据
     localStorage.clear();
-    ApiConfigStore.clearForTests?.();
     adapter = new ApiConfigStoreAdapter();
   });
 

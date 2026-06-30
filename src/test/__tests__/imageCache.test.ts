@@ -108,7 +108,6 @@ describe('isCacheStorageAvailable', () => {
   it('在不支持的环境下返回 false', () => {
     // jsdom 默认有 caches dummy 实现，模拟"不支持"需要彻底移除属性
     const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'caches');
-    // @ts-expect-error 模拟浏览器无 CacheStorage
     delete (globalThis as { caches?: unknown }).caches;
     try {
       expect(isCacheStorageAvailable()).toBe(false);
@@ -131,7 +130,6 @@ describe('isServiceWorkerAvailable', () => {
 
   it('没有 navigator.serviceWorker 时返回 false', () => {
     const originalDescriptor = Object.getOwnPropertyDescriptor(navigator, 'serviceWorker');
-    // @ts-expect-error 模拟无 SW
     delete (navigator as { serviceWorker?: unknown }).serviceWorker;
     try {
       expect(isServiceWorkerAvailable()).toBe(false);
@@ -192,7 +190,6 @@ describe('getCachedMediaBlob', () => {
 
   it('caches 不可用 → 返回 null', async () => {
     const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'caches');
-    // @ts-expect-error simulate missing caches
     delete (globalThis as { caches?: unknown }).caches;
     try {
       const blob = await getCachedMediaBlob('https://example.com/x.png');
@@ -249,7 +246,6 @@ describe('warmCacheFromElement', () => {
 
   it('caches 不可用 → 返回 false', async () => {
     const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'caches');
-    // @ts-expect-error simulate missing caches
     delete (globalThis as { caches?: unknown }).caches;
     try {
       const img = document.createElement('img');
@@ -315,7 +311,6 @@ describe('clearAllMediaCache', () => {
 
   it('caches 不可用 → 返回 false', async () => {
     const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'caches');
-    // @ts-expect-error simulate missing caches
     delete (globalThis as { caches?: unknown }).caches;
     try {
       expect(await clearAllMediaCache()).toBe(false);
@@ -383,7 +378,6 @@ describe('getMediaCacheStats', () => {
 
   it('caches 不可用 → 返回 0 统计', async () => {
     const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'caches');
-    // @ts-expect-error simulate missing caches
     delete (globalThis as { caches?: unknown }).caches;
     try {
       const stats = await getMediaCacheStats();

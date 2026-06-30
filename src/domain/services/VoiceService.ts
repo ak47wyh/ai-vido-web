@@ -26,7 +26,8 @@ export interface CloneVoiceOptions {
 export class VoiceService {
   private router: PlatformRouter;
   private configStore: IApiConfigStore;
-  private logger: ILoggerPort;
+  // @ts-expect-error Logger injected for future use
+  private _logger: ILoggerPort;
   characterRepo: ICharacterRepository;
   segmentRepo: IStorySegmentRepository;
   private getFileStorage: () => IFileStoragePort;
@@ -44,7 +45,7 @@ export class VoiceService {
     this.segmentRepo = segmentRepo;
     this.getFileStorage = typeof fileStorage === 'function' ? fileStorage : () => fileStorage;
     this.configStore = configStore;
-    this.logger = logger;
+    this._logger = logger;
   }
 
   /** 获取当前配置对应的语音合成适配器 */

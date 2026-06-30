@@ -12,7 +12,11 @@ import { ConsoleLoggerAdapter } from './ConsoleLoggerAdapter';
 type NetworkListener = (status: NetworkStatus) => void;
 
 class NetworkEventBus {
-  constructor(private logger: ILoggerPort) {}
+  private logger: ILoggerPort;
+
+  constructor(logger: ILoggerPort) {
+    this.logger = logger;
+  }
 
   private listeners = new Set<NetworkListener>();
 

@@ -173,7 +173,6 @@ describe('ImageGenerationService', () => {
       personalityPrompt: 'brave',
       referenceImageUrl: '',
       createdAt: Date.now(),
-      updatedAt: Date.now(),
     };
     (characterRepo.findById as ReturnType<typeof vi.fn>).mockResolvedValue(character);
     (characterRepo.save as ReturnType<typeof vi.fn>).mockResolvedValue(character);
@@ -199,7 +198,6 @@ describe('ImageGenerationService', () => {
       personalityPrompt: '',
       referenceImageUrl: '',
       createdAt: Date.now(),
-      updatedAt: Date.now(),
     };
     (characterRepo.findById as ReturnType<typeof vi.fn>).mockResolvedValue(character);
 
@@ -214,7 +212,6 @@ describe('ImageGenerationService', () => {
       environmentPrompt: '',
       referenceImageUrl: '',
       createdAt: Date.now(),
-      updatedAt: Date.now(),
     };
     (backgroundRepo.findById as ReturnType<typeof vi.fn>).mockResolvedValue(bg);
 
@@ -229,7 +226,6 @@ describe('ImageGenerationService', () => {
       appearancePrompt: 'cool look',
       referenceImageUrl: '',
       createdAt: Date.now(),
-      updatedAt: Date.now(),
     };
     (characterRepo.findById as ReturnType<typeof vi.fn>).mockResolvedValue(character);
     (characterRepo.save as ReturnType<typeof vi.fn>).mockResolvedValue(character);
@@ -257,7 +253,6 @@ describe('ImageGenerationService', () => {
       appearancePrompt: 'something',
       referenceImageUrl: '',
       createdAt: Date.now(),
-      updatedAt: Date.now(),
     };
     (characterRepo.findById as ReturnType<typeof vi.fn>).mockResolvedValue(character);
     (characterRepo.save as ReturnType<typeof vi.fn>).mockResolvedValue(character);

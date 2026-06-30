@@ -13,7 +13,8 @@ import type { PlatformRouter } from './PlatformRouter';
 export class VideoLabService {
   private router: PlatformRouter;
   private configStore: IApiConfigStore;
-  private logger: ILoggerPort;
+  // @ts-expect-error Logger injected for future use
+  private _logger: ILoggerPort;
   private activePollers = new Map<string, ReturnType<typeof setInterval>>();
 
   constructor(
@@ -23,7 +24,7 @@ export class VideoLabService {
   ) {
     this.router = router;
     this.configStore = configStore;
-    this.logger = logger;
+    this._logger = logger;
   }
 
   /** 获取当前配置对应的视频生成适配器 */

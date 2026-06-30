@@ -60,17 +60,15 @@ export class VolcengineVoiceAdapter implements IVoicePort {
     );
 
     return {
-      audioBlob: new Blob([result], { type: 'audio/mpeg' }),
       audioUrl: URL.createObjectURL(new Blob([result], { type: 'audio/mpeg' })),
-      durationMs: this.estimateDurationMs(context.text.length),
-      sampleRate: 24000,
-      format: 'mp3',
+      audioSize: result.byteLength,
+      usageCharacters: context.text.length,
     };
   }
 
   synthesizeSpeechStream(_context: T2ASyncContext, _callbacks: T2AStreamCallbacks): T2AStreamHandle {
     // 流式 TTS（火山引擎）需要 WebSocket，暂不实现
-    return { abort: () => {} };
+    return { close: () => {} };
   }
 
   // ==================== 异步合成 ====================
@@ -79,8 +77,7 @@ export class VolcengineVoiceAdapter implements IVoicePort {
     if (!this.config.volcArkApiKey) {
       return {
         taskId: `mock-volc-tts-${Date.now()}`,
-        status: 'processing',
-        estimatedDurationMs: this.estimateDurationMs(context.text.length),
+        usageCharacters: (context.text ?? '').length,
       };
     }
 
@@ -94,8 +91,7 @@ export class VolcengineVoiceAdapter implements IVoicePort {
     );
     return {
       taskId: result.id,
-      status: 'processing',
-      estimatedDurationMs: this.estimateDurationMs(context.text.length),
+      usageCharacters: (context.text ?? '').length,
     };
   }
 
@@ -106,16 +102,14 @@ export class VolcengineVoiceAdapter implements IVoicePort {
       ),
     );
     const statusMap: Record<string, T2AAsyncStatus['status']> = {
-      'pending': 'pending',
       'processing': 'processing',
       'success': 'success',
       'failed': 'failed',
     };
     return {
-      taskId: result.id,
       status: statusMap[result.status] ?? 'processing',
       audioUrl: result.audio_url,
-      error: result.error,
+      errorMessage: result.error,
     };
   }
 
@@ -145,13 +139,12 @@ export class VolcengineVoiceAdapter implements IVoicePort {
   async getAvailableVoices(_voiceType: VoiceType): Promise<VoiceListResult> {
     // 提供预定义的几个常用声音
     return {
-      voices: [
-        { voiceId: 'zh_male_narration', name: '中文男声 - 旁白', gender: 'male', language: 'zh' },
-        { voiceId: 'zh_female_gentle', name: '中文女声 - 温柔', gender: 'female', language: 'zh' },
-        { voiceId: 'en_male_narration', name: 'English Male - Narration', gender: 'male', language: 'en' },
-        { voiceId: 'en_female_gentle', name: 'English Female - Gentle', gender: 'female', language: 'en' },
+      systemVoices: [
+        { voiceId: 'zh_male_narration', voiceName: '中文男声 - 旁白', description: '中文男声，旁白风格', type: 'system' as const },
+        { voiceId: 'zh_female_gentle', voiceName: '中文女声 - 温柔', description: '中文女声，温柔风格', type: 'system' as const },
+        { voiceId: 'en_male_narration', voiceName: 'English Male - Narration', description: 'English male, narration style', type: 'system' as const },
+        { voiceId: 'en_female_gentle', voiceName: 'English Female - Gentle', description: 'English female, gentle style', type: 'system' as const },
       ],
-      total: 4,
     };
   }
 
@@ -165,16 +158,8 @@ export class VolcengineVoiceAdapter implements IVoicePort {
     const mockBase64 = 'SUQzAwAAAAABslBTRkEAAAAQAAAAHAAABVNC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0=';
     const blob = await (await fetch(`data:audio/mp3;base64,${mockBase64}`)).blob();
     return {
-      audioBlob: blob,
       audioUrl: URL.createObjectURL(blob),
-      durationMs: 1000,
-      sampleRate: 24000,
-      format: 'mp3',
+      audioSize: blob.size,
     };
-  }
-
-  private estimateDurationMs(textLength: number): number {
-    // 中文 ~4 字/秒，英文 ~12 词/秒 → 估算文本字数 / 4 * 1000ms
-    return Math.max(1000, Math.ceil(textLength / 4) * 1000);
   }
 }

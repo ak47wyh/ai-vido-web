@@ -61,7 +61,7 @@ export class SnapshotService {
 
     await this.snapshotRepo.save(snapshot);
     await this.snapshotRepo.trim(spaceId, this.maxPerSpace);
-    this.eventBus?.emit('space.snapshot.created', { snapshotId: snapshot.id, spaceId });
+    this.eventBus?.emit('space.snapshot.created', { type: 'space.snapshot.created' as const, snapshotId: snapshot.id, spaceId });
     this.logger?.info('snapshot created', { service: 'SnapshotService', method: 'createSnapshot', spaceId, snapshotId: snapshot.id });
     return snapshot;
   }

@@ -53,13 +53,13 @@ export class HunyuanImageAdapter implements IImageGeneratorPort {
     }
 
     const result = await withRetry(() =>
-      this.http.post<{
+      this.http.call<{
         Response: {
           ResultImage: string; // base64 PNG
           RequestId: string;
         };
         RequestId: string;
-      }>('/', { Action: 'TextToImageLite', ...payload }),
+      }>('TextToImageLite', payload),
     );
 
     const b64 = result.Response?.ResultImage;

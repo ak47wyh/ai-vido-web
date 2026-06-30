@@ -12,13 +12,16 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { installGlobalErrorCapture } from '../../adapters/outbound/infrastructure/GlobalErrorCapture';
-import type { LogEntry } from '../../domain/ports/LoggingPorts';
+import type { LogEntry, ILogSinkPort } from '../../domain/ports/LoggingPorts';
 
-function makeSink() {
+function makeSink(): ILogSinkPort {
   const entries: LogEntry[] = [];
   return {
-    entries,
     write: vi.fn((e: LogEntry) => entries.push(e)),
+    subscribe: vi.fn(),
+    snapshot: vi.fn(() => [...entries]),
+    clear: vi.fn(() => { entries.length = 0; }),
+    size: vi.fn(() => entries.length),
   };
 }
 
@@ -58,7 +61,7 @@ describe('GlobalErrorCapture', () => {
       error: new TypeError('bad type'),
     });
     expect(sink.write).toHaveBeenCalledTimes(1);
-    const entry = sink.entries[0];
+    const entry = sink.snapshot()[0];
     expect(entry.level).toBe('error');
     expect(entry.message).toBe('uncaught');
     expect(entry.context?.source).toBe('window.onerror');
@@ -75,8 +78,8 @@ describe('GlobalErrorCapture', () => {
       reason: new Error('async fail'),
     });
     expect(sink.write).toHaveBeenCalledTimes(1);
-    expect(sink.entries[0].message).toBe('Unhandled promise rejection');
-    expect(sink.entries[0].error?.message).toBe('async fail');
+    expect(sink.snapshot()[0].message).toBe('Unhandled promise rejection');
+    expect(sink.snapshot()[0].error?.message).toBe('async fail');
     dispose();
   });
 
@@ -85,8 +88,8 @@ describe('GlobalErrorCapture', () => {
     rejectionListener!({
       reason: 'string reason',
     });
-    expect(sink.entries[0].error?.name).toBe('string');
-    expect(sink.entries[0].error?.message).toBe('string reason');
+    expect(sink.snapshot()[0].error?.name).toBe('string');
+    expect(sink.snapshot()[0].error?.message).toBe('string reason');
     dispose();
   });
 

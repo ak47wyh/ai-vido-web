@@ -15,12 +15,18 @@ import type {
   BgmMixConfig
 } from '../../../domain/ports/DomainServicePorts';
 import { PostProcessService } from '../../../domain/services/PostProcessService';
+import { ffmpegAdapter } from '../../../dependencies';
+import { whisperAdapter } from '../../../dependencies';
 
 export class PostProcessPortAdapter implements IPostProcessPort {
-  constructor(private inner: PostProcessService) {}
+  private inner: PostProcessService;
+
+  constructor(inner: PostProcessService) {
+    this.inner = inner;
+  }
 
   async mergeVideoAudio(ctx: MergeContext): Promise<Blob> {
-    return this.inner.mergeVideoAudio(ctx.video, ctx.audio, ctx.audioOffsetSec);
+    return this.inner.mergeVideoAudio(ctx.video, ctx.audio, ctx.audioOffset);
   }
 
   async concatClips(clips: VideoClip[]): Promise<Blob> {
@@ -60,4 +66,4 @@ export class PostProcessPortAdapter implements IPostProcessPort {
 }
 
 /** 默认单例（懒加载） */
-export const postProcessPortAdapter = new PostProcessPortAdapter(new PostProcessService());
+export const postProcessPortAdapter = new PostProcessPortAdapter(new PostProcessService(ffmpegAdapter, whisperAdapter));

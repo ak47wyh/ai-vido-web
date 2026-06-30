@@ -68,37 +68,37 @@ describe('RingBufferLogSinkAdapter', () => {
   });
 
   it('subscribe receives new entries asynchronously', async () => {
-    const listener = vi.fn();
+    const listener = vi.fn<(e: LogEntry) => void>();
     sink.subscribe(listener);
     sink.write(makeEntry('a'));
     expect(listener).not.toHaveBeenCalled();
-    await new Promise(resolve => queueMicrotask(resolve));
+    await new Promise(resolve => setTimeout(resolve, 0));
     expect(listener).toHaveBeenCalledTimes(1);
     expect(listener.mock.calls[0][0].id).toBe('a');
   });
 
   it('unsubscribe stops further notifications', async () => {
-    const listener = vi.fn();
+    const listener = vi.fn<(e: LogEntry) => void>();
     const unsub = sink.subscribe(listener);
     sink.write(makeEntry('a'));
-    await new Promise(resolve => queueMicrotask(resolve));
+    await new Promise(resolve => setTimeout(resolve, 0));
     expect(listener).toHaveBeenCalledTimes(1);
 
     unsub();
     sink.write(makeEntry('b'));
-    await new Promise(resolve => queueMicrotask(resolve));
+    await new Promise(resolve => setTimeout(resolve, 0));
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
   it('isolates listener errors so other listeners still fire', async () => {
-    const bad = vi.fn(() => {
+    const bad = vi.fn<(e: LogEntry) => void>(() => {
       throw new Error('boom');
     });
-    const good = vi.fn();
+    const good = vi.fn<(e: LogEntry) => void>();
     sink.subscribe(bad);
     sink.subscribe(good);
     sink.write(makeEntry('a'));
-    await new Promise(resolve => queueMicrotask(resolve));
+    await new Promise(resolve => setTimeout(resolve, 0));
     expect(bad).toHaveBeenCalled();
     expect(good).toHaveBeenCalled();
   });

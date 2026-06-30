@@ -47,7 +47,8 @@ const CATEGORY_DESCRIPTIONS: Record<BGMCategory, { emotion: string; tempo: strin
 export class BGMRecommendationService {
   private router: PlatformRouter;
   private configStore: IApiConfigStore;
-  private logger: ILoggerPort;
+  // @ts-expect-error Logger injected for future use
+  private _logger: ILoggerPort;
   constructor(
     router: PlatformRouter,
     configStore: IApiConfigStore,
@@ -55,7 +56,7 @@ export class BGMRecommendationService {
   ) {
     this.router = router;
     this.configStore = configStore;
-    this.logger = logger;
+    this._logger = logger;
   }
 
   /** 获取当前配置对应的文本生成适配器 */

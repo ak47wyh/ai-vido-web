@@ -407,9 +407,14 @@ export interface VoiceCapabilities {
 
 /** 抛出当 VoiceCapabilities 不支持某方法时 */
 export class CapabilityNotSupportedError extends Error {
-  constructor(public platform: string, public capability: keyof VoiceCapabilities) {
+  public platform: string;
+  public capability: keyof VoiceCapabilities;
+
+  constructor(platform: string, capability: keyof VoiceCapabilities) {
     super(`Voice capability "${capability}" is not supported by platform "${platform}"`);
     this.name = 'CapabilityNotSupportedError';
+    this.platform = platform;
+    this.capability = capability;
   }
 }
 
