@@ -1,4 +1,4 @@
-/**
+﻿/**
  * PostProcessPortAdapter —— IPostProcessPort 的 Service 包装实现
  *
  * PostProcessService 现有方法名与 Port 略有差异（如 mixBGM vs mixBgm），
@@ -15,8 +15,6 @@ import type {
   BgmMixConfig
 } from '../../../domain/ports/DomainServicePorts';
 import { PostProcessService } from '../../../domain/services/PostProcessService';
-import { ffmpegAdapter } from '../../../dependencies';
-import { whisperAdapter } from '../../../dependencies';
 
 export class PostProcessPortAdapter implements IPostProcessPort {
   private inner: PostProcessService;
@@ -64,6 +62,3 @@ export class PostProcessPortAdapter implements IPostProcessPort {
     return this.inner.ensureLoaded();
   }
 }
-
-/** 默认单例（懒加载） */
-export const postProcessPortAdapter = new PostProcessPortAdapter(new PostProcessService(ffmpegAdapter, whisperAdapter));

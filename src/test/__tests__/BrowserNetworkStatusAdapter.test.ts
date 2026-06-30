@@ -71,13 +71,12 @@ describe('BrowserNetworkStatusAdapter', () => {
   it('window.online event triggers status change', () => {
     // 在浏览器实现中：window.addEventListener('online', () => updateStatus('online'))
     // 先触发 offline 确保状态变化，再触发 online 验证事件传递
-    let received = false;
-    const off = networkEventBus.subscribe(() => { received = true; });
+    let count = 0;
+    const off = networkEventBus.subscribe(() => { count++; });
     window.dispatchEvent(new Event('offline'));
-    received = false;
     window.dispatchEvent(new Event('online'));
-    // 适配器在收到事件后调用 networkEventBus.emit('online')
-    expect(received).toBe(true);
+    // 适配器在收到事件后调用 networkEventBus.emit
+    expect(count).toBe(2);
     off();
   });
 
