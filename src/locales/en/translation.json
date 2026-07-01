@@ -5,6 +5,11 @@
     "expand": "Expand",
     "collapse": "Collapse"
   },
+  "errorBoundary": {
+    "title": "Something went wrong",
+    "defaultMessage": "An unexpected error occurred.",
+    "retry": "Try Again"
+  },
   "nav": {
     "dashboard": "Dashboard",
     "characters": "Characters",
@@ -17,8 +22,21 @@
     "imageLab": "Image Generation",
     "videoLab": "Video Generation",
     "voiceLab": "Voice & Dubbing",
+    "textLab": "Text Refine",
     "musicLab": "Music Generation",
-    "enhanceLab": "Enhancement"
+    "enhanceLab": "Enhancement",
+    "watermarkLab": "Watermark Removal",
+    "groupOverview": "Overview",
+    "groupCreation": "Creation",
+    "groupAI": "AI Labs",
+    "groupManage": "Management",
+    "creationFlow": "Creation Flow",
+    "flowCharacters": "Characters",
+    "flowBackgrounds": "Backgrounds",
+    "flowGenerate": "Generate",
+    "flowExport": "Export",
+    "expand": "Expand Sidebar",
+    "collapse": "Collapse Sidebar"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -266,7 +284,13 @@
     "generateDraftImage": "Generate Image",
     "generatingDraftImage": "Generating...",
     "draftImageGenerated": "Image generated",
-    "openEditor": "Edit"
+    "openEditor": "Edit",
+    "saveSuccess": "Story saved",
+    "assembleBtn": "Assemble & Export",
+    "assembling": "Assembling...",
+    "assembleSuccess": "Assembly succeeded, saved to Export Center!",
+    "assembleFailed": "Assembly failed",
+    "videoConfig": "Video Configuration"
   },
   "space": {
     "title": "Story Space Management",
@@ -632,7 +656,8 @@
     "withSubs": "With subtitles",
     "noSubs": "No subtitles",
     "untitledStory": "Untitled story",
-    "openEditor": "Edit in Video Editor"
+    "openEditor": "Edit in Video Editor",
+    "videoUpdated": "Video updated"
   },
   "agent": {
     "title": "AI Assistant",
@@ -744,5 +769,39 @@
     "categoryScene": "Scene Description",
     "categoryNarration": "Narration Text",
     "categoryOther": "Other"
+  },
+  "pipeline": {
+    "title": "Pipeline",
+    "startBtn": "Generate All",
+    "cancelBtn": "Cancel",
+    "includeNarration": "Include Narration",
+    "includeBGM": "Include BGM",
+    "includeSubtitles": "Include Subtitles"
+  },
+  "postProcess": {
+    "title": "Post-Production",
+    "speed": "Speed",
+    "trim": "Trim",
+    "crop": "Crop",
+    "subtitle": "Subtitle",
+    "autoEdit": "AI Edit",
+    "cinematography": "Cinematography",
+    "speedLabel": "Speed",
+    "trimStart": "Start",
+    "trimEnd": "End",
+    "apply": "Apply",
+    "speedChanged": "Speed adjusted",
+    "trimmed": "Video trimmed",
+    "cropped": "Frame cropped",
+    "subtitleGenerated": "Subtitle generated",
+    "subtitleTranslated": "Subtitle translated",
+    "generateSrt": "Generate Subtitle",
+    "translateSrt": "Translate Subtitle",
+    "autoEditDesc": "AI auto-detects keyframes and optimizes editing rhythm",
+    "autoEditBtn": "Auto Edit",
+    "autoEdited": "Auto edit complete",
+    "noStoryContent": "Please select story content first",
+    "generatePrompt": "Generate Cinematography Prompt",
+    "cinematographyGenerated": "Cinematography prompt generated"
   }
 }

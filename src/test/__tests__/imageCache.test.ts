@@ -1,12 +1,13 @@
 /**
  * imageCache 单元测试
  *
- * 不依赖真实 Service Worker：通过 mock `caches`、`navigator.serviceWorker`、
- * `MessageChannel` 验证主线程工具的：
+ * 不依赖真实 Service Worker（SW 已按设计约束移除）：通过 mock `caches`、
+ * `navigator.serviceWorker` 验证主线程工具的：
  * - getCachedMediaBlob 命中 / miss / 异常 / 浏览器不支持
  * - warmCacheFromElement 写入缓存
- * - clearAllMediaCache 通过 SW 消息 vs 主线程删除
- * - getMediaCacheStats SW 消息 vs 主线程遍历
+ * - clearAllMediaCache 直接调用 CacheStorage 删除
+ * - getMediaCacheStats 主线程遍历统计
+ * - isSWActive 始终返回 false（SW 已移除）
  * - triggerNativeDownload 创建 <a> 元素 + click
  */
 
@@ -144,23 +145,17 @@ describe('isServiceWorkerAvailable', () => {
 // ===== isSWActive =====
 
 describe('isSWActive', () => {
-  it('SW 注册且 active 时返回 true', async () => {
+  it('始终返回 false（SW 已按设计约束移除）', async () => {
+    // 即使 navigator.serviceWorker 存在并注册，函数也应返回 false
     installSWMock({ active: true });
-    expect(await isSWActive()).toBe(true);
-  });
-
-  it('SW 未注册时返回 false', async () => {
-    Object.defineProperty(navigator, 'serviceWorker', {
-      value: {
-        getRegistration: vi.fn(async () => undefined),
-      },
-      configurable: true,
-    });
     expect(await isSWActive()).toBe(false);
   });
 
-  it('SW active=null 时返回 false', async () => {
-    installSWMock({ active: false });
+  it('navigator.serviceWorker 不可用时也返回 false', async () => {
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: undefined,
+      configurable: true,
+    });
     expect(await isSWActive()).toBe(false);
   });
 });
@@ -270,33 +265,7 @@ describe('warmCacheFromElement', () => {
 // ===== clearAllMediaCache =====
 
 describe('clearAllMediaCache', () => {
-  it('通过 SW 消息清空成功', async () => {
-    installCacheStorageMock(makeMockCache());
-    installSWMock({ active: true });
-
-    // 监听 MessageChannel
-    const originalMessageChannel = globalThis.MessageChannel;
-    class MockMessageChannel {
-      port1 = { onmessage: null as ((e: MessageEvent) => void) | null };
-      port2 = { postMessage: vi.fn() };
-      constructor() {
-        // 模拟 SW 异步响应
-        setTimeout(() => {
-          if (this.port1.onmessage) {
-            this.port1.onmessage(new MessageEvent('message', { data: { type: 'CLEARED', deleted: true } }));
-          }
-        }, 0);
-      }
-    }
-    globalThis.MessageChannel = MockMessageChannel as unknown as typeof MessageChannel;
-
-    const ok = await clearAllMediaCache();
-    expect(ok).toBe(true);
-
-    globalThis.MessageChannel = originalMessageChannel;
-  });
-
-  it('SW 不可用 → 主线程直接 delete', async () => {
+  it('直接调用 CacheStorage.delete 清空成功', async () => {
     const cache = makeMockCache();
     const deleteSpy = vi.fn(async () => true);
     installCacheStorageMock(cache, deleteSpy);
@@ -325,42 +294,7 @@ describe('clearAllMediaCache', () => {
 // ===== getMediaCacheStats =====
 
 describe('getMediaCacheStats', () => {
-  it('通过 SW 消息获取统计', async () => {
-    installCacheStorageMock(makeMockCache());
-    installSWMock({ active: true });
-
-    const originalMessageChannel = globalThis.MessageChannel;
-    class MockMessageChannel {
-      port1 = { onmessage: null as ((e: MessageEvent) => void) | null };
-      port2 = { postMessage: vi.fn() };
-      constructor() {
-        setTimeout(() => {
-          if (this.port1.onmessage) {
-            this.port1.onmessage(new MessageEvent('message', {
-              data: {
-                type: 'MEDIA_CACHE_STATS_RESULT',
-                count: 12,
-                totalBytes: 3456789,
-                oldestTimestamp: 1700000000000,
-                maxEntries: 200,
-              },
-            }));
-          }
-        }, 0);
-      }
-    }
-    globalThis.MessageChannel = MockMessageChannel as unknown as typeof MessageChannel;
-
-    const stats = await getMediaCacheStats();
-    expect(stats.count).toBe(12);
-    expect(stats.totalBytes).toBe(3456789);
-    expect(stats.oldestTimestamp).toBe(1700000000000);
-    expect(stats.maxEntries).toBe(200);
-
-    globalThis.MessageChannel = originalMessageChannel;
-  });
-
-  it('SW 不可用 → 主线程遍历统计', async () => {
+  it('主线程遍历 CacheStorage 统计', async () => {
     const initial = new Map<string, Response>();
     // jsdom Response 会扩展 blob，使用 text() 验证内容、size 至少 > 0
     initial.set('https://a.com/x.png', new Response(new Blob(['12345'])));

@@ -16,6 +16,7 @@ import type {
 } from '../../../domain/ports/OutboundPorts';
 import { ApiConfigStore } from '../config/ApiConfigStore';
 import { getMiniMaxErrorMessage } from './MiniMaxErrorUtils';
+import { createTrackedObjectUrl } from '../../../utils/objectUrlRegistry';
 import axios from 'axios';
 
 export class MiniMaxVoiceAdapter implements IVoicePort {
@@ -305,7 +306,7 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
     // 确定正确的 MIME type：优先使用响应头，降级为 audio/mpeg
     const audioContentType = contentType.startsWith('audio/') ? contentType : 'audio/mpeg';
     const blob = new Blob([data], { type: audioContentType });
-    return URL.createObjectURL(blob);
+    return createTrackedObjectUrl(blob);
   }
 
   /** 检测 ArrayBuffer 是否为 JSON 内容 */

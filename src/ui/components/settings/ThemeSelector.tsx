@@ -10,7 +10,7 @@ export const ThemeSelector: React.FC = () => {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))',
           gap: '0.5rem',
         }}
       >

@@ -6,6 +6,7 @@ import type {
 import type { ApiConfig } from '../../config/ApiConfigStore';
 import { VolcengineHttpClient } from './VolcengineHttpClient';
 import { withRetry } from './VolcengineErrorUtils';
+import { createTrackedObjectUrl } from '../../../../utils/objectUrlRegistry';
 
 /**
  * 火山引擎语音合成适配器（豆包 TTS）。
@@ -74,7 +75,7 @@ export class VolcengineVoiceAdapter implements IVoicePort {
     });
 
     return {
-      audioUrl: URL.createObjectURL(new Blob([result], { type: 'audio/mpeg' })),
+      audioUrl: createTrackedObjectUrl(new Blob([result], { type: 'audio/mpeg' })),
       audioSize: result.byteLength,
       usageCharacters: text.length,
     };
@@ -187,7 +188,7 @@ export class VolcengineVoiceAdapter implements IVoicePort {
     const mockBase64 = 'SUQzAwAAAAABslBTRkEAAAAQAAAAHAAABVNC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0=';
     const blob = await (await fetch(`data:audio/mp3;base64,${mockBase64}`)).blob();
     return {
-      audioUrl: URL.createObjectURL(blob),
+      audioUrl: createTrackedObjectUrl(blob),
       audioSize: blob.size,
     };
   }

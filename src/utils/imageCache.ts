@@ -1,18 +1,14 @@
 /**
- * imageCache —— 主线程访问 Service Worker 媒体缓存的工具集
+ * imageCache —— 主线程直接访问 CacheStorage 媒体缓存的工具集
  *
  * 核心功能：
  * - getCachedMediaBlob(url) → Blob | null：从 CacheStorage 读取已缓存的跨域图片
  * - warmCacheFromElement(img) → void：把 <img> 当前 src 主动写入缓存（防御性）
- * - clearAllMediaCache() → boolean：清空媒体缓存（通过 SW 消息）
+ * - clearAllMediaCache() → boolean：清空媒体缓存（直接调用 CacheStorage）
  * - getMediaCacheStats() → 统计
- * - isSWActive() → Promise<boolean>：SW 是否已激活
+ * - isSWActive() → Promise<boolean>：始终返回 false（SW 已按设计约束移除）
  *
- * 与 Plan D 协同：
- *   SW 命中 → getCachedMediaBlob → Blob → saveImageFromBlob → FilesLocalAdapter → 磁盘
- *   全程 0 网络请求。
- *
- * 与 Plan A（路径 A）对应。
+ * 全部操作走主线程 CacheStorage，不依赖 Service Worker。
  */
 
 const MEDIA_CACHE_NAME = 'ai-vido-media-v1';
@@ -36,15 +32,14 @@ export function isServiceWorkerAvailable(): boolean {
   return typeof navigator !== 'undefined' && 'serviceWorker' in navigator;
 }
 
-/** 检查 Service Worker 是否已注册并激活 */
+/**
+ * 检查 Service Worker 是否已注册并激活。
+ *
+ * 注意：本项目已按设计约束移除 Service Worker（不再注册、不再保留 sw.js），
+ * 因此本函数始终返回 false。保留函数签名仅为向后兼容（其他文件可能 import）。
+ */
 export async function isSWActive(): Promise<boolean> {
-  if (!isServiceWorkerAvailable()) return false;
-  try {
-    const reg = await navigator.serviceWorker.getRegistration();
-    return !!reg && !!reg.active;
-  } catch {
-    return false;
-  }
+  return false;
 }
 
 /**
@@ -100,33 +95,11 @@ export async function warmCacheFromElement(img: HTMLImageElement): Promise<boole
 }
 
 /**
- * 清空媒体缓存（通过 Service Worker 消息接口）。
+ * 清空媒体缓存（直接调用 CacheStorage）。
  * 返回是否成功清空。
  */
 export async function clearAllMediaCache(): Promise<boolean> {
   if (!isCacheStorageAvailable()) return false;
-  // 优先通过 SW 消息清空（异步、可观测）
-  if (isServiceWorkerAvailable()) {
-    try {
-      const reg = await navigator.serviceWorker.getRegistration();
-      const activeSW = reg?.active;
-      if (activeSW) {
-        const cleared = await new Promise<boolean>((resolve) => {
-          const channel = new MessageChannel();
-          const timer = setTimeout(() => resolve(false), 3000);
-          channel.port1.onmessage = (e) => {
-            clearTimeout(timer);
-            resolve(e.data?.type === 'CLEARED' ? !!e.data.deleted : false);
-          };
-          activeSW.postMessage({ type: 'CLEAR_MEDIA_CACHE' }, [channel.port2]);
-        });
-        return cleared;
-      }
-    } catch {
-      // 退化：直接调用 caches.delete
-    }
-  }
-  // 主线程直接删除（SW 未注册/未激活）
   try {
     return await caches.delete(MEDIA_CACHE_NAME);
   } catch {
@@ -135,46 +108,12 @@ export async function clearAllMediaCache(): Promise<boolean> {
 }
 
 /**
- * 获取媒体缓存统计（通过 SW 消息）。
- * SW 未激活时退化为主线程统计。
+ * 获取媒体缓存统计（主线程遍历 CacheStorage）。
  */
 export async function getMediaCacheStats(): Promise<MediaCacheStats> {
   if (!isCacheStorageAvailable()) {
     return { count: 0, totalBytes: 0, oldestTimestamp: 0, maxEntries: 200 };
   }
-
-  // 优先通过 SW 获取（更准确，避免主线程读全部 blob）
-  if (isServiceWorkerAvailable()) {
-    try {
-      const reg = await navigator.serviceWorker.getRegistration();
-      const activeSW = reg?.active;
-      if (activeSW) {
-        const stats = await new Promise<MediaCacheStats | null>((resolve) => {
-          const channel = new MessageChannel();
-          const timer = setTimeout(() => resolve(null), 3000);
-          channel.port1.onmessage = (e) => {
-            clearTimeout(timer);
-            if (e.data?.type === 'MEDIA_CACHE_STATS_RESULT') {
-              resolve({
-                count: e.data.count ?? 0,
-                totalBytes: e.data.totalBytes ?? 0,
-                oldestTimestamp: e.data.oldestTimestamp ?? 0,
-                maxEntries: e.data.maxEntries ?? 200,
-              });
-            } else {
-              resolve(null);
-            }
-          };
-          activeSW.postMessage({ type: 'MEDIA_CACHE_STATS' }, [channel.port2]);
-        });
-        if (stats) return stats;
-      }
-    } catch {
-      // 退化到主线程统计
-    }
-  }
-
-  // 主线程统计（退化路径）
   return await computeStatsInMainThread();
 }
 

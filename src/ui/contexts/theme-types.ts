@@ -1,4 +1,4 @@
-export type ThemeId = 'dark' | 'light' | 'blue';
+export type ThemeId = 'dark' | 'light' | 'blue' | 'warm';
 
 export interface ThemeConfig {
   id: ThemeId;
@@ -44,6 +44,17 @@ export const THEMES: ThemeConfig[] = [
       secondary: '#06b6d4',
       background: '#0c1929',
       surface: 'rgba(30,58,95,0.6)',
+    },
+  },
+  {
+    id: 'warm',
+    name: '暖阳赭石',
+    icon: '🍂',
+    previewColors: {
+      primary: '#e8956b',
+      secondary: '#d4a574',
+      background: '#faf8f5',
+      surface: 'rgba(255,252,247,0.92)',
     },
   },
 ];

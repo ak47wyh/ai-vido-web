@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { Film } from 'lucide-react';
 import { useEnhancement, buildVideoOptions } from '../../hooks/useEnhancement';
 import { useToast } from '../../contexts/ToastContext';
+import { useConfirm } from '../../contexts/ConfirmContext';
 import { useSpace } from '../../contexts/SpaceContext';
 import { assetLibraryService } from '../../../dependencies';
 import {
@@ -18,6 +19,7 @@ const MAX_DIMENSION = 600;
 
 export const VideoEnhancePanel: React.FC = () => {
   const { showToast } = useToast();
+  const { confirm } = useConfirm();
   const { currentSpaceId } = useSpace();
   const {
     progress, isProcessing, error, resultUrl, resultBlob,
@@ -55,10 +57,14 @@ export const VideoEnhancePanel: React.FC = () => {
     };
   }, [reset, showToast]);
 
-  const handleProcess = () => {
+  const handleProcess = async () => {
     if (!file) return;
     if (frameInterpolation) {
-      const ok = window.confirm('帧率提升（补帧到 60fps）性能开销极大，处理时间可能显著增加。是否继续？');
+      const ok = await confirm({
+        title: '帧率提升确认',
+        message: '帧率提升（补帧到 60fps）性能开销极大，处理时间可能显著增加。是否继续？',
+        danger: true,
+      });
       if (!ok) return;
     }
     processVideo(file, buildVideoOptions(mode, scale, sharpen, denoise, outputCodec, frameInterpolation));

@@ -10,6 +10,7 @@ import type { IFileStoragePort } from '../ports/FileStoragePorts';
 import type { IApiConfigStore } from '../ports/PlatformPorts';
 import type { ILoggerPort } from '../ports/CrossCuttingPorts';
 import type { PlatformRouter } from './PlatformRouter';
+import { createTrackedObjectUrl } from '../../utils/objectUrlRegistry';
 
 export interface ResolvedMusicResult {
   audioUrl: string;
@@ -76,7 +77,7 @@ export class MusicLabService {
         storagePath,
         error: e instanceof Error ? e.message : String(e),
       });
-      const audioUrl = URL.createObjectURL(audioBlob);
+      const audioUrl = createTrackedObjectUrl(audioBlob);
       return this.buildResult(audioUrl, undefined, result);
     }
 

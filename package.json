@@ -16,7 +16,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "typecheck": "tsc --noEmit -p tsconfig.app.json"
+    "typecheck": "tsc --noEmit -p tsconfig.app.json",
+    "i18n:check": "node scripts/i18n-check.mjs",
+    "i18n:check:strict": "node scripts/i18n-check.mjs --strict"
   },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",

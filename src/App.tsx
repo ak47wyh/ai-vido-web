@@ -6,6 +6,7 @@ import { ToastProvider } from './ui/contexts/ToastContext';
 import { ConfirmProvider } from './ui/contexts/ConfirmContext';
 import { ThemeProvider } from './ui/contexts/ThemeContext';
 import { ErrorBoundary } from './ui/components/ErrorBoundary';
+import { PageSkeleton } from './ui/components/PageSkeleton';
 import { LogViewerContainer } from './ui/components/LogViewer/LogViewerContainer';
 import { videoGenerationService } from './dependencies';
 import { installGlobalErrorCapture } from './adapters/outbound/infrastructure/GlobalErrorCapture';
@@ -115,24 +116,9 @@ function App() {
 }
 
 /**
- * 路由 lazy 加载占位 —— 首次进入页面或切换路由时短暂显示的骨架屏
- * 避免白屏闪烁，让用户感知到"正在加载"。
+ * 路由 lazy 加载占位 —— 首次进入页面或切换路由时短暂显示的骨架屏。
+ * V3 §6.2：用骨架屏替代纯文本"加载中…"，保持视觉连续性。
  */
-const RouteLoadingFallback: React.FC = () => (
-  <div
-    role="status"
-    aria-live="polite"
-    style={{
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      height: '60vh',
-      color: 'var(--text-muted, #888)',
-      fontSize: '0.9rem',
-    }}
-  >
-    加载中…
-  </div>
-);
+const RouteLoadingFallback: React.FC = () => <PageSkeleton />;
 
 export default App;

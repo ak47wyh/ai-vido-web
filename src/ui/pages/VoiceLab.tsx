@@ -5,6 +5,7 @@ import { voiceService, assetLibraryService } from '../../dependencies';
 import type { T2ASyncModel, VoiceListResult, VoiceInfo } from '../../domain/ports/OutboundPorts';
 import { VOICES_BY_LANGUAGE, LANGUAGE_LABELS } from '../../domain/data/systemVoices';
 import { useToast } from '../contexts/ToastContext';
+import { useConfirm } from '../contexts/ConfirmContext';
 import { getErrorMessage } from '../utils/errorUtils';
 import { useSpace } from '../contexts/SpaceContext';
 import { AssetSaveDialog } from '../components/AssetPicker';
@@ -33,6 +34,7 @@ const EMOTION_TAGS = ['(laughs)', '(sighs)', '(breath)', '(coughs)', '(chuckle)'
 export const VoiceLab: React.FC = () => {
   const { t } = useTranslation();
   const { showToast } = useToast();
+  const { confirm } = useConfirm();
   const { currentSpaceId } = useSpace();
 
   const [activeTab, setActiveTab] = useState<VoiceLabTab>('tts');
@@ -354,7 +356,12 @@ export const VoiceLab: React.FC = () => {
   };
 
   const handleDeleteVoice = async (voiceType: 'voice_cloning' | 'voice_generation', voiceId: string) => {
-    if (!confirm(`确认删除音色 ${voiceId}？删除后不可恢复。`)) return;
+    const ok = await confirm({
+      title: '删除音色',
+      message: `确认删除音色 ${voiceId}？删除后不可恢复。`,
+      danger: true,
+    });
+    if (!ok) return;
     setDeletingVoiceId(voiceId);
     try {
       await voiceService.deleteVoice(voiceType, voiceId);

@@ -26,7 +26,6 @@ export interface CloneVoiceOptions {
 export class VoiceService {
   private router: PlatformRouter;
   private configStore: IApiConfigStore;
-  // @ts-expect-error Logger injected for future use
   private _logger: ILoggerPort;
   characterRepo: ICharacterRepository;
   segmentRepo: IStorySegmentRepository;
@@ -113,7 +112,7 @@ export class VoiceService {
 
     // 风控检测
     if (cloneResult.inputSensitive) {
-      console.warn('[VoiceService] Cloned audio triggered content moderation');
+      this._logger.warn('[VoiceService] Cloned audio triggered content moderation', { service: 'VoiceService' });
     }
 
     return cloneResult.voiceId;
@@ -486,7 +485,7 @@ export class VoiceService {
         const taskId = await this.createAsyncTask(seg.content, voiceId);
         results.set(seg.id, taskId);
       } catch (e) {
-        console.error(`[VoiceService] Failed to create T2A task for segment ${seg.id}:`, e);
+        this._logger.error(`[VoiceService] Failed to create T2A task for segment ${seg.id}`, e, { service: 'VoiceService', segmentId: seg.id });
       }
     }
     return results;

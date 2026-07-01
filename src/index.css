@@ -8,11 +8,11 @@
   --primary-color: #6366f1; /* Indigo */
   --primary-hover: #4f46e5;
   --accent-color: #ec4899; /* Pink */
-  
+
   --text-main: #f3f4f6;
   --text-muted: #9ca3af;
   --text-inverse: #ffffff;
-  
+
   --border-color: rgba(255, 255, 255, 0.1);
   --border-color-focus: rgba(99, 102, 241, 0.5);
 
@@ -22,15 +22,37 @@
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
   --shadow-glow: 0 0 15px rgba(99, 102, 241, 0.4);
+  /* 柔和卡片阴影（暖色主题引入，其他主题降级为中性灰） */
+  --shadow-card: 0 2px 8px rgba(180, 140, 100, 0.08);
 
   /* Metrics */
   --radius-md: 8px;
   --radius-lg: 12px;
   --radius-xl: 16px;
   --radius-full: 9999px;
-  
+
   --transition-fast: 0.15s ease-in-out;
   --transition-normal: 0.3s ease-in-out;
+
+  /* ===== 设计令牌（V3 §6.1）：间距系统 ===== */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 40px;
+
+  /* ===== 设计令牌：字号阶梯（12/14/16/20/24） ===== */
+  --font-size-xs: 0.75rem;   /* 12 */
+  --font-size-sm: 0.875rem;  /* 14 */
+  --font-size-base: 1rem;    /* 16 */
+  --font-size-lg: 1.25rem;   /* 20 */
+  --font-size-xl: 1.5rem;    /* 24 */
+
+  /* ===== 设计令牌：动效节奏（V3 §6.4） ===== */
+  --motion-fast: 120ms;
+  --motion-normal: 200ms;
+  --motion-slow: 320ms;
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -123,6 +145,80 @@
   background-color: var(--bg-dark);
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   暖色主题 (Warm Theme) —— 暖橙赭石主色 + 暖灰底，长时间使用护眼
+   V3 §6.1：背景 #faf8f5 / 主色 #e8956b / 柔和卡片阴影 + 圆角 12px
+═══════════════════════════════════════════════════════════════ */
+:root[data-theme="warm"] {
+  --bg-dark: #faf8f5;
+  --bg-panel: rgba(255, 252, 247, 0.92);
+  --bg-panel-hover: rgba(250, 246, 238, 0.96);
+  --primary-color: #e8956b;
+  --primary-hover: #d4794a;
+  --accent-color: #d4a574;
+
+  --text-main: #3d3530;
+  --text-muted: #6e635a;
+  --text-inverse: #3d3530;
+
+  --border-color: rgba(120, 90, 60, 0.15);
+  --border-color-focus: rgba(232, 149, 107, 0.5);
+
+  --shadow-glow: 0 0 15px rgba(232, 149, 107, 0.25);
+  --shadow-card: 0 2px 8px rgba(180, 140, 100, 0.12);
+}
+
+:root[data-theme="warm"] .glass-panel {
+  background: var(--bg-panel);
+  border-color: var(--border-color);
+  box-shadow: var(--shadow-card);
+}
+
+:root[data-theme="warm"] .glass-panel.interactive:hover {
+  background: var(--bg-panel-hover);
+  border-color: rgba(120, 90, 60, 0.25);
+}
+
+:root[data-theme="warm"] body {
+  background-color: var(--bg-dark);
+}
+
+:root[data-theme="warm"] h1,
+:root[data-theme="warm"] h2,
+:root[data-theme="warm"] h3,
+:root[data-theme="warm"] h4,
+:root[data-theme="warm"] h5,
+:root[data-theme="warm"] h6 {
+  color: var(--text-main);
+}
+
+:root[data-theme="warm"] p {
+  color: var(--text-muted);
+}
+
+/* 暖色主题下表单输入框使用暖白底，聚焦时暖橙光晕 */
+:root[data-theme="warm"] .form-input,
+:root[data-theme="warm"] .form-textarea,
+:root[data-theme="warm"] .form-select {
+  background: rgba(255, 253, 248, 0.7);
+}
+
+:root[data-theme="warm"] .form-input:focus,
+:root[data-theme="warm"] .form-textarea:focus,
+:root[data-theme="warm"] .form-select:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(232, 149, 107, 0.15);
+}
+
+/* 暖色主题滚动条 */
+:root[data-theme="warm"] ::-webkit-scrollbar-thumb {
+  background: rgba(120, 90, 60, 0.22);
+}
+
+:root[data-theme="warm"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(120, 90, 60, 0.38);
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -133,7 +229,7 @@ body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   background-color: var(--bg-dark);
   color: var(--text-main);
-  line-height: 1.5;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
@@ -218,6 +314,31 @@ p {
   border-color: var(--text-muted);
 }
 
+/* V3 §6.3：ghost 透明变体（用于次要操作/工具栏） */
+.btn-ghost {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid transparent;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--bg-panel);
+  color: var(--text-main);
+}
+
+/* V3 §6.3：danger 危险变体（删除/不可逆操作） */
+.btn-danger {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #fff;
+  box-shadow: var(--shadow-md);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+  transform: translateY(-1px);
+}
+
 /* Forms */
 .form-group {
   margin-bottom: 0.75rem;
@@ -246,7 +367,7 @@ p {
 .form-input:focus, .form-textarea:focus, .form-select:focus {
   outline: none;
   border-color: var(--primary-color);
-  box-shadow: 0 0 0 2px var(--border-color-focus);
+  box-shadow: 0 0 0 3px var(--border-color-focus);
 }
 
 .form-textarea {
@@ -326,6 +447,88 @@ p {
 
 .slide-up {
   animation: slideUp 0.35s ease-out;
+}
+
+/* ========================================
+   骨架屏（V3 §6.2）—— shimmer 微光占位
+   ======================================== */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-panel) 25%,
+    var(--bg-panel-hover) 50%,
+    var(--bg-panel) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: var(--radius-md);
+  display: block;
+}
+
+.skeleton-text {
+  height: 12px;
+  margin-bottom: 8px;
+  border-radius: var(--radius-full);
+}
+
+.skeleton-text:last-child {
+  margin-bottom: 0;
+}
+
+.skeleton-block {
+  height: 80px;
+  border-radius: var(--radius-lg);
+}
+
+.skeleton-circle {
+  border-radius: 50%;
+}
+
+/* 路由级骨架屏容器 */
+.route-skeleton {
+  padding: var(--space-lg);
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.route-skeleton-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+
+.route-skeleton-title {
+  width: 180px;
+  height: 22px;
+}
+
+.route-skeleton-subtitle {
+  width: 240px;
+  height: 14px;
+}
+
+.route-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-md);
+}
+
+.route-skeleton-card {
+  height: 110px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
 }
 
 /* ========================================
@@ -765,7 +968,7 @@ p {
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
   gap: 0.6rem;
 }
 
@@ -786,7 +989,7 @@ p {
 .dashboard-card:hover {
   transform: translateY(-2px);
   border-color: var(--primary-color);
-  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.12);
+  box-shadow: var(--shadow-card), 0 6px 20px rgba(99, 102, 241, 0.12);
 }
 
 .dashboard-card-icon {
@@ -2224,5 +2427,20 @@ p {
 
   .asset-voice-item audio {
     width: 100%;
+  }
+}
+
+/* ========================================
+   无障碍：尊重 prefers-reduced-motion（V3 §6.4）
+   开启该系统偏好时，所有动画降级为瞬切，避免眩晕
+   ======================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

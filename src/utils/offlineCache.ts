@@ -2,17 +2,21 @@
  * offlineCache — 离线缓存工具
  *
  * 提供：
- * - Service Worker 注册（占位实现，实际 SW 需在 public/sw.js 注册）
  * - OPFS (Origin Private File System) Blob 缓存
  * - 缓存配额管理 + LRU 淘汰
  * - 离线状态检测
  *
+ * 注意：Service Worker 已按设计约束移除，不再提供 SW 注册能力。
+ * 本工具仅保留基于 IndexedDB 的 Blob 缓存（用于离线媒体回放兜底）。
+ *
  * 使用：
  *   const cached = await offlineCache.getCachedBlob(url);
- *   if (cached) { return URL.createObjectURL(cached); }
+ *   if (cached) { return createTrackedObjectUrl(cached); }
  *   const fresh = await fetch(url).then(r => r.blob());
  *   await offlineCache.setCachedBlob(url, fresh);
  */
+
+import { createTrackedObjectUrl } from './objectUrlRegistry';
 
 const CACHE_VERSION = '1.0.0';
 const DB_NAME = 'minimax-offline-cache';
@@ -173,41 +177,12 @@ export class OfflineCache {
         // ignore cache write failures
       }
     }
-    const objectUrl = URL.createObjectURL(blob);
+    const objectUrl = createTrackedObjectUrl(blob);
     return { blob, fromCache, objectUrl };
   }
 }
 
 export const offlineCache = new OfflineCache();
-
-/**
- * Service Worker registration helper.
- * Returns null if SW API is not available.
- *
- * 注意：方案 A 已不再调用此函数。
- * 历史上启用 SW 做跨域媒体缓存，但 cache-first + 跨域拦截策略
- * 破坏了 <img>/<audio>/<video> 的原生渲染，导致预览异常。
- * 函数保留以兼容 API，但不应再被调用。
- * 老用户的 SW 由 public/sw.js 自毁版本一次性清理。
- */
-export async function registerServiceWorker(swPath = '/sw.js'): Promise<ServiceWorkerRegistration | null> {
-  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
-    console.warn('Service Worker not supported');
-    return null;
-  }
-  try {
-    // scope 必须在 SW 脚本路径之下。base 为 '/ai-vido-web/' 时,
-    // swPath 为 '/ai-vido-web/sw.js',scope 应为 '/ai-vido-web/'。
-    // 之前 scope:'/' 会导致 "not under max scope" 注册失败。
-    const scope = import.meta.env.BASE_URL;
-    const registration = await navigator.serviceWorker.register(swPath, { scope });
-    console.log('[SW] Registered with scope:', registration.scope);
-    return registration;
-  } catch (e) {
-    console.error('[SW] Registration failed:', e);
-    return null;
-  }
-}
 
 /**
  * Detect online/offline state.

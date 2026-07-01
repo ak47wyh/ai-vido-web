@@ -9,7 +9,6 @@ import { getErrorMessage } from '../utils/errorUtils';
 import { PLATFORM_METADATA, getCapabilitySummary, type Capability } from '../../domain/services/platformCapabilities';
 import { TEXT_LIMITS } from '../../domain/constants/textLimits';
 import {
-  isSWActive,
   getMediaCacheStats,
   clearAllMediaCache,
   type MediaCacheStats,
@@ -457,7 +456,7 @@ export const Settings: React.FC = () => {
               style={{
                 width: 52,
                 height: 52,
-                borderRadius: 'var(--radius-lg)',
+                borderRadius: '50%',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -1353,29 +1352,23 @@ function LocalStorageSettingsSection() {
 }
 
 // ==========================================
-// 媒体缓存配置区块 —— Service Worker 状态 / CacheStorage 统计 / 清空
+// 媒体缓存配置区块 —— CacheStorage 统计 / 清空
 // ==========================================
 function MediaCacheSettingsSection() {
   const { t } = useTranslation();
-  const [swActive, setSwActive] = useState<boolean | null>(null);
   const [stats, setStats] = useState<MediaCacheStats | null>(null);
   const [isClearing, setIsClearing] = useState(false);
 
-  // 初始探测
+  // 初始加载缓存统计
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const active = await isSWActive();
+        const s = await getMediaCacheStats();
         if (cancelled) return;
-        setSwActive(active);
-        if (active) {
-          const s = await getMediaCacheStats();
-          if (cancelled) return;
-          setStats(s);
-        }
+        setStats(s);
       } catch {
-        if (!cancelled) setSwActive(false);
+        if (!cancelled) setStats(null);
       }
     })();
     return () => { cancelled = true; };
@@ -1383,12 +1376,8 @@ function MediaCacheSettingsSection() {
 
   const handleRefresh = useCallback(async () => {
     setStats(null);
-    const active = await isSWActive();
-    setSwActive(active);
-    if (active) {
-      const s = await getMediaCacheStats();
-      setStats(s);
-    }
+    const s = await getMediaCacheStats();
+    setStats(s);
   }, []);
 
   const handleClear = useCallback(async () => {
@@ -1396,7 +1385,7 @@ function MediaCacheSettingsSection() {
     setIsClearing(true);
     try {
       await clearAllMediaCache();
-      // 清空后立即重新探测
+      // 清空后立即重新加载统计
       await handleRefresh();
     } finally {
       setIsClearing(false);
@@ -1406,36 +1395,11 @@ function MediaCacheSettingsSection() {
   return (
     <SettingsSection
       icon={<Database size={20} />}
-      title={t('settings.mediaCache.title', '媒体缓存（Service Worker）')}
+      title={t('settings.mediaCache.title', '媒体缓存')}
       badge={undefined}
       defaultExpanded={false}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        <div style={{
-          padding: '0.75rem 1rem',
-          background: swActive === false ? 'rgba(248, 113, 113, 0.1)' : 'rgba(74, 222, 128, 0.1)',
-          border: `1px solid ${swActive === false ? 'rgba(248, 113, 113, 0.3)' : 'rgba(74, 222, 128, 0.3)'}`,
-          borderRadius: '8px',
-          fontSize: '0.85rem',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 500 }}>
-            {swActive === false ? '⚠️ ' : swActive === true ? '✅ ' : '⏳ '}
-            {swActive === false
-              ? t('settings.mediaCache.swOffline', 'Service Worker 未激活（无法缓存跨域媒体）')
-              : swActive === true
-              ? t('settings.mediaCache.swOnline', 'Service Worker 已激活 — 跨域媒体自动缓存')
-              : t('settings.mediaCache.probing', '正在探测 SW 状态...')}
-          </div>
-          {swActive === false && (
-            <div style={{ marginTop: '0.4rem', color: 'var(--text-muted)' }}>
-              {t(
-                'settings.mediaCache.swOfflineHint',
-                '可能原因：浏览器不支持 SW、当前不是 HTTPS / localhost、或者 sw.js 注册失败。'
-              )}
-            </div>
-          )}
-        </div>
-
         {stats && (
           <div style={{
             padding: '0.75rem',
@@ -1465,7 +1429,7 @@ function MediaCacheSettingsSection() {
             type="button"
             className="btn btn-secondary"
             onClick={handleRefresh}
-            disabled={swActive === null}
+            disabled={stats === null}
           >
             <RefreshCw size={14} />
             {t('settings.mediaCache.refreshBtn', '刷新状态')}
@@ -1474,7 +1438,7 @@ function MediaCacheSettingsSection() {
             type="button"
             className="btn btn-danger"
             onClick={handleClear}
-            disabled={isClearing || swActive !== true}
+            disabled={isClearing || stats === null}
             style={{ background: 'rgba(248, 113, 113, 0.2)', color: '#f87171' }}
           >
             <Trash2 size={14} />

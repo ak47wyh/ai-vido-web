@@ -73,6 +73,14 @@ export const Dashboard: React.FC = () => {
     navigate(`/workbench?story=${storyId}`);
   };
 
+  // a11y：可点击卡片支持键盘操作（回车/空格触发导航）V3 §6.5
+  const handleCardKeyDown = (e: React.KeyboardEvent<HTMLDivElement>, path: string) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      navigate(path);
+    }
+  };
+
   return (
     <div className="dashboard fade-in">
       <div className="dashboard-header">
@@ -89,7 +97,11 @@ export const Dashboard: React.FC = () => {
             <div
               key={step.path}
               className="dashboard-card"
+              role="button"
+              tabIndex={0}
+              aria-label={`${step.title} — ${step.desc}`}
               onClick={() => navigate(step.path)}
+              onKeyDown={(e) => handleCardKeyDown(e, step.path)}
             >
               <div className="dashboard-card-header">
                 <div className="dashboard-card-icon" style={{ background: `${step.color}20`, color: step.color, position: 'relative' }}>
@@ -131,7 +143,11 @@ export const Dashboard: React.FC = () => {
             <div
               key={item.path}
               className="dashboard-card"
+              role="button"
+              tabIndex={0}
+              aria-label={`${item.label} — ${item.desc}`}
               onClick={() => navigate(item.path)}
+              onKeyDown={(e) => handleCardKeyDown(e, item.path)}
             >
               <div className="dashboard-card-header">
                 <div className="dashboard-card-icon" style={{ background: `${item.color}20`, color: item.color }}>

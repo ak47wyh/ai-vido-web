@@ -547,6 +547,7 @@
   transition: all var(--transition-fast);
   border-radius: var(--radius-md);
   min-width: 56px;
+  min-height: 44px;
 }
 
 .mobile-bottom-nav-item:hover {

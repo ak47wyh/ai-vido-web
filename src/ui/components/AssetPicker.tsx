@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Trash2, Image as ImageIcon, Mic, Check } from 'lucide-react';
 import { assetLibraryService } from '../../dependencies';
+import { useConfirm } from '../contexts/ConfirmContext';
 import { useSavedImages, useSavedVoices, useSavedPrompts } from '../hooks/useSavedAssets';
 import type { SavedImage, SavedVoice, SavedPrompt, PromptCategory } from '../../domain/entities/models';
 import { InputWithCounter } from './InputWithCounter';
@@ -26,6 +27,7 @@ export const AssetPicker: React.FC<AssetPickerProps> = ({
   multiple = false,
 }) => {
   const { t } = useTranslation();
+  const { confirm } = useConfirm();
   const [keyword, setKeyword] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -62,7 +64,12 @@ export const AssetPicker: React.FC<AssetPickerProps> = ({
 
   const handleDelete = useCallback(async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!window.confirm(t('assetLibrary.deleteConfirm', '确定删除此素材？'))) return;
+    const ok = await confirm({
+      title: t('assetLibrary.deleteConfirm', '确定删除此素材？'),
+      message: t('assetLibrary.deleteConfirm', '确定删除此素材？'),
+      danger: true,
+    });
+    if (!ok) return;
     try {
       if (type === 'image') await assetLibraryService.deleteImage(id);
       else if (type === 'voice') await assetLibraryService.deleteVoice(id);
@@ -74,7 +81,7 @@ export const AssetPicker: React.FC<AssetPickerProps> = ({
     } catch {
       // ignore
     }
-  }, [type, t, imagesQuery, voicesQuery, promptsQuery]);
+  }, [type, t, confirm, imagesQuery, voicesQuery, promptsQuery]);
 
   const handleOverlayClick = useCallback((e: React.MouseEvent) => {
     if (e.target === e.currentTarget) onClose();

@@ -18,6 +18,7 @@ import type { IFileStoragePort } from '../ports/FileStoragePorts';
 import type { IApiConfigStore } from '../ports/PlatformPorts';
 import type { ILoggerPort, IEventBus } from '../ports/CrossCuttingPorts';
 import type { PostProcessService } from './PostProcessService';
+import { createTrackedObjectUrl } from '../../utils/objectUrlRegistry';
 import type { SubtitleService } from './SubtitleService';
 import type { PlatformRouter } from './PlatformRouter';
 
@@ -685,18 +686,9 @@ export class PipelineService {
     let thumbnailUrl = '';
     try {
       const firstFrameBlob = await this.deps.postProcess.extractFrame(finalVideoBlob, 0);
-      const storagePath = `images/thumb_${finalCutId}.jpg`;
-      try {
-        thumbnailUrl = URL.createObjectURL(firstFrameBlob);
-        void storagePath;
-      } catch (cacheErr) {
-        this.logger.warn('thumbnail persist failed', {
-          service: 'PipelineService',
-          method: 'assembleFinalVideo',
-          error: cacheErr instanceof Error ? cacheErr.message : String(cacheErr),
-        });
-        thumbnailUrl = URL.createObjectURL(firstFrameBlob);
-      }
+      // 缩略图 URL 会随 finalCut 返回给 UI 层,统一通过 ObjectUrlRegistry 追踪,
+      // 由消费方在不再使用时释放(或页面卸载时兜底释放)。
+      thumbnailUrl = createTrackedObjectUrl(firstFrameBlob);
     } catch (e) {
       this.logger.warn('thumbnail extract failed', {
         service: 'PipelineService',

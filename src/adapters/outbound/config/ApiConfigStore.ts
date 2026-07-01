@@ -1,7 +1,19 @@
 /**
  * ApiConfigStore — 负责读写 API 配置（Token、BaseURL 等）。
  * 数据持久化到 localStorage，纯前端，无需后端。
+ *
+ * 安全：敏感配置通过 Web Crypto API（AES-GCM）加密后持久化，
+ * 避免在开发者工具中直接看到明文 API Key。
+ * 启动时需调用 `await ApiConfigStore.init()` 解密到内存缓存；
+ * 此后 load() 同步返回缓存，save() 同步更新缓存并异步加密写入。
  */
+
+import {
+  encryptJSON,
+  decryptJSON,
+  isEncryptedPayload,
+  isSecureStorageAvailable,
+} from './secureStorage';
 
 // ===== 平台标识类型 =====
 
@@ -9,7 +21,7 @@
 export type PlatformId = 'minimax' | 'volcengine' | 'coze' | 'kling' | 'wan' | 'hunyuan' | 'zhipu' | 'vidu';
 
 /** 主题标识 */
-export type ThemeId = 'dark' | 'light' | 'blue';
+export type ThemeId = 'dark' | 'light' | 'blue' | 'warm';
 
 // ===== ApiConfig 接口 =====
 
@@ -63,7 +75,7 @@ const STORAGE_KEY = 'ai_video_studio_api_config';
 // ===== 默认值 =====
 
 // 所有平台默认直连完整外部 URL,DEV 与 PROD 行为一致。
-// 若某平台不支持 CORS,用户可在配置中心手动填入自建反代地址。
+// 按设计约束不做 CORS 处理：不可直连的平台视为能力不可用，UI 自动置灰。
 const DEFAULT_CONFIG: ApiConfig = {
   // MiniMax 默认值
   minimaxApiKey: '',
@@ -123,47 +135,103 @@ const PROXY_PATH_MIGRATIONS: Record<string, Partial<ApiConfig>> = {
 };
 
 export const ApiConfigStore = {
+  /** 内存缓存（init 后填充，load 同步返回） */
+  _cache: null as ApiConfig | null,
+
+  /** 迁移旧版 DEV 代理路径 → 完整外部 URL（直连架构） */
+  _migrateProxyPaths(config: ApiConfig): ApiConfig {
+    for (const proxyPath of Object.keys(PROXY_PATH_MIGRATIONS) as Array<keyof typeof PROXY_PATH_MIGRATIONS>) {
+      const migration = PROXY_PATH_MIGRATIONS[proxyPath];
+      for (const field of Object.keys(migration) as Array<keyof ApiConfig>) {
+        if (config[field] === proxyPath) {
+          // 迁移字段均为 string 类型（baseUrl），安全断言
+          (config as unknown as Record<string, string>)[field as string] = migration[field] as string;
+        }
+      }
+    }
+    return config;
+  },
+
+  /**
+   * 启动时异步初始化：解密 localStorage 中的密文到内存缓存。
+   * 必须在渲染前调用一次（main.tsx），以便 load() 能同步返回正确配置。
+   * - 密文：解密并迁移代理路径
+   * - 旧明文 JSON：解析、迁移，并立即加密重写（一次性升级）
+   * - 无数据：使用默认配置
+   * - Web Crypto 不可用：降级为明文读写
+   */
+  async init(): Promise<void> {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) {
+        this._cache = { ...DEFAULT_CONFIG };
+        return;
+      }
+      if (isEncryptedPayload(raw)) {
+        const config = this._migrateProxyPaths({ ...DEFAULT_CONFIG, ...await decryptJSON<ApiConfig>(raw) });
+        this._cache = config;
+      } else {
+        // 旧版明文：解析、迁移，并异步加密重写升级
+        const config = this._migrateProxyPaths({ ...DEFAULT_CONFIG, ...JSON.parse(raw) });
+        this._cache = config;
+        void this._persistEncrypted(config);
+      }
+    } catch {
+      this._cache = { ...DEFAULT_CONFIG };
+    }
+  },
+
+  /** 加密并写入 localStorage（异步，失败静默降级明文） */
+  async _persistEncrypted(config: ApiConfig): Promise<void> {
+    try {
+      if (!isSecureStorageAvailable()) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+        return;
+      }
+      const payload = await encryptJSON(config);
+      localStorage.setItem(STORAGE_KEY, payload);
+    } catch {
+      // 加密失败时降级为明文，保证可用性优先
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(config)); } catch { /* ignore */ }
+    }
+  },
+
   load(): ApiConfig {
+    // 优先返回内存缓存（init 后的常态）
+    if (this._cache) return this._cache;
+    // 未 init 的降级路径：同步读 localStorage（兼容旧调用方 / 测试环境）
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return { ...DEFAULT_CONFIG };
-      const config = { ...DEFAULT_CONFIG, ...JSON.parse(raw) };
-      // 迁移:把旧版 DEV 代理路径(如 /anthropic、/kling)替换为完整外部 URL
-      (Object.keys(PROXY_PATH_MIGRATIONS) as Array<keyof typeof PROXY_PATH_MIGRATIONS>)
-        .forEach(proxyPath => {
-          const migration = PROXY_PATH_MIGRATIONS[proxyPath];
-          (Object.keys(migration) as Array<keyof ApiConfig>).forEach(field => {
-            if (config[field] === proxyPath) {
-              config[field] = migration[field]!;
-            }
-          });
-        });
-      return config;
+      if (isEncryptedPayload(raw)) {
+        // 密文无法同步解密，返回默认值（init 完成后会被纠正）
+        return { ...DEFAULT_CONFIG };
+      }
+      return this._migrateProxyPaths({ ...DEFAULT_CONFIG, ...JSON.parse(raw) });
     } catch {
       return { ...DEFAULT_CONFIG };
     }
   },
 
   save(config: ApiConfig): void {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-      // 脱敏日志：仅输出激活平台与各平台配置状态，不输出 Key 内容
-      const summary = {
-        activePlatform: config.activePlatform,
-        minimax: !!config.minimaxApiKey.trim(),
-        volcengine: !!config.volcArkApiKey.trim(),
-        coze: !!config.cozePatToken.trim(),
-        kling: !!config.klingAccessKey.trim() && !!config.klingSecretKey.trim(),
-        wan: !!config.wanApiKey.trim(),
-        hunyuan: !!config.hunyuanSecretId.trim() && !!config.hunyuanSecretKey.trim(),
-        zhipu: !!config.zhipuApiKey.trim(),
-        vidu: !!config.viduApiKey.trim(),
-      };
-      console.log('[ApiConfigStore] 配置已保存:', summary);
-    } catch (e) {
-      console.error('[ApiConfigStore] 保存配置失败:', e);
-      throw e;
-    }
+    // 同步更新内存缓存
+    this._cache = config;
+    // 异步加密持久化（不阻塞调用方）
+    void this._persistEncrypted(config);
+    // 脱敏日志：仅输出激活平台与各平台配置状态，不输出 Key 内容
+    const summary = {
+      activePlatform: config.activePlatform,
+      minimax: !!config.minimaxApiKey.trim(),
+      volcengine: !!config.volcArkApiKey.trim(),
+      coze: !!config.cozePatToken.trim(),
+      kling: !!config.klingAccessKey.trim() && !!config.klingSecretKey.trim(),
+      wan: !!config.wanApiKey.trim(),
+      hunyuan: !!config.hunyuanSecretId.trim() && !!config.hunyuanSecretKey.trim(),
+      zhipu: !!config.zhipuApiKey.trim(),
+      vidu: !!config.viduApiKey.trim(),
+    };
+    // 使用 console 输出脱敏摘要（ApiConfigStore 是底层适配器，不注入 logger 以避免循环依赖）
+    console.log('[ApiConfigStore] 配置已保存:', summary);
   },
 
   /** 自动保存（防抖调用） */

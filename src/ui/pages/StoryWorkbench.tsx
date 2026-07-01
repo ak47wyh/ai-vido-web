@@ -588,7 +588,14 @@ export const StoryWorkbench: React.FC = () => {
             {progressStats && progressStats.total > 0 && (
               <div className="workbench-progress">
                 <span className="workbench-progress-label">{progressStats.success}/{progressStats.total} {t('workbench.completed')}</span>
-                <div className="workbench-progress-bar">
+                <div
+                  className="workbench-progress-bar"
+                  role="progressbar"
+                  aria-valuenow={progressStats.success}
+                  aria-valuemin={0}
+                  aria-valuemax={progressStats.total}
+                  aria-label={t('workbench.completed', '已完成')}
+                >
                   {progressStats.success > 0 && <div style={{ width: `${(progressStats.success / progressStats.total) * 100}%`, background: '#34d399', transition: 'width 0.3s' }} />}
                   {progressStats.processing + progressStats.pending > 0 && <div style={{ width: `${((progressStats.processing + progressStats.pending) / progressStats.total) * 100}%`, background: '#fbbf24', transition: 'width 0.3s' }} />}
                   {progressStats.failed > 0 && <div style={{ width: `${(progressStats.failed / progressStats.total) * 100}%`, background: '#f87171', transition: 'width 0.3s' }} />}

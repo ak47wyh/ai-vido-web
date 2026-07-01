@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, Image as ImageIcon, BookOpen, Settings,
   FolderOpen, Download, Mic, MessageSquare, Sparkles, Film, Scissors,
   ChevronLeft, ChevronRight, Plus, Zap, Palette, Music as MusicIcon, X, Menu, Eraser,
-  FolderCog
+  FolderCog, Ban
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAllSpaces } from '../hooks/useSpaceScopedQuery';
@@ -44,7 +44,10 @@ export const MainLayout: React.FC = () => {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  // 懒初始化读取 matchMedia，避免在 effect 内同步 setState（react-hooks/set-state-in-effect）
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches,
+  );
 
   // 当前激活平台（路由变化时刷新，确保 Settings 切换后立即生效）
   const activePlatform: PlatformId = useMemo(
@@ -54,12 +57,14 @@ export const MainLayout: React.FC = () => {
   );
   const activeMeta = PLATFORM_METADATA[activePlatform];
 
-  // Detect mobile viewport
+  // Detect mobile viewport — V3 §6.6：用 matchMedia 替代 resize 监听，
+  // 性能更优且响应系统偏好变化（如响应式模式切换）
+  // 初值已由 useState 懒初始化读取，effect 仅订阅后续变化
   useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
+    const mql = window.matchMedia('(max-width: 768px)');
+    const onChange = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
   }, []);
 
   // Close mobile menu on route change — 在渲染期间调整 state，避免 effect 内同步 setState
@@ -110,8 +115,8 @@ export const MainLayout: React.FC = () => {
         { to: '/labs/voice', icon: <Mic size={18} />, label: t('nav.voiceLab', '音色与配音'), capability: 'voice' },
         { to: '/labs/music', icon: <MusicIcon size={18} />, label: t('nav.musicLab', '音乐生成'), capability: 'music' },
         { to: '/labs/text', icon: <MessageSquare size={18} />, label: t('nav.textLab', '文本润色'), capability: 'text' },
-        { to: '/labs/watermark', icon: <Eraser size={18} />, label: '去水印' },
-        { to: '/labs/enhance', icon: <Sparkles size={18} />, label: '清晰度提升' },
+        { to: '/labs/watermark', icon: <Eraser size={18} />, label: t('nav.watermarkLab', '去水印') },
+        { to: '/labs/enhance', icon: <Sparkles size={18} />, label: t('nav.enhanceLab', '清晰度提升') },
       ],
     },
     {
@@ -262,7 +267,7 @@ export const MainLayout: React.FC = () => {
                 <option key={space.id} value={space.id}>{space.name}</option>
               ))}
             </select>
-            <button className="space-add-btn" onClick={handleCreateSpace} title={t('space.newBtn')}>
+            <button className="space-add-btn" onClick={handleCreateSpace} title={t('space.newBtn')} aria-label={t('space.newBtn', '新建空间')}>
               <Plus size={14} />
             </button>
           </div>
@@ -309,7 +314,10 @@ export const MainLayout: React.FC = () => {
                       title={item.disabledReason ?? '该平台不支持此能力'}
                       aria-disabled={true}
                     >
-                      <span className="nav-icon">{item.icon}</span>
+                      <span className="nav-icon" style={{ position: 'relative' }}>
+                        {item.icon}
+                        <Ban size={10} style={{ position: 'absolute', bottom: -2, right: -2, color: 'var(--text-muted)' }} />
+                      </span>
                       {(!collapsed || isMobile) && <span className="nav-label">{item.label}</span>}
                     </span>
                   );

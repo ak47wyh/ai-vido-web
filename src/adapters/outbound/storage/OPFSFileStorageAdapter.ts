@@ -1,5 +1,6 @@
 import type { IFileStoragePort, FileStorageStats } from '../../../domain/ports/FileStoragePorts';
 import type { GeneratedFileType } from '../../../domain/entities/models';
+import { createTrackedObjectUrl, revokeObjectUrl as revokeTrackedObjectUrl } from '../../../utils/objectUrlRegistry';
 
 /**
  * OPFS 文件存储适配器 — 使用 Origin Private File System API。
@@ -90,14 +91,15 @@ export class OPFSFileStorageAdapter implements IFileStoragePort {
   async getObjectUrl(path: string): Promise<string> {
     const blob = await this.getBlob(path);
     if (!blob) throw new Error(`[OPFSFileStorage] File not found: ${path}`);
-    const url = URL.createObjectURL(blob);
+    // 注册到全局 objectUrlRegistry（跨层追踪 + beforeunload 兜底释放）
+    const url = createTrackedObjectUrl(blob);
     this.activeObjectUrls.add(url);
     return url;
   }
 
   revokeObjectUrl(url: string): void {
     if (this.activeObjectUrls.has(url)) {
-      URL.revokeObjectURL(url);
+      revokeTrackedObjectUrl(url);
       this.activeObjectUrls.delete(url);
     }
   }
@@ -181,9 +183,9 @@ export class OPFSFileStorageAdapter implements IFileStoragePort {
   async clearAll(): Promise<void> {
     this.ensureInitialized();
 
-    // 释放所有活跃 Object URL
+    // 释放所有活跃 Object URL（通过全局 registry 释放）
     for (const url of this.activeObjectUrls) {
-      URL.revokeObjectURL(url);
+      revokeTrackedObjectUrl(url);
     }
     this.activeObjectUrls.clear();
 
