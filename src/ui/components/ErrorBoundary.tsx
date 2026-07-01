@@ -4,6 +4,8 @@ import { logSink } from '../../adapters/outbound/infrastructure/RingBufferLogSin
 
 interface Props {
   children: React.ReactNode;
+  /** "root" = 全屏兜底；"route" = 仅占据路由内容区域，保留侧边栏等框架 */
+  variant?: 'root' | 'route';
 }
 
 interface State {
@@ -48,13 +50,21 @@ export class ErrorBoundary extends React.Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
+      const isRoute = this.props.variant === 'route';
+      const containerStyle: React.CSSProperties = isRoute
+        ? {
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            minHeight: '50vh', padding: '2rem', textAlign: 'center',
+            color: 'var(--text-primary, #e5e5e5)',
+          }
+        : {
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            minHeight: '100vh', padding: '2rem', textAlign: 'center',
+            background: 'var(--bg-base, #0a0a0f)', color: 'var(--text-primary, #e5e5e5)',
+          };
       return (
-        <div style={{
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          minHeight: '100vh', padding: '2rem', textAlign: 'center',
-          background: 'var(--bg-base, #0a0a0f)', color: 'var(--text-primary, #e5e5e5)'
-        }}>
-          <AlertTriangle size={48} style={{ color: '#f87171', marginBottom: '1.5rem' }} />
+        <div style={containerStyle}>
+          <AlertTriangle size={isRoute ? 36 : 48} style={{ color: '#f87171', marginBottom: '1.5rem' }} />
           <h2 style={{ marginBottom: '0.75rem', fontSize: '1.25rem' }}>Something went wrong</h2>
           <p style={{ color: 'var(--text-muted, #9ca3af)', marginBottom: '1.5rem', maxWidth: '480px', lineHeight: 1.6 }}>
             {this.state.error?.message || 'An unexpected error occurred.'}

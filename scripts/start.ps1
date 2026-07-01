@@ -1,4 +1,4 @@
-# 一键启动脚本（Windows）
+﻿# 一键启动脚本（Windows）
 # 用法：在 PowerShell 中执行 .\scripts\start.ps1
 # 或在 cmd 中执行：powershell -ExecutionPolicy Bypass -File scripts\start.ps1
 #
@@ -122,9 +122,14 @@ function Main {
     Info "[3/3] 进入核心流程..."
     Write-Host ""
     # 兼容多种调用方式：直接执行 / dot-source / powershell -File
-    # $MyInvocation.MyCommand.Path 在某些调用方式下为空，用 $PSScriptRoot 兜底
-    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-    if (-not $scriptDir) { $scriptDir = $PSScriptRoot }
+    # $MyInvocation.MyCommand.Path 在 dot-source 等场景下为 null，
+    # 直接 Split-Path -Parent $null 在 ErrorActionPreference=Stop 下会抛错，
+    # 因此先用 $PSScriptRoot（PowerShell 3.0+ 内置，最可靠），再依次回退。
+    $scriptDir = $PSScriptRoot
+    if (-not $scriptDir) {
+        $cmdPath = $MyInvocation.MyCommand.Path
+        if ($cmdPath) { $scriptDir = Split-Path -Parent $cmdPath }
+    }
     if (-not $scriptDir) { $scriptDir = (Get-Location).Path + "\scripts" }
     & node "$scriptDir\lib\run-dev.mjs"
 }

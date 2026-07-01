@@ -372,7 +372,10 @@ export const MusicLab: React.FC = () => {
           {/* 高级设置 */}
           <div>
             <button className="advanced-toggle" onClick={() => setShowAdvancedCompose(!showAdvancedCompose)}>
-              {showAdvancedCompose ? <ChevronUp size={14} /> : <ChevronDown size={14} />} {t('musicLab.advanced', '高级设置')}
+              <span className="advanced-toggle-icon">
+                {showAdvancedCompose ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </span>
+              <span>{t('musicLab.advanced', '高级设置')}</span>
             </button>
             {showAdvancedCompose && (
               <div className="advanced-content">

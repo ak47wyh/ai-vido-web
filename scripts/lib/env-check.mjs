@@ -56,6 +56,7 @@ async function checkNode() {
     ok,
     current,
     required: NODE_MIN,
+    missing: false,
     message: ok
       ? `Node.js ${current} ✓`
       : `Node.js ${current} 过低，需要 >= ${NODE_MIN}`,

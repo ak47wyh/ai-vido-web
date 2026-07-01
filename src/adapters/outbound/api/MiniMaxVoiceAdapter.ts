@@ -673,7 +673,7 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
       voice_type: voiceType,
     };
 
-    console.log('[MiniMaxVoiceAdapter] Getting available voices, type:', voiceType);
+    console.log('[MiniMaxVoiceAdapter] getAvailableVoices request:', JSON.stringify({ url: `${baseUrl}/get_voice`, payload }));
 
     const response = await axios.post(`${baseUrl}/get_voice`, payload, {
       headers: {
@@ -685,46 +685,51 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
 
     const data = response.data;
 
+    console.log('[MiniMaxVoiceAdapter] getAvailableVoices response:', JSON.stringify(data));
+
     const statusCode = data?.base_resp?.status_code;
     const error = getMiniMaxErrorMessage(statusCode, data?.base_resp?.status_msg, 'MiniMax Get Voice error');
     if (error) throw new Error(error);
 
     const result: VoiceListResult = {};
 
-    const systemVoices = data?.data?.system_voice || data?.system_voice;
-    if (systemVoices && Array.isArray(systemVoices)) {
-      result.systemVoices = systemVoices.map((v: Record<string, unknown>) => ({
-        voiceId: v.voice_id as string,
-        description: Array.isArray(v.description) ? v.description.join('；') : (v.description || v.voice_desc || '') as string,
-        voiceName: (v.voice_name || v.name || v.voice_id) as string,
-        createdTime: (v.created_time || v.create_time) as string | undefined,
-        type: 'system' as const,
+    // 防御性辅助：安全地将单条原始 voice 映射为 VoiceInfo
+    const mapVoice = (v: unknown, type: 'system' | 'voice_cloning' | 'voice_generation') => {
+      const obj = (v && typeof v === 'object') ? v as Record<string, unknown> : {};
+      const voiceId = String(obj.voice_id ?? obj.voiceId ?? '');
+      const descRaw = obj.description ?? obj.voice_desc;
+      const description = Array.isArray(descRaw)
+        ? descRaw.join('；')
+        : (typeof descRaw === 'string' ? descRaw : '');
+      return {
+        voiceId,
+        description,
+        voiceName: String(obj.voice_name ?? obj.name ?? obj.voice_id ?? ''),
+        createdTime: (obj.created_time ?? obj.create_time) as string | undefined,
+        type,
         isActive: true,
-      }));
+      };
+    };
+
+    const systemVoices = data?.data?.system_voice || data?.system_voice;
+    if (Array.isArray(systemVoices)) {
+      result.systemVoices = systemVoices
+        .filter((v): v is Record<string, unknown> => v != null && typeof v === 'object')
+        .map((v) => mapVoice(v, 'system'));
     }
 
     const clonedVoices = data?.data?.voice_cloning || data?.voice_cloning;
-    if (clonedVoices && Array.isArray(clonedVoices)) {
-      result.clonedVoices = clonedVoices.map((v: Record<string, unknown>) => ({
-        voiceId: v.voice_id as string,
-        description: Array.isArray(v.description) ? v.description.join('；') : (v.description || v.voice_desc || '') as string,
-        voiceName: (v.voice_name || v.name || v.voice_id) as string,
-        createdTime: (v.created_time || v.create_time) as string | undefined,
-        type: 'voice_cloning' as const,
-        isActive: true,
-      }));
+    if (Array.isArray(clonedVoices)) {
+      result.clonedVoices = clonedVoices
+        .filter((v): v is Record<string, unknown> => v != null && typeof v === 'object')
+        .map((v) => mapVoice(v, 'voice_cloning'));
     }
 
     const designedVoices = data?.data?.voice_generation || data?.voice_generation;
-    if (designedVoices && Array.isArray(designedVoices)) {
-      result.designedVoices = designedVoices.map((v: Record<string, unknown>) => ({
-        voiceId: v.voice_id as string,
-        description: Array.isArray(v.description) ? v.description.join('；') : (v.description || v.voice_desc || '') as string,
-        voiceName: (v.voice_name || v.name || v.voice_id) as string,
-        createdTime: (v.created_time || v.create_time) as string | undefined,
-        type: 'voice_generation' as const,
-        isActive: true,
-      }));
+    if (Array.isArray(designedVoices)) {
+      result.designedVoices = designedVoices
+        .filter((v): v is Record<string, unknown> => v != null && typeof v === 'object')
+        .map((v) => mapVoice(v, 'voice_generation'));
     }
 
     return result;

@@ -148,8 +148,10 @@ export const SegmentCard: React.FC<SegmentCardProps> = React.memo(({
             className="advanced-toggle"
             onClick={() => setShowAdvanced(!showAdvanced)}
           >
-            {showAdvanced ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-            {t('workbench.advancedOptions', '高级选项 (运镜与参考图)')}
+            <span className="advanced-toggle-icon">
+              {showAdvanced ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </span>
+            <span>{t('workbench.advancedOptions', '高级选项 (运镜与参考图)')}</span>
           </button>
 
           {showAdvanced && (

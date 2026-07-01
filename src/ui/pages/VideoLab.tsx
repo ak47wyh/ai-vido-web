@@ -119,7 +119,10 @@ const VideoModelConfig: React.FC<VideoModelConfigProps> = ({
       {showAdvanced && (
         <div>
           <button className="advanced-toggle" onClick={() => setExpanded(!expanded)}>
-            {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />} 高级设置
+            <span className="advanced-toggle-icon">
+              {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </span>
+            <span>高级设置</span>
           </button>
           {expanded && (
             <div className="advanced-content">

@@ -492,7 +492,10 @@ export const VoiceLab: React.FC = () => {
           {/* 高级设置 */}
           <div>
             <button className="advanced-toggle" onClick={() => setShowAdvancedTTS(!showAdvancedTTS)}>
-              {showAdvancedTTS ? <ChevronUp size={14} /> : <ChevronDown size={14} />} 高级设置
+              <span className="advanced-toggle-icon">
+                {showAdvancedTTS ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </span>
+              <span>高级设置</span>
             </button>
             {showAdvancedTTS && (
               <div className="advanced-content">
@@ -630,7 +633,10 @@ export const VoiceLab: React.FC = () => {
           {/* 高级克隆选项 */}
           <div>
             <button className="advanced-toggle" onClick={() => setShowAdvancedClone(!showAdvancedClone)}>
-              {showAdvancedClone ? <ChevronUp size={14} /> : <ChevronDown size={14} />} 高级选项
+              <span className="advanced-toggle-icon">
+                {showAdvancedClone ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </span>
+              <span>高级选项</span>
             </button>
             {showAdvancedClone && (
               <div className="advanced-content">

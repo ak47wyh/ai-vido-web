@@ -13,6 +13,7 @@ import { storySpaceService } from '../../dependencies';
 import { useToast } from '../contexts/ToastContext';
 import { ApiConfigStore, type PlatformId } from '../../adapters/outbound/config/ApiConfigStore';
 import { PLATFORM_METADATA, hasCapability, getCapabilitySummary, type Capability } from '../../domain/services/platformCapabilities';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import './MainLayout.css';
 
 interface NavItem {
@@ -340,7 +341,9 @@ export const MainLayout: React.FC = () => {
       {/* Main Content */}
       <main className="main-content">
         <div className="glass-panel main-panel">
-          <Outlet />
+          <ErrorBoundary variant="route">
+            <Outlet />
+          </ErrorBoundary>
         </div>
       </main>
 
