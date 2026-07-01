@@ -17,11 +17,11 @@ export const TEXT_LIMITS = {
   VIDEO_PROMPT_MAX: 1500,            // Vidu 1500 / 万相旧版 800 / MiniMax 2000 / 可灵 2500
 
   // TTS（核对官方文档后修订）
-  TTS_TEXT_MAX: 500,                 // MiniMax 同步 TTS 官方"<500字符"
+  TTS_TEXT_MAX: 10000,                 // MiniMax 同步 TTS 官方"<500字符"
   TTS_ASYNC_TEXT_MAX: 10000,         // MiniMax 异步长文本上限（火山异步 10 万字符远大于此）
-  VOICE_CLONE_PROMPT_MAX: 500,
-  VOICE_DESIGN_PROMPT_MAX: 500,
-  VOICE_DESIGN_PREVIEW_MAX: 500,
+  VOICE_CLONE_PROMPT_MAX: 1500,
+  VOICE_DESIGN_PROMPT_MAX: 1500,
+  VOICE_DESIGN_PREVIEW_MAX: 1500,
   VOICE_NAME_MAX: 100,
 
   // 音乐（核对 MiniMax 音乐 API 后修订）

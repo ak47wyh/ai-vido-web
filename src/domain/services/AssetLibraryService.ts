@@ -525,6 +525,143 @@ export class AssetLibraryService {
     return this.getFileStorage().getStorageType();
   }
 
+  // ===== 批量图片压缩 =====
+
+  /**
+   * 批量压缩图片。
+   *
+   * 压缩引擎由调用方传入（避免 domain 层依赖 ui/utils）。
+   * 本方法负责：读取源 blob → 调用压缩引擎 → 写回 / 另存 → 更新元数据。
+   *
+   * @param params.imageIds 要压缩的 SavedImage ID 列表
+   * @param params.quality 质量 60-95
+   * @param params.maxDimension 最长边上限（可选）
+   * @param params.outputFormat 输出格式
+   * @param params.resultMode 'replace'=原地替换 | 'saveAsNew'=另存为新素材
+   * @param params.compressFn 压缩函数（由 UI 层注入，避免 domain 依赖 ui）
+   * @param params.onProgress 进度回调
+   * @returns 每张图片的压缩结果
+   */
+  async compressImages(params: {
+    imageIds: string[];
+    quality: number;
+    maxDimension?: number;
+    outputFormat?: 'original' | 'jpeg' | 'webp';
+    resultMode: 'replace' | 'saveAsNew';
+    compressFn: (source: Blob, opts: {
+      quality: number;
+      maxDimension?: number;
+      outputFormat?: 'original' | 'jpeg' | 'webp';
+    }) => Promise<{
+      blob: Blob;
+      originalSize: number;
+      compressedSize: number;
+      ratio: number;
+      mimeType: string;
+    }>;
+    onProgress?: (done: number, total: number) => void;
+  }): Promise<Array<{
+    imageId: string;
+    success: boolean;
+    originalSize: number;
+    compressedSize: number;
+    ratio: number;
+    error?: string;
+  }>> {
+    const results: Array<{
+      imageId: string;
+      success: boolean;
+      originalSize: number;
+      compressedSize: number;
+      ratio: number;
+      error?: string;
+    }> = [];
+
+    const fileStorage = this.getFileStorage();
+    const fileRepo = this.getFileRepo();
+
+    for (let i = 0; i < params.imageIds.length; i++) {
+      const imageId = params.imageIds[i];
+      let originalSize = 0;
+      try {
+        const image = await this.imageRepo.getById(imageId);
+        if (!image) {
+          results.push({ imageId, success: false, originalSize: 0, compressedSize: 0, ratio: 0, error: '图片不存在' });
+          continue;
+        }
+        // 读取源 blob（优先从 GeneratedFile.storagePath 读，回退 thumbnailBlobKey）
+        let sourceBlob: Blob | null = null;
+        if (image.thumbnailBlobKey) {
+          sourceBlob = await fileStorage.getBlob(image.thumbnailBlobKey);
+        }
+        if (!sourceBlob) {
+          // 通过 getImageBlobUrl 兜底读取
+          const url = await this.getImageBlobUrl(image);
+          const r = await fetch(url);
+          sourceBlob = await r.blob();
+        }
+        if (!sourceBlob) {
+          results.push({ imageId, success: false, originalSize: 0, compressedSize: 0, ratio: 0, error: '源文件读取失败' });
+          continue;
+        }
+        originalSize = sourceBlob.size;
+
+        // 调用压缩引擎
+        const compressed = await params.compressFn(sourceBlob, {
+          quality: params.quality,
+          maxDimension: params.maxDimension,
+          outputFormat: params.outputFormat,
+        });
+
+        if (params.resultMode === 'replace') {
+          // 原地替换：覆盖同 storagePath + 更新 GeneratedFile 元数据
+          const genFile = await fileRepo.findByPath(image.thumbnailBlobKey || `images/${image.id}`);
+          if (genFile) {
+            await fileStorage.storeBlob(genFile.storagePath, compressed.blob);
+            await fileRepo.save({
+              ...genFile,
+              fileSize: compressed.blob.size,
+              mimeType: compressed.mimeType,
+              originalSize,
+              compressedAt: Date.now(),
+              compressionRatio: compressed.ratio,
+              lastAccessedAt: Date.now(),
+            });
+          } else if (image.thumbnailBlobKey) {
+            // 无 GeneratedFile 记录但有 thumbnailBlobKey：直接覆盖
+            await fileStorage.storeBlob(image.thumbnailBlobKey, compressed.blob);
+          }
+        } else {
+          // 另存为新素材
+          await this.saveImageFromBlob({
+            spaceId: image.spaceId,
+            name: `${image.name}_compressed`,
+            blob: compressed.blob,
+            prompt: image.prompt,
+            model: image.model,
+            aspectRatio: image.aspectRatio,
+            tags: image.tags,
+            sourceType: image.sourceType,
+          });
+        }
+
+        results.push({
+          imageId,
+          success: true,
+          originalSize,
+          compressedSize: compressed.compressedSize,
+          ratio: compressed.ratio,
+        });
+      } catch (e) {
+        const error = e instanceof Error ? e.message : String(e);
+        results.push({ imageId, success: false, originalSize, compressedSize: 0, ratio: 0, error });
+      }
+      params.onProgress?.(i + 1, params.imageIds.length);
+    }
+
+    return results;
+  }
+
   // ===== Private helpers =====
 
   private async registerFile(fileRepo: IGeneratedFileRepository, params: {

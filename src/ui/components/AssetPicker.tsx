@@ -127,17 +127,20 @@ function ImageList({ images, selectedIds, onSelect, onDelete, loading, t }: {
   loading: boolean;
   t: (key: string, fallback: string) => string;
 }) {
-  const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
+  // url 状态：string=正常URL；''=加载中；null=图源缺失
+  const [imageUrls, setImageUrls] = useState<Record<string, string | null>>({});
 
   useEffect(() => {
     let cancelled = false;
-    const urls: Record<string, string> = {};
+    const urls: Record<string, string | null> = {};
     const loadUrls = async () => {
       for (const img of images) {
         try {
-          urls[img.id] = await assetLibraryService.getImageBlobUrl(img);
+          const url = await assetLibraryService.getImageBlobUrl(img);
+          urls[img.id] = url;
         } catch {
-          urls[img.id] = '';
+          // 图源缺失：标记为 null，UI 显示"图源缺失·点击修复"
+          urls[img.id] = null;
         }
       }
       if (!cancelled) setImageUrls(urls);
@@ -157,26 +160,64 @@ function ImageList({ images, selectedIds, onSelect, onDelete, loading, t }: {
 
   return (
     <div className="asset-image-grid">
-      {images.map(img => (
-        <div
-          key={img.id}
-          className={`asset-image-card ${selectedIds.has(img.id) ? 'selected' : ''}`}
-          onClick={() => onSelect(img.id)}
-        >
-          {imageUrls[img.id] ? (
-            <img src={imageUrls[img.id]} alt={img.name} />
-          ) : (
-            <div style={{ aspectRatio: '16/9', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.3)' }}>
-              <ImageIcon size={24} style={{ color: 'var(--text-muted)' }} />
+      {images.map(img => {
+        const urlState = imageUrls[img.id];
+        const isMissing = urlState === null;
+        const isLoading = urlState === undefined;
+        return (
+          <div
+            key={img.id}
+            className={`asset-image-card ${selectedIds.has(img.id) ? 'selected' : ''}`}
+            onClick={() => onSelect(img.id)}
+          >
+            {urlState && !isMissing ? (
+              <img src={urlState} alt={img.name} />
+            ) : isMissing ? (
+              <div
+                style={{
+                  aspectRatio: '16/9',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'rgba(220, 38, 38, 0.15)',
+                  color: '#fca5a5',
+                  cursor: 'pointer',
+                  padding: '0.5rem',
+                  textAlign: 'center',
+                }}
+                title={t('assetLibrary.missingHint', '图源文件缺失，可能存储目录已切换。点击尝试修复或删除后重新保存。')}
+                onClick={e => {
+                  e.stopPropagation();
+                  // 点击缺失提示：重新尝试加载一次（删除 key 触发 loading 态）
+                  setImageUrls(prev => {
+                    const next = { ...prev };
+                    delete next[img.id];
+                    return next;
+                  });
+                  assetLibraryService.getImageBlobUrl(img)
+                    .then(u => setImageUrls(prev => ({ ...prev, [img.id]: u })))
+                    .catch(() => setImageUrls(prev => ({ ...prev, [img.id]: null })));
+                }}
+              >
+                <ImageIcon size={20} style={{ marginBottom: '0.25rem' }} />
+                <span style={{ fontSize: '0.7rem' }}>
+                  {t('assetLibrary.missingLabel', '图源缺失·点击修复')}
+                </span>
+              </div>
+            ) : isLoading ? (
+              <div style={{ aspectRatio: '16/9', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.3)' }}>
+                <ImageIcon size={24} style={{ color: 'var(--text-muted)' }} />
+              </div>
+            ) : null}
+            <div className="asset-card-info">
+              <div className="asset-card-name">{img.name}</div>
+              <div className="asset-card-tags">{img.tags.join(', ')}</div>
             </div>
-          )}
-          <div className="asset-card-info">
-            <div className="asset-card-name">{img.name}</div>
-            <div className="asset-card-tags">{img.tags.join(', ')}</div>
+            <button className="asset-card-delete" onClick={e => onDelete(img.id, e)}>x</button>
           </div>
-          <button className="asset-card-delete" onClick={e => onDelete(img.id, e)}>x</button>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

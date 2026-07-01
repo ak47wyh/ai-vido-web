@@ -168,6 +168,25 @@ export class AiVideoDatabase extends Dexie {
       timelines: 'id, storyId, createdAt, updatedAt',
       generatedFiles: 'id, spaceId, fileType, sourceEntityType, sourceEntityId, storagePath, createdAt, lastAccessedAt'
     });
+    // Version 12: GeneratedFile 新增压缩元数据字段（originalSize/compressedAt/compressionRatio）
+    // 仅升级 schema 声明，无需数据迁移（新字段可选，老数据自动为 undefined）
+    this.version(12).stores({
+      storySpaces: 'id, name, createdAt',
+      characters: 'id, spaceId, name, createdAt',
+      backgrounds: 'id, spaceId, name, createdAt',
+      stories: 'id, spaceId, status, createdAt',
+      segments: 'id, storyId, sequenceOrder',
+      videoTasks: 'id, segmentId, status, createdAt',
+      pipelineTasks: 'id, storyId, status, createdAt',
+      finalCuts: 'id, storyId, pipelineTaskId, createdAt',
+      savedImages: 'id, spaceId, name, sourceType, createdAt',
+      savedVoices: 'id, spaceId, name, sourceType, createdAt',
+      savedPrompts: 'id, spaceId, name, category, createdAt',
+      savedVideos: 'id, spaceId, name, sourceType, createdAt',
+      snapshots: 'id, spaceId, createdAt',
+      timelines: 'id, storyId, createdAt, updatedAt',
+      generatedFiles: 'id, spaceId, fileType, sourceEntityType, sourceEntityId, storagePath, createdAt, lastAccessedAt, compressedAt'
+    });
   }
 }
 

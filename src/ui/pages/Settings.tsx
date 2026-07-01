@@ -1010,10 +1010,12 @@ function formatBytes(bytes: number): string {
 function LocalStorageSettingsSection() {
   const { t } = useTranslation();
 
-  // 用户偏好：local / opfs / indexeddb / auto
-  const [preference, setPreference] = useState<'local' | 'opfs' | 'indexeddb' | 'auto'>(() => {
+  // 用户偏好：local（默认）/ opfs / auto —— 已移除 indexeddb 选项（文件不存入 IndexedDB）
+  const [preference, setPreference] = useState<'local' | 'opfs' | 'auto'>(() => {
     const v = window.localStorage.getItem('ai_vido_storage_preference');
-    return (v === 'local' || v === 'opfs' || v === 'indexeddb' || v === 'auto') ? v : 'auto';
+    if (v === 'local' || v === 'opfs' || v === 'auto') return v;
+    // 旧值（含 indexeddb）统一迁移为 local
+    return 'local';
   });
 
   // 探测 Vite 插件的 API 路径（默认 /__files / files）
@@ -1024,8 +1026,11 @@ function LocalStorageSettingsSection() {
     window.localStorage.getItem('ai_vido_files_public_path') || '/files'
   );
 
-  // 服务端实际保存根目录（仅显示，不可改 —— 由 Vite FILES_DIR 环境变量决定）
-  const [_serverRoot] = useState<string>('docs/files');
+  // 服务端实际保存根目录（可编辑，通过 GET/POST /__files/config 端点读写）
+  const [serverRoot, setServerRoot] = useState<string>('docs/files');
+  const [serverRootEditing, setServerRootEditing] = useState(false);
+  const [migrateOnSwitch, setMigrateOnSwitch] = useState(true);
+  const [applyingRoot, setApplyingRoot] = useState(false);
   const [pluginOnline, setPluginOnline] = useState<boolean | null>(null);
   const [fileCount, setFileCount] = useState<number | null>(null);
   // 磁盘用量聚合（由 /__files/stats 提供）
@@ -1036,7 +1041,7 @@ function LocalStorageSettingsSection() {
     maxUploadBytes?: number;
   } | null>(null);
 
-  // 探测插件可用性 + 文件数量 + 磁盘用量（不触发 setState in effect —— 一次性 effect，初始探测）
+  // 探测插件可用性 + 文件数量 + 磁盘用量 + 读取服务端实际 rootDir
   useEffect(() => {
     let cancelled = false;
     // 同步重置状态是必要的"探测中"UI提示，
@@ -1057,6 +1062,16 @@ function LocalStorageSettingsSection() {
             maxUploadBytes: data.maxUploadBytes,
           });
           setFileCount(data.totalFiles ?? 0);
+          // 读取服务端实际 rootDir
+          try {
+            const cr = await fetch(`${apiBase}/config`);
+            if (cr.ok) {
+              const cfg = await cr.json();
+              if (cfg.rootDir) setServerRoot(cfg.rootDir);
+            }
+          } catch {
+            // config 端点不可用时保留默认值
+          }
           return;
         }
         // 回退：用 list 接口
@@ -1084,6 +1099,30 @@ function LocalStorageSettingsSection() {
     // 触发重新探测：重置状态再启动 effect
     setPluginOnline(null);
   }, []);
+
+  // 应用新目录：调用 POST /__files/config 切换服务端 rootDir
+  const applyServerRoot = useCallback(async () => {
+    setApplyingRoot(true);
+    try {
+      const r = await fetch(`${apiBase}/config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rootDir: serverRoot, migrate: migrateOnSwitch }),
+      });
+      const data = await r.json();
+      if (r.ok && data.success) {
+        alert(`目录已切换到 ${data.absoluteRoot}\n迁移文件数：${data.migratedFiles ?? 0}\n错误：${data.errors?.length ?? 0} 条\n\n请刷新页面使所有组件生效。`);
+        setServerRootEditing(false);
+        window.location.reload();
+      } else {
+        alert(`切换失败：${data.error ?? '未知错误'}`);
+      }
+    } catch (e) {
+      alert(`切换失败：${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setApplyingRoot(false);
+    }
+  }, [apiBase, serverRoot, migrateOnSwitch]);
 
   // 持久化
   const persist = useCallback((next: { preference?: typeof preference; apiBase?: string; publicPath?: string }) => {
@@ -1145,23 +1184,52 @@ function LocalStorageSettingsSection() {
           placeholder="auto"
           type="select"
           options={[
-            { value: 'auto', label: t('settings.localStorage.prefAuto', '自动（推荐）') },
-            { value: 'local', label: t('settings.localStorage.prefLocal', '本地磁盘（Vite 插件）') },
+            { value: 'local', label: t('settings.localStorage.prefLocal', '本地磁盘（配置目录，推荐）') },
             { value: 'opfs', label: t('settings.localStorage.prefOpfs', '浏览器 OPFS（Origin Private File System）') },
-            { value: 'indexeddb', label: t('settings.localStorage.prefIdb', '浏览器 IndexedDB（兜底）') },
+            { value: 'auto', label: t('settings.localStorage.prefAuto', '自动（优先本地磁盘，回退 OPFS）') },
           ]}
         />
 
         <FormField
-          label={t('settings.localStorage.serverRootLabel', '服务端保存目录（仅显示）')}
-          value={_serverRoot}
-          onChange={() => undefined}
+          label={t('settings.localStorage.serverRootLabel', '服务端保存目录')}
+          value={serverRoot}
+          onChange={v => { setServerRoot(v); setServerRootEditing(true); }}
           maxLength={TEXT_LIMITS.BASE_URL_MAX}
           hint={t(
             'settings.localStorage.serverRootHint',
-            '由 Vite 插件配置 / FILES_DIR 环境变量决定；修改需要重启 Vite dev server。'
+            '文件保存的物理目录（相对项目根或绝对路径）。修改后点击"应用"切换，可选迁移老文件。'
           )}
         />
+        {serverRootEditing && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
+              <input
+                type="checkbox"
+                checked={migrateOnSwitch}
+                onChange={e => setMigrateOnSwitch(e.target.checked)}
+              />
+              {t('settings.localStorage.migrateLabel', '切换时迁移老文件到新目录')}
+            </label>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                className="btn btn-primary"
+                onClick={applyServerRoot}
+                disabled={applyingRoot}
+                style={{ padding: '0.3rem 0.8rem' }}
+              >
+                {applyingRoot ? t('settings.localStorage.applying', '应用中...') : t('settings.localStorage.applyBtn', '应用')}
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={() => { setServerRootEditing(false); }}
+                disabled={applyingRoot}
+                style={{ padding: '0.3rem 0.8rem' }}
+              >
+                {t('common.cancel', '取消')}
+              </button>
+            </div>
+          </div>
+        )}
 
         <FormField
           label={t('settings.localStorage.apiBaseLabel', 'API 路由前缀')}

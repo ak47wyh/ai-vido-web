@@ -12,8 +12,9 @@ import { ImageGallery, type GalleryImage } from '../components/ImageGallery';
 import { ImageAdvancedSettings, type ImageAdvancedSettingsValue } from '../components/ImageAdvancedSettings';
 import { LabPageLayout } from '../components/LabPageLayout';
 import { TextAreaWithCounter } from '../components/TextAreaWithCounter';
+import { SavedRecordsPanel } from '../components/SavedRecordsPanel';
+import type { SavedImage } from '../../domain/entities/models';
 import {
-  getCachedMediaBlob,
   triggerNativeDownload,
 } from '../../utils/imageCache';
 
@@ -51,6 +52,9 @@ export const ImageLab: React.FC = () => {
   const [gallery, setGallery] = useState<GalleryImage[]>([]);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [saveTargetImage, setSaveTargetImage] = useState<GalleryImage | null>(null);
+  // 本会话已保存记录（用于底部面板展示）
+  const [savedThisSession, setSavedThisSession] = useState<SavedImage[]>([]);
+  const [savedPanelExpandKey, setSavedPanelExpandKey] = useState(0);
 
   // ==================== I2I 专用 State ====================
   const [referenceImage, setReferenceImage] = useState<string | null>(null);
@@ -174,43 +178,10 @@ export const ImageLab: React.FC = () => {
     if (!saveTargetImage || !currentSpaceId) return;
     const tagList = tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [];
 
-    // ==================== 路径 A：Service Worker 缓存命中 ====================
-    // 优先级最高。SW 在 <img> 加载时已经把跨域媒体写入 CacheStorage，
-    // 主线程读缓存 → Blob → saveImageFromBlob，**0 网络请求**。
-    if (saveTargetImage.url.startsWith('http')) {
-      const cached = await getCachedMediaBlob(saveTargetImage.url);
-      if (cached) {
-        try {
-          const saved = await assetLibraryService.saveImageFromBlob({
-            spaceId: currentSpaceId,
-            name,
-            blob: cached,
-            prompt: saveTargetImage.prompt,
-            model: saveTargetImage.model || '',
-            aspectRatio: saveTargetImage.aspectRatio || '',
-            tags: tagList,
-            sourceType: 'lab',
-          });
-          showToast(
-            'success',
-            t(
-              'assetLibrary.saveSuccessFromCache',
-              '素材已从浏览器缓存保存，0 网络请求。\n文件名：{{name}}',
-              { name: saved.name }
-            )
-          );
-          setShowSaveDialog(false);
-          setSaveTargetImage(null);
-          return;
-        } catch (e) {
-          console.warn('[ImageLab] SW cache save failed, falling back:', e);
-        }
-      }
-    }
-
     // ==================== 主路径：saveImageFromUrl（data URI / CORS 友好 URL） ====================
     // data URI 直接 atob 转 Blob（0 网络请求）；
     // http(s) URL 走 fetch（受 CORS 限制，OSS 会失败）。
+    // 已移除 SW 缓存层（getCachedMediaBlob）：数据直接从 IndexedDB（元数据）+ 配置目录/OPFS（文件）获取
     try {
       const saved = await assetLibraryService.saveImageFromUrl({
         spaceId: currentSpaceId,
@@ -236,6 +207,9 @@ export const ImageLab: React.FC = () => {
       showToast('success', `${locationHint}\n文件名：${saved.name}`);
       setShowSaveDialog(false);
       setSaveTargetImage(null);
+      // 记录到本会话已保存面板
+      setSavedThisSession(prev => [saved, ...prev].slice(0, 20));
+      setSavedPanelExpandKey(k => k + 1);
       return;
     } catch (_innerErr) {
       // 主路径失败（CORS 阻断），尝试路径 B：从 <img> 元素提取
@@ -263,6 +237,8 @@ export const ImageLab: React.FC = () => {
             );
             setShowSaveDialog(false);
             setSaveTargetImage(null);
+            setSavedThisSession(prev => [saved, ...prev].slice(0, 20));
+            setSavedPanelExpandKey(k => k + 1);
             return;
           } catch {
             // fall through to download fallback
@@ -272,7 +248,7 @@ export const ImageLab: React.FC = () => {
     }
 
     // ==================== 路径 C：浏览器原生下载兜底 ====================
-    // 缓存未命中 + CORS 阻断 + Canvas 提取失败 → 触发浏览器原生下载
+    // CORS 阻断 + Canvas 提取失败 → 触发浏览器原生下载
     const filename = buildDownloadFilename(saveTargetImage.prompt);
     const ok = triggerNativeDownload(saveTargetImage.url, filename);
     if (ok) {
@@ -510,6 +486,7 @@ export const ImageLab: React.FC = () => {
             onSave={handleSaveClick}
             onUseAsReference={handleUseAsReference}
           />
+          <SavedRecordsPanel images={savedThisSession} autoExpandKey={savedPanelExpandKey} />
         </div>
       )}
 

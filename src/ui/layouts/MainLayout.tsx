@@ -3,7 +3,8 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Image as ImageIcon, BookOpen, Settings,
   FolderOpen, Download, Mic, MessageSquare, Sparkles, Film, Scissors,
-  ChevronLeft, ChevronRight, Plus, Zap, Palette, Music as MusicIcon, X, Menu, Eraser
+  ChevronLeft, ChevronRight, Plus, Zap, Palette, Music as MusicIcon, X, Menu, Eraser,
+  FolderCog
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAllSpaces } from '../hooks/useSpaceScopedQuery';
@@ -118,6 +119,7 @@ export const MainLayout: React.FC = () => {
       label: t('nav.groupManage', '管理'),
       items: [
         { to: '/spaces', icon: <FolderOpen size={18} />, label: t('nav.spaces') },
+        { to: '/files', icon: <FolderCog size={18} />, label: t('nav.files', '文件管理') },
         { to: '/settings', icon: <Settings size={18} />, label: t('nav.settings') },
       ],
     },

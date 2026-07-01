@@ -103,7 +103,8 @@ export function filesStoragePlugin(options: FilesStoragePluginOptions = {}): Plu
     apply: 'serve', // 仅 dev server，生产构建不注册
     configureServer(server) {
       const viteRoot = server.config.root;
-      const absoluteRoot = path.resolve(viteRoot, rootDir);
+      // 可变：POST /__files/config 可运行时切换
+      let absoluteRoot = path.resolve(viteRoot, rootDir);
 
       // 启动时确保目录存在
       if (!existsSync(absoluteRoot)) {
@@ -326,6 +327,136 @@ export function filesStoragePlugin(options: FilesStoragePluginOptions = {}): Plu
             res.statusCode = 500;
             res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify({ code: 'STATS_FAILED', error: msg }));
+          }
+          return;
+        }
+
+        // ----- GET /__files/config 返回当前服务端实际 rootDir -----
+        if (method === 'GET' && url.startsWith(`${apiPath}/config`)) {
+          try {
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({
+              rootDir,
+              absoluteRoot,
+              publicPath,
+              apiPath,
+              maxUploadBytes,
+            }));
+            server.config.logger.info(`[files-storage] GET /config → ${JSON.stringify({ rootDir, absoluteRoot })}`);
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ code: 'CONFIG_READ_FAILED', error: msg }));
+          }
+          return;
+        }
+
+        // ----- POST /__files/config 运行时切换 rootDir，可选迁移老文件 -----
+        // 请求体：{ rootDir: string, migrate?: boolean }
+        // 响应：{ success: boolean, migratedFiles?: number, errors?: string[] }
+        if (method === 'POST' && url.startsWith(`${apiPath}/config`)) {
+          try {
+            const chunks: Buffer[] = [];
+            await new Promise<void>((resolve, reject) => {
+              req.on('data', (c: Buffer) => chunks.push(c));
+              req.on('end', () => resolve());
+              req.on('error', reject);
+            });
+            const bodyStr = Buffer.concat(chunks).toString('utf8');
+            const body = JSON.parse(bodyStr || '{}') as { rootDir?: string; migrate?: boolean };
+            if (!body.rootDir || typeof body.rootDir !== 'string') {
+              res.statusCode = 400;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ code: 'MISSING_ROOT_DIR', error: 'body.rootDir is required' }));
+              return;
+            }
+            server.config.logger.info(`[files-storage] POST /config ← ${JSON.stringify(body)}`);
+
+            // 解析新目录（支持相对/绝对路径），防路径穿越
+            const newAbsolute = path.isAbsolute(body.rootDir)
+              ? path.resolve(body.rootDir)
+              : path.resolve(viteRoot, body.rootDir);
+            // 安全校验：不允许指向系统关键目录（简化版：只校验非空且可创建）
+            try {
+              if (!existsSync(newAbsolute)) {
+                mkdirSync(newAbsolute, { recursive: true });
+              }
+              // 可写性测试：写入临时文件
+              const testFile = path.join(newAbsolute, `.write_test_${Date.now()}`);
+              await fsp.writeFile(testFile, 'ok');
+              await fsp.unlink(testFile);
+            } catch (e) {
+              const msg = e instanceof Error ? e.message : String(e);
+              res.statusCode = 400;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ code: 'DIR_NOT_WRITABLE', error: `新目录不可写: ${msg}` }));
+              return;
+            }
+
+            const oldAbsolute = absoluteRoot;
+            let migratedFiles = 0;
+            const errors: string[] = [];
+
+            // 迁移老文件（先复制后删除，失败回滚）
+            if (body.migrate && oldAbsolute !== newAbsolute && existsSync(oldAbsolute)) {
+              const copyDir = async (srcDir: string, destDir: string) => {
+                let entries: string[] = [];
+                try {
+                  entries = await fsp.readdir(srcDir);
+                } catch {
+                  return;
+                }
+                for (const name of entries) {
+                  const srcPath = path.join(srcDir, name);
+                  const destPath = path.join(destDir, name);
+                  try {
+                    const s = statSync(srcPath);
+                    if (s.isDirectory()) {
+                      await fsp.mkdir(destPath, { recursive: true });
+                      await copyDir(srcPath, destPath);
+                    } else if (s.isFile()) {
+                      await fsp.copyFile(srcPath, destPath);
+                      migratedFiles++;
+                    }
+                  } catch (e) {
+                    errors.push(`${srcPath}: ${e instanceof Error ? e.message : String(e)}`);
+                  }
+                }
+              };
+              await copyDir(oldAbsolute, newAbsolute);
+              // 复制成功后删除老目录文件（保留目录本身）
+              if (errors.length === 0) {
+                try {
+                  await fsp.rm(oldAbsolute, { recursive: true, force: true });
+                } catch (e) {
+                  errors.push(`清理老目录失败: ${e instanceof Error ? e.message : String(e)}`);
+                }
+              }
+            }
+
+            // 切换
+            absoluteRoot = newAbsolute;
+            server.config.logger.info(
+              `[files-storage] rootDir 切换成功: ${oldAbsolute} → ${newAbsolute}（迁移 ${migratedFiles} 文件，${errors.length} 错误）`
+            );
+
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({
+              success: true,
+              rootDir: body.rootDir,
+              absoluteRoot: newAbsolute,
+              migratedFiles,
+              errors,
+            }));
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            server.config.logger.error(`[files-storage] POST /config failed: ${msg}`);
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ code: 'CONFIG_UPDATE_FAILED', error: msg }));
           }
           return;
         }

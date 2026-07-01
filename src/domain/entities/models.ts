@@ -473,4 +473,10 @@ export interface GeneratedFile {
   /** 最近访问时间（LRU 淘汰用） */
   lastAccessedAt: number;
   createdAt: number;
+  /** 压缩前体积（仅压缩替换时记录，便于展示压缩效果） */
+  originalSize?: number;
+  /** 压缩时间戳 */
+  compressedAt?: number;
+  /** 压缩率（0-1，如 0.21 表示压缩后为原图的 21%） */
+  compressionRatio?: number;
 }
