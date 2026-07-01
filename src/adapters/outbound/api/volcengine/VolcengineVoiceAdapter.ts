@@ -6,7 +6,6 @@ import type {
 import type { ApiConfig } from '../../config/ApiConfigStore';
 import { VolcengineHttpClient } from './VolcengineHttpClient';
 import { withRetry } from './VolcengineErrorUtils';
-import { ADAPTER_TEXT_LIMITS } from '../../../../domain/constants/textLimits';
 
 /**
  * 火山引擎语音合成适配器（豆包 TTS）。
@@ -51,19 +50,33 @@ export class VolcengineVoiceAdapter implements IVoicePort {
       return this.mockTtsResult();
     }
 
+    const text = context.text;
+
+    console.log('[VolcengineVoiceAdapter] sync TTS 入参', {
+      text,
+      textLength: text.length,
+      voiceId: context.voiceId,
+      model: context.model ?? 'doubao-tts-base',
+    });
+
     const result = await withRetry(() =>
       this.http.post<ArrayBuffer>('/audio/speech', {
         model: context.model ?? 'doubao-tts-base',
-        input: context.text,
+        input: text,
         voice: context.voiceId ?? 'zh_male_narration',
         response_format: 'mp3',
       }, { responseType: 'arraybuffer' }),
     );
 
+    console.log('[VolcengineVoiceAdapter] sync TTS 出参', {
+      audioSize: result.byteLength,
+      usageCharacters: text.length,
+    });
+
     return {
       audioUrl: URL.createObjectURL(new Blob([result], { type: 'audio/mpeg' })),
       audioSize: result.byteLength,
-      usageCharacters: context.text.length,
+      usageCharacters: text.length,
     };
   }
 
@@ -82,11 +95,14 @@ export class VolcengineVoiceAdapter implements IVoicePort {
       };
     }
 
-    // 火山异步长文本上限：100000 字符
-    const rawText = context.text ?? '';
-    const text = rawText.length > ADAPTER_TEXT_LIMITS.VOLC_TTS_ASYNC_MAX
-      ? rawText.slice(0, ADAPTER_TEXT_LIMITS.VOLC_TTS_ASYNC_MAX)
-      : rawText;
+    const text = context.text ?? '';
+
+    console.log('[VolcengineVoiceAdapter] async TTS 入参', {
+      text,
+      textLength: text.length,
+      voiceId: context.voiceId,
+      model: context.model ?? 'doubao-tts-pro',
+    });
 
     const result = await withRetry(() =>
       this.http.post<{ id: string }>('/audio/async/create', {
@@ -96,6 +112,12 @@ export class VolcengineVoiceAdapter implements IVoicePort {
         response_format: 'mp3',
       }),
     );
+
+    console.log('[VolcengineVoiceAdapter] async TTS 出参', {
+      taskId: result.id,
+      usageCharacters: text.length,
+    });
+
     return {
       taskId: result.id,
       usageCharacters: text.length,

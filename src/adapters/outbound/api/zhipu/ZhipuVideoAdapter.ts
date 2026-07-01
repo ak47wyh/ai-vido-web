@@ -5,7 +5,6 @@ import type {
 import type { ApiConfig } from '../../config/ApiConfigStore';
 import { ZhipuHttpClient } from './ZhipuHttpClient';
 import { withRetry } from './ZhipuErrorUtils';
-import { ADAPTER_TEXT_LIMITS } from '../../../../domain/constants/textLimits';
 
 /**
  * 智谱视频生成适配器。
@@ -106,14 +105,9 @@ export class ZhipuVideoAdapter implements IVideoGeneratorPort {
     const mode = context.mode || this.inferMode(context);
     const model = context.model || this.getDefaultModel(mode, context);
 
-    // 智谱 CogVideoX 限制：226 token ≈ 800 中文字符
-    const prompt = context.prompt.length > ADAPTER_TEXT_LIMITS.ZHIPU_VIDEO_PROMPT_MAX
-      ? context.prompt.slice(0, ADAPTER_TEXT_LIMITS.ZHIPU_VIDEO_PROMPT_MAX)
-      : context.prompt;
-
     const payload: Record<string, unknown> = {
       model,
-      prompt,
+      prompt: context.prompt,
     };
 
     // 时长（智谱支持 4/8s）

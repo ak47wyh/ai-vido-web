@@ -69,9 +69,14 @@ export class VolcengineVideoAdapter implements IVideoGeneratorPort {
   private buildPayload(context: VideoPromptContext): Record<string, unknown> {
     const content: Array<Record<string, unknown>> = [];
 
-    // 文本提示词
+    // 文本提示词（直接透传原始 prompt，不做截断）
     if (context.prompt) {
-      content.push({ type: 'text', text: context.prompt });
+      const prompt = context.prompt;
+      console.log('[VolcengineVideoAdapter] buildPayload 入参', {
+        prompt,
+        promptLength: prompt.length,
+      });
+      content.push({ type: 'text', text: prompt });
     }
 
     // 首帧图片

@@ -21,6 +21,10 @@ interface FormFieldProps {
   maxLength?: number;
 }
 
+/**
+ * 软限制模式：不将 maxLength 透传给原生 input（不阻止输入），
+ * 超限时计数器变红并显示提示文本，由提交逻辑调用 validateTextLimit 拦截。
+ */
 export const FormField: React.FC<FormFieldProps> = ({
   label,
   value,
@@ -36,6 +40,7 @@ export const FormField: React.FC<FormFieldProps> = ({
 }) => {
   const showCounter = maxLength !== undefined && type !== 'select';
   const currentLength = typeof value === 'string' ? value.length : 0;
+  const isOverLimit = !!(maxLength && currentLength > maxLength);
   // 同时显示 key 图标和计数器时，预留更宽右侧空间
   const paddingRight = showKeyIcon && showCounter
     ? '5rem'
@@ -70,8 +75,7 @@ export const FormField: React.FC<FormFieldProps> = ({
             placeholder={placeholder}
             autoComplete={autoComplete}
             disabled={disabled}
-            maxLength={maxLength}
-            style={{ paddingRight }}
+            style={{ paddingRight, borderColor: isOverLimit ? 'var(--color-danger)' : undefined }}
           />
         )}
         {showKeyIcon && type !== 'select' && (
@@ -95,7 +99,7 @@ export const FormField: React.FC<FormFieldProps> = ({
               top: '50%',
               transform: 'translateY(-50%)',
               fontSize: '0.75rem',
-              color: maxLength && currentLength > maxLength
+              color: isOverLimit
                 ? 'var(--color-danger)'
                 : 'var(--text-muted)',
               pointerEvents: 'none',
@@ -108,6 +112,11 @@ export const FormField: React.FC<FormFieldProps> = ({
           </div>
         )}
       </div>
+      {isOverLimit && (
+        <p style={{ fontSize: '0.7rem', color: 'var(--color-danger)', marginTop: '0.25rem' }}>
+          文本超限，请调整至 {maxLength} 字以内
+        </p>
+      )}
       {hint && (
         <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
           {hint}

@@ -5,7 +5,6 @@ import type {
 import type { ApiConfig } from '../../config/ApiConfigStore';
 import { WanHttpClient } from './WanHttpClient';
 import { withRetry } from './WanErrorUtils';
-import { ADAPTER_TEXT_LIMITS } from '../../../../domain/constants/textLimits';
 
 /**
  * 通义万相视频生成适配器（DashScope）。
@@ -108,10 +107,7 @@ export class WanVideoAdapter implements IVideoGeneratorPort {
     const model = context.model || this.getDefaultModel(mode);
 
     const input: Record<string, unknown> = {
-      // 万相 2.7 官方限制：prompt 最大 5000 字符（超过部分会自动截断）
-      prompt: context.prompt.length > ADAPTER_TEXT_LIMITS.WAN_VIDEO_PROMPT_MAX
-        ? context.prompt.slice(0, ADAPTER_TEXT_LIMITS.WAN_VIDEO_PROMPT_MAX)
-        : context.prompt,
+      prompt: context.prompt,
     };
 
     // 图片输入

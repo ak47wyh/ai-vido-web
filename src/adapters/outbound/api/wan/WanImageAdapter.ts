@@ -34,6 +34,12 @@ export class WanImageAdapter implements IImageGeneratorPort {
       n: context.n ?? 1,
     };
 
+    console.log('[WanImageAdapter] generateImage 入参', {
+      prompt: context.prompt,
+      promptLength: context.prompt.length,
+      model,
+    });
+
     const payload = {
       model,
       input: { prompt: context.prompt },

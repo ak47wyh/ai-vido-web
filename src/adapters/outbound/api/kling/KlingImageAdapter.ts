@@ -30,6 +30,11 @@ export class KlingImageAdapter implements IImageGeneratorPort {
     }
 
     const model = context.model || 'kling-v1';
+    console.log('[KlingImageAdapter] generateImage 入参', {
+      prompt: context.prompt,
+      promptLength: context.prompt.length,
+      model,
+    });
     const payload: Record<string, unknown> = {
       model,
       prompt: context.prompt,

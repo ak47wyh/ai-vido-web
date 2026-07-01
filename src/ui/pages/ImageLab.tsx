@@ -14,6 +14,8 @@ import { LabPageLayout } from '../components/LabPageLayout';
 import { TextAreaWithCounter } from '../components/TextAreaWithCounter';
 import { SavedRecordsPanel } from '../components/SavedRecordsPanel';
 import type { SavedImage } from '../../domain/entities/models';
+import { TEXT_LIMITS } from '../../domain/constants/textLimits';
+import { validateTextLimit } from '../utils/validateTextLimit';
 import {
   triggerNativeDownload,
 } from '../../utils/imageCache';
@@ -117,6 +119,7 @@ export const ImageLab: React.FC = () => {
   // ==================== 生成 ====================
   const handleGenerate = async (prompt: string, isI2I: boolean) => {
     if (!prompt.trim()) return;
+    if (!validateTextLimit(prompt, TEXT_LIMITS.IMAGE_PROMPT_MAX, '画面描述', showToast)) return;
     if (isI2I && !referenceImage) {
       showToast('error', '请先上传参考图片');
       return;

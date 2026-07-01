@@ -17,7 +17,6 @@ import type {
 import { ApiConfigStore } from '../config/ApiConfigStore';
 import { getMiniMaxErrorMessage } from './MiniMaxErrorUtils';
 import axios from 'axios';
-import { ADAPTER_TEXT_LIMITS } from '../../../domain/constants/textLimits';
 
 export class MiniMaxVoiceAdapter implements IVoicePort {
   readonly voiceCapabilities: import('../../../domain/ports/OutboundPorts').VoiceCapabilities = {
@@ -71,12 +70,22 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
 
     // 试听参数
     if (context.text) {
+      console.log('[MiniMaxVoiceAdapter] clone voice text 入参', {
+        text: context.text,
+        length: context.text.length,
+      });
       payload.text = context.text;
       payload.model = context.model || 'speech-2.8-hd';
     }
 
     // 示例音频
     if (context.promptAudioFileId) {
+      if (context.promptText) {
+        console.log('[MiniMaxVoiceAdapter] clone prompt_text 入参', {
+          promptText: context.promptText,
+          length: context.promptText.length,
+        });
+      }
       payload.clone_prompt = {
         prompt_audio: context.promptAudioFileId,
         ...(context.promptText ? { prompt_text: context.promptText } : {}),
@@ -150,10 +159,7 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
     if (context.textFileId) {
       payload.text_file_id = context.textFileId;
     } else if (context.text) {
-      // MiniMax 异步长文本上限：10000 字符
-      payload.text = context.text.length > ADAPTER_TEXT_LIMITS.MINIMAX_TTS_ASYNC_MAX
-        ? context.text.slice(0, ADAPTER_TEXT_LIMITS.MINIMAX_TTS_ASYNC_MAX)
-        : context.text;
+      payload.text = context.text;
     }
 
     if (context.pronunciationDict) payload.pronunciation_dict = context.pronunciationDict;
@@ -333,10 +339,8 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
     };
     if (context.emotion) voiceSetting.emotion = context.emotion;
 
-    // MiniMax 同步 TTS 官方硬限：长度限制 < 500 字符
-    const text = context.text.length > ADAPTER_TEXT_LIMITS.MINIMAX_TTS_SYNC_MAX
-      ? context.text.slice(0, ADAPTER_TEXT_LIMITS.MINIMAX_TTS_SYNC_MAX)
-      : context.text;
+    // MiniMax 同步 TTS：直接透传原始文本
+    const text = context.text;
 
     const payload: Record<string, unknown> = {
       model,
@@ -625,6 +629,13 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
 
     const baseUrl = config.minimaxBaseUrl.replace(/\/+$/, '');
 
+    console.log('[MiniMaxVoiceAdapter] design voice 入参', {
+      prompt,
+      promptLength: prompt.length,
+      previewText,
+      previewLength: previewText.length,
+    });
+
     const payload: Record<string, unknown> = {
       prompt,
       preview_text: previewText,
@@ -637,8 +648,6 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
     if (aigcWatermark) {
       payload.aigc_watermark = true;
     }
-
-    console.log('[MiniMaxVoiceAdapter] Designing voice, prompt:', prompt.substring(0, 50));
 
     const response = await axios.post(`${baseUrl}/voice_design`, payload, {
       headers: {

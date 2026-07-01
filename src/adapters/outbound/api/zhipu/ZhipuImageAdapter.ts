@@ -28,6 +28,11 @@ export class ZhipuImageAdapter implements IImageGeneratorPort {
     }
 
     const model = context.model || 'cogview-3-plus';
+    console.log('[ZhipuImageAdapter] generateImage 入参', {
+      prompt: context.prompt,
+      promptLength: context.prompt.length,
+      model,
+    });
     const payload: Record<string, unknown> = {
       model,
       prompt: context.prompt,

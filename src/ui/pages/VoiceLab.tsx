@@ -13,6 +13,7 @@ import { LabPageLayout } from '../components/LabPageLayout';
 import { TextAreaWithCounter } from '../components/TextAreaWithCounter';
 import { InputWithCounter } from '../components/InputWithCounter';
 import { TEXT_LIMITS } from '../../domain/constants/textLimits';
+import { validateTextLimit } from '../utils/validateTextLimit';
 
 type VoiceLabTab = 'tts' | 'clone' | 'design' | 'async' | 'manage';
 
@@ -168,6 +169,7 @@ export const VoiceLab: React.FC = () => {
   // ==================== TTS Handlers ====================
   const handleGenerateTTS = async () => {
     if (!ttsText.trim()) return;
+    if (!validateTextLimit(ttsText, TEXT_LIMITS.TTS_TEXT_MAX, '配音文本', showToast)) return;
     setIsGeneratingTTS(true);
     // 释放旧音频
     if (ttsAudioUrl) revokeBlobUrl(ttsAudioUrl);
@@ -201,6 +203,7 @@ export const VoiceLab: React.FC = () => {
   // ==================== Clone Handlers ====================
   const handleCloneVoice = async () => {
     if (!cloneFile || !cloneName.trim()) return;
+    if (!validateTextLimit(cloneText, TEXT_LIMITS.VOICE_CLONE_PROMPT_MAX, '克隆试听文本', showToast)) return;
     setIsCloning(true);
     if (clonePreviewAudioUrl) revokeBlobUrl(clonePreviewAudioUrl);
     setClonedVoiceId(null);
@@ -249,6 +252,8 @@ export const VoiceLab: React.FC = () => {
   // ==================== Design Handlers ====================
   const handleDesignVoice = async () => {
     if (!designPrompt.trim() || !designPreviewText.trim()) return;
+    if (!validateTextLimit(designPrompt, TEXT_LIMITS.VOICE_DESIGN_PROMPT_MAX, '音色描述', showToast)) return;
+    if (!validateTextLimit(designPreviewText, TEXT_LIMITS.VOICE_DESIGN_PREVIEW_MAX, '试听文本', showToast)) return;
     setIsDesigning(true);
     if (designResult?.audioUrl) revokeBlobUrl(designResult.audioUrl);
     setDesignResult(null);
@@ -288,6 +293,7 @@ export const VoiceLab: React.FC = () => {
   // ==================== Async Handlers ====================
   const handleCreateAsyncTask = async () => {
     if (!asyncText.trim()) return;
+    if (!validateTextLimit(asyncText, TEXT_LIMITS.TTS_ASYNC_TEXT_MAX, '长文本配音', showToast)) return;
     setIsCreatingAsyncTask(true);
     try {
       const taskId = await voiceService.createAsyncTask(asyncText, asyncVoiceId, { model: asyncModel });

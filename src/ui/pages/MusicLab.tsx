@@ -21,6 +21,7 @@ import { LyricsDisplay } from '../components/LyricsDisplay';
 import { TextAreaWithCounter } from '../components/TextAreaWithCounter';
 import { InputWithCounter } from '../components/InputWithCounter';
 import { TEXT_LIMITS } from '../../domain/constants/textLimits';
+import { validateTextLimit } from '../utils/validateTextLimit';
 
 type MusicLabTab = 'compose' | 'lyrics' | 'cover';
 
@@ -111,6 +112,8 @@ export const MusicLab: React.FC = () => {
       showToast('error', t('musicLab.lyricsRequired', '请输入歌词或开启纯音乐模式'));
       return;
     }
+    if (!validateTextLimit(composePrompt, TEXT_LIMITS.MUSIC_PROMPT_MAX, '音乐描述', showToast)) return;
+    if (!isInstrumental && !validateTextLimit(composeLyrics, TEXT_LIMITS.MUSIC_LYRICS_MAX, '歌词', showToast)) return;
     setIsComposing(true);
     if (composeResult) revokeBlobUrl(composeResult.audioUrl);
     setComposeResult(null);
@@ -225,6 +228,8 @@ export const MusicLab: React.FC = () => {
       showToast('error', t('musicLab.coverPromptRequired', '请输入翻唱风格描述'));
       return;
     }
+    if (!validateTextLimit(coverPrompt, TEXT_LIMITS.MUSIC_COVER_PROMPT_MAX, '翻唱风格描述', showToast)) return;
+    if (!validateTextLimit(coverLyrics, TEXT_LIMITS.MUSIC_COVER_LYRICS_MAX, '歌词', showToast)) return;
     setIsGeneratingCover(true);
     if (coverResult) revokeBlobUrl(coverResult.audioUrl);
     setCoverResult(null);

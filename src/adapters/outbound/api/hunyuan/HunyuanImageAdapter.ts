@@ -2,7 +2,6 @@ import type { IImageGeneratorPort, ImageGenerationContext, ImageGenerationResult
 import type { ApiConfig } from '../../config/ApiConfigStore';
 import { HunyuanHttpClient } from './HunyuanHttpClient';
 import { withRetry } from './HunyuanErrorUtils';
-import { ADAPTER_TEXT_LIMITS } from '../../../../domain/constants/textLimits';
 
 /**
  * 腾讯混元 Hunyuan 图片生成适配器。
@@ -40,14 +39,9 @@ export class HunyuanImageAdapter implements IImageGeneratorPort {
     const model = (context.model as string) || 'hunyuan-image';
     const dims = this.resolveDimensions(context.aspectRatio);
 
-    // 混元生图官方硬限：最多 1024 个 utf-8 字符
-    const prompt = context.prompt.length > ADAPTER_TEXT_LIMITS.HUNYUAN_IMAGE_PROMPT_MAX
-      ? context.prompt.slice(0, ADAPTER_TEXT_LIMITS.HUNYUAN_IMAGE_PROMPT_MAX)
-      : context.prompt;
-
     // 使用同步版 TextToImageLite（适合快速预览）
     const payload: Record<string, unknown> = {
-      Prompt: prompt,
+      Prompt: context.prompt,
       Model: model,
       Width: dims.width,
       Height: dims.height,

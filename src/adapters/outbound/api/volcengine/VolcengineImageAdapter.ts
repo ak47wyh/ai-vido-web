@@ -50,9 +50,15 @@ export class VolcengineImageAdapter implements IImageGeneratorPort {
   }
 
   private buildPayload(context: ImageGenerationContext): Record<string, unknown> {
+    // 直接透传原始 prompt，不做截断
+    const prompt = context.prompt;
+    console.log('[VolcengineImageAdapter] buildPayload 入参', {
+      prompt,
+      promptLength: prompt.length,
+    });
     return {
       model: 'doubao-seedream-4-5-251128',
-      prompt: context.prompt,
+      prompt,
       ...(context.subjectReferenceUrl && { image: [context.subjectReferenceUrl] }),
       ...(context.width && context.height && { size: `${context.width}x${context.height}` }),
       ...(context.n && { n: context.n }),

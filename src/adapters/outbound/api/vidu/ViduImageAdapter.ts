@@ -42,6 +42,11 @@ export class ViduImageAdapter implements IImageGeneratorPort {
     }
 
     const model = (context.model as string) || 'viduq1';
+    console.log('[ViduImageAdapter] generateImage 入参', {
+      prompt: context.prompt,
+      promptLength: context.prompt.length,
+      model,
+    });
     const payload: Record<string, unknown> = {
       model,
       prompt: context.prompt,

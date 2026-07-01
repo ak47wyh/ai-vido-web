@@ -16,6 +16,7 @@ import { hasCapability } from '../../domain/services/platformCapabilities';
 import { TextAreaWithCounter } from '../components/TextAreaWithCounter';
 import { InputWithCounter } from '../components/InputWithCounter';
 import { TEXT_LIMITS } from '../../domain/constants/textLimits';
+import { validateTextLimit } from '../utils/validateTextLimit';
 
 type VideoLabTab = 't2v' | 'i2v' | 'fl2v' | 's2v' | 'agent' | 'tasks';
 
@@ -286,6 +287,7 @@ export const VideoLab: React.FC = () => {
 
   const handleT2VSubmit = async () => {
     if (!t2vPrompt.trim()) return;
+    if (!validateTextLimit(t2vPrompt, TEXT_LIMITS.VIDEO_PROMPT_MAX, '视频描述', showToast)) return;
     setIsSubmittingT2V(true);
     try {
       const taskId = await videoLabService.submitTask({
@@ -304,6 +306,7 @@ export const VideoLab: React.FC = () => {
 
   const handleI2VSubmit = async () => {
     if (!i2vFirstFrame) return;
+    if (!validateTextLimit(i2vPrompt, TEXT_LIMITS.VIDEO_PROMPT_MAX, '视频描述', showToast)) return;
     setIsSubmittingI2V(true);
     try {
       const taskId = await videoLabService.submitTask({
@@ -322,6 +325,7 @@ export const VideoLab: React.FC = () => {
 
   const handleFL2VSubmit = async () => {
     if (!fl2vFirstFrame || !fl2vLastFrame) return;
+    if (!validateTextLimit(fl2vPrompt, TEXT_LIMITS.VIDEO_PROMPT_MAX, '视频描述', showToast)) return;
     setIsSubmittingFL2V(true);
     try {
       const taskId = await videoLabService.submitTask({
@@ -341,6 +345,7 @@ export const VideoLab: React.FC = () => {
 
   const handleS2VSubmit = async () => {
     if (!s2vSubjectImage || !s2vPrompt.trim()) return;
+    if (!validateTextLimit(s2vPrompt, TEXT_LIMITS.VIDEO_PROMPT_MAX, '视频描述', showToast)) return;
     setIsSubmittingS2V(true);
     try {
       const taskId = await videoLabService.submitTask({
