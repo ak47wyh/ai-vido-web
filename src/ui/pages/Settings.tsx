@@ -7,6 +7,7 @@ import { modelManagementService, fileManagementService } from '../../dependencie
 import type { ModelInfo, FileItem } from '../../domain/ports/OutboundPorts';
 import { getErrorMessage } from '../utils/errorUtils';
 import { PLATFORM_METADATA, getCapabilitySummary, type Capability } from '../../domain/services/platformCapabilities';
+import { TEXT_LIMITS } from '../../domain/constants/textLimits';
 import {
   isSWActive,
   getMediaCacheStats,
@@ -565,6 +566,7 @@ export const Settings: React.FC = () => {
               label={t('settings.volcArkApiKeyLabel')}
               value={config.volcArkApiKey}
               onChange={v => handleChange('volcArkApiKey', v)}
+              maxLength={TEXT_LIMITS.API_KEY_MAX}
               type="password"
               placeholder={t('settings.volcArkApiKeyPlaceholder')}
               autoComplete="off"
@@ -639,6 +641,7 @@ export const Settings: React.FC = () => {
               label="AccessKey"
               value={config.klingAccessKey}
               onChange={v => handleChange('klingAccessKey', v)}
+              maxLength={TEXT_LIMITS.API_KEY_MAX}
               type="password"
               placeholder="可灵 AccessKey"
               autoComplete="off"
@@ -657,6 +660,7 @@ export const Settings: React.FC = () => {
               label="Base URL"
               value={config.klingBaseUrl}
               onChange={v => handleChange('klingBaseUrl', v)}
+              maxLength={TEXT_LIMITS.BASE_URL_MAX}
               placeholder="https://api.klingai.com"
             />
           </PlatformCard>
@@ -682,6 +686,7 @@ export const Settings: React.FC = () => {
               label="API-Key"
               value={config.wanApiKey}
               onChange={v => handleChange('wanApiKey', v)}
+              maxLength={TEXT_LIMITS.API_KEY_MAX}
               type="password"
               placeholder="DashScope API-Key"
               autoComplete="off"
@@ -716,6 +721,7 @@ export const Settings: React.FC = () => {
               label="SecretId"
               value={config.hunyuanSecretId}
               onChange={v => handleChange('hunyuanSecretId', v)}
+              maxLength={TEXT_LIMITS.API_KEY_MAX}
               type="password"
               placeholder="腾讯云 SecretId"
               autoComplete="off"
@@ -725,6 +731,7 @@ export const Settings: React.FC = () => {
               label="SecretKey"
               value={config.hunyuanSecretKey}
               onChange={v => handleChange('hunyuanSecretKey', v)}
+              maxLength={TEXT_LIMITS.API_KEY_MAX}
               type="password"
               placeholder="腾讯云 SecretKey"
               autoComplete="off"
@@ -734,6 +741,7 @@ export const Settings: React.FC = () => {
               label="Base URL"
               value={config.hunyuanBaseUrl}
               onChange={v => handleChange('hunyuanBaseUrl', v)}
+              maxLength={TEXT_LIMITS.BASE_URL_MAX}
               placeholder="https://hunyuan.tencentcloudapi.com"
             />
           </PlatformCard>
@@ -759,6 +767,7 @@ export const Settings: React.FC = () => {
               label="API-Key"
               value={config.zhipuApiKey}
               onChange={v => handleChange('zhipuApiKey', v)}
+              maxLength={TEXT_LIMITS.API_KEY_MAX}
               type="password"
               placeholder="智谱 API-Key"
               autoComplete="off"
@@ -802,6 +811,7 @@ export const Settings: React.FC = () => {
               label="Base URL"
               value={config.viduBaseUrl}
               onChange={v => handleChange('viduBaseUrl', v)}
+              maxLength={TEXT_LIMITS.BASE_URL_MAX}
               placeholder="https://api.vidu.cn"
             />
           </PlatformCard>
@@ -1146,6 +1156,7 @@ function LocalStorageSettingsSection() {
           label={t('settings.localStorage.serverRootLabel', '服务端保存目录（仅显示）')}
           value={_serverRoot}
           onChange={() => undefined}
+          maxLength={TEXT_LIMITS.BASE_URL_MAX}
           hint={t(
             'settings.localStorage.serverRootHint',
             '由 Vite 插件配置 / FILES_DIR 环境变量决定；修改需要重启 Vite dev server。'
@@ -1167,6 +1178,7 @@ function LocalStorageSettingsSection() {
           label={t('settings.localStorage.publicPathLabel', '静态访问前缀')}
           value={publicPath}
           onChange={v => persist({ publicPath: v })}
+          maxLength={TEXT_LIMITS.PATH_PREFIX_MAX}
           placeholder="/files"
           hint={t(
             'settings.localStorage.publicPathHint',

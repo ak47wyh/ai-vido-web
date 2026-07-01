@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Upload, Link, X } from 'lucide-react';
+import { TEXT_LIMITS } from '../../domain/constants/textLimits';
 
 const MAX_AUDIO_SIZE_MB = 50;
 const VALID_AUDIO_TYPES = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/flac', 'audio/x-flac'];
@@ -127,6 +128,7 @@ export const AudioUploadField: React.FC<AudioUploadFieldProps> = ({
             onChange={e => setUrlInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleUrlConfirm()}
             style={{ flex: 1, fontSize: '0.85rem' }}
+            maxLength={TEXT_LIMITS.URL_MAX}
           />
           <button className="btn btn-secondary" style={{ fontSize: '0.8rem' }} onClick={handleUrlConfirm} disabled={!urlInput.trim()}>确认</button>
         </div>

@@ -9,6 +9,7 @@ import type {
 import { ApiConfigStore } from '../config/ApiConfigStore';
 import { getMiniMaxErrorMessage } from './MiniMaxErrorUtils';
 import axios from 'axios';
+import { ADAPTER_TEXT_LIMITS } from '../../../domain/constants/textLimits';
 
 /**
  * Adapter for MiniMax Music Generation API.
@@ -41,15 +42,29 @@ export class MiniMaxMusicAdapter implements IMusicPort {
     const baseUrl = config.minimaxBaseUrl.replace(/\/+$/, '');
     const model = context.model || 'music-2.6';
 
+    // 音乐 prompt 硬限：music-2.6 模式 2000 字符 / music-cover 翻唱模式 300 字符
+    const isCover = model === 'music-cover' || model === 'music-cover-free';
+    const promptMax = isCover
+      ? ADAPTER_TEXT_LIMITS.MINIMAX_MUSIC_COVER_PROMPT_MAX
+      : ADAPTER_TEXT_LIMITS.MINIMAX_MUSIC_PROMPT_MAX;
+    const prompt = context.prompt.length > promptMax
+      ? context.prompt.slice(0, promptMax)
+      : context.prompt;
+
     const payload: Record<string, unknown> = {
       model,
-      prompt: context.prompt,
+      prompt,
       output_format: context.outputFormat || 'url',
     };
 
-    // Lyrics
+    // Lyrics（music-2.6 限制 3500 字符，music-cover 翻唱限制 1000 字符）
     if (context.lyrics) {
-      payload.lyrics = context.lyrics;
+      const lyricsMax = isCover
+        ? ADAPTER_TEXT_LIMITS.MINIMAX_MUSIC_COVER_LYRICS_MAX
+        : ADAPTER_TEXT_LIMITS.MINIMAX_MUSIC_LYRICS_MAX;
+      payload.lyrics = context.lyrics.length > lyricsMax
+        ? context.lyrics.slice(0, lyricsMax)
+        : context.lyrics;
     }
 
     // Instrumental mode (only for music-2.6 / music-2.6-free)
@@ -92,7 +107,7 @@ export class MiniMaxMusicAdapter implements IMusicPort {
       }
     }
 
-    console.log(`[MiniMaxMusicAdapter] Generating music, model: ${model}, prompt: ${context.prompt.substring(0, 50)}`);
+    console.log(`[MiniMaxMusicAdapter] Generating music, model: ${model}, prompt: ${prompt.substring(0, 50)}`);
 
     const response = await axios.post(`${baseUrl}/music_generation`, payload, {
       headers: {

@@ -4,6 +4,8 @@ import { X, Trash2, Image as ImageIcon, Mic, Check } from 'lucide-react';
 import { assetLibraryService } from '../../dependencies';
 import { useSavedImages, useSavedVoices, useSavedPrompts } from '../hooks/useSavedAssets';
 import type { SavedImage, SavedVoice, SavedPrompt, PromptCategory } from '../../domain/entities/models';
+import { InputWithCounter } from './InputWithCounter';
+import { TEXT_LIMITS } from '../../domain/constants/textLimits';
 import './AssetPicker.css';
 
 interface AssetPickerProps {
@@ -298,20 +300,22 @@ export const AssetSaveDialog: React.FC<SaveDialogProps> = ({ title, defaultName,
         <h3>{title}</h3>
         <div className="form-group">
           <label>{t('assetLibrary.nameLabel', '素材名称')}</label>
-          <input
+          <InputWithCounter
             type="text"
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="输入素材名称"
+            maxLength={TEXT_LIMITS.ASSET_NAME_MAX}
           />
         </div>
         <div className="form-group">
           <label>{t('assetLibrary.tagsLabel', '标签（逗号分隔）')}</label>
-          <input
+          <InputWithCounter
             type="text"
             value={tags}
             onChange={e => setTags(e.target.value)}
             placeholder="例如: 背景, 夜景, 赛博朋克"
+            maxLength={TEXT_LIMITS.ASSET_TAGS_MAX}
           />
         </div>
         <div className="dialog-actions">

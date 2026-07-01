@@ -17,6 +17,7 @@ import type {
 import { ApiConfigStore } from '../config/ApiConfigStore';
 import { getMiniMaxErrorMessage } from './MiniMaxErrorUtils';
 import axios from 'axios';
+import { ADAPTER_TEXT_LIMITS } from '../../../domain/constants/textLimits';
 
 export class MiniMaxVoiceAdapter implements IVoicePort {
   readonly voiceCapabilities: import('../../../domain/ports/OutboundPorts').VoiceCapabilities = {
@@ -149,7 +150,10 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
     if (context.textFileId) {
       payload.text_file_id = context.textFileId;
     } else if (context.text) {
-      payload.text = context.text;
+      // MiniMax 异步长文本上限：10000 字符
+      payload.text = context.text.length > ADAPTER_TEXT_LIMITS.MINIMAX_TTS_ASYNC_MAX
+        ? context.text.slice(0, ADAPTER_TEXT_LIMITS.MINIMAX_TTS_ASYNC_MAX)
+        : context.text;
     }
 
     if (context.pronunciationDict) payload.pronunciation_dict = context.pronunciationDict;
@@ -329,9 +333,14 @@ export class MiniMaxVoiceAdapter implements IVoicePort {
     };
     if (context.emotion) voiceSetting.emotion = context.emotion;
 
+    // MiniMax 同步 TTS 官方硬限：长度限制 < 500 字符
+    const text = context.text.length > ADAPTER_TEXT_LIMITS.MINIMAX_TTS_SYNC_MAX
+      ? context.text.slice(0, ADAPTER_TEXT_LIMITS.MINIMAX_TTS_SYNC_MAX)
+      : context.text;
+
     const payload: Record<string, unknown> = {
       model,
-      text: context.text,
+      text,
       voice_setting: voiceSetting,
       audio_setting: {
         sample_rate: context.sampleRate ?? 32000,

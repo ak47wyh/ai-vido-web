@@ -5,6 +5,7 @@ import type {
 import type { ApiConfig } from '../../config/ApiConfigStore';
 import { HunyuanHttpClient } from './HunyuanHttpClient';
 import { withRetry } from './HunyuanErrorUtils';
+import { ADAPTER_TEXT_LIMITS } from '../../../../domain/constants/textLimits';
 
 /**
  * 腾讯混元 Hunyuan 视频生成适配器。
@@ -39,8 +40,13 @@ export class HunyuanVideoAdapter implements IVideoGeneratorPort {
     const isI2v = !!context.firstFrameImage;
     const model = context.model || (isI2v ? 'hunyuan-video-i2v' : 'hunyuan-video');
 
+    // 混元视频官方硬限：最多 200 个 utf-8 字符（所有视频平台中最严格）
+    const prompt = context.prompt.length > ADAPTER_TEXT_LIMITS.HUNYUAN_VIDEO_PROMPT_MAX
+      ? context.prompt.slice(0, ADAPTER_TEXT_LIMITS.HUNYUAN_VIDEO_PROMPT_MAX)
+      : context.prompt;
+
     const payload: Record<string, unknown> = {
-      Prompt: context.prompt,
+      Prompt: prompt,
       Model: model,
     };
     if (isI2v && context.firstFrameImage) {

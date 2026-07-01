@@ -5,6 +5,7 @@ import type {
 import type { ApiConfig } from '../../config/ApiConfigStore';
 import { KlingHttpClient } from './KlingHttpClient';
 import { withRetry } from './KlingErrorUtils';
+import { ADAPTER_TEXT_LIMITS } from '../../../../domain/constants/textLimits';
 
 /**
  * 可灵 Kling 视频生成适配器。
@@ -132,9 +133,13 @@ export class KlingVideoAdapter implements IVideoGeneratorPort {
 
   private buildPayload(context: VideoPromptContext, mode: 't2v' | 'i2v' | 's2v'): Record<string, unknown> {
     const model = context.model || 'kling-v2.1';
+    // 可灵官方硬限：prompt 不超过 2500 字符
+    const prompt = context.prompt.length > ADAPTER_TEXT_LIMITS.KLING_VIDEO_PROMPT_MAX
+      ? context.prompt.slice(0, ADAPTER_TEXT_LIMITS.KLING_VIDEO_PROMPT_MAX)
+      : context.prompt;
     const payload: Record<string, unknown> = {
       model,
-      prompt: context.prompt,
+      prompt,
     };
 
     // 时长（可灵支持 5s / 10s）

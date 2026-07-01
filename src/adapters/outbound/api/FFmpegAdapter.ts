@@ -415,6 +415,82 @@ export class FFmpegAdapter implements IFFmpegPort {
     }
   }
 
+  async applyDelogo(video: Blob, regions: { x: number; y: number; width: number; height: number }[]): Promise<Blob> {
+    await this.load();
+    const ffmpeg = this.ensureLoaded();
+    const inputName = 'in.mp4';
+    const outName = 'out.mp4';
+    try {
+      await this.writeFile(inputName, video);
+      // 多个 delogo 滤镜用逗号串联
+      const filter = regions
+        .map(r => `delogo=x=${Math.floor(r.x)}:y=${Math.floor(r.y)}:w=${Math.floor(r.width)}:h=${Math.floor(r.height)}:show=0`)
+        .join(',');
+      await ffmpeg.exec([
+        '-i', inputName,
+        '-vf', filter,
+        '-c:v', 'libx264',
+        '-crf', '23',
+        '-preset', 'fast',
+        '-c:a', 'copy',
+        outName,
+      ]);
+      return await this.readFile(outName);
+    } finally {
+      await this.safeDelete(inputName);
+      await this.safeDelete(outName);
+    }
+  }
+
+  async encodeFromFrames(frames: Blob[], fps: number, audio?: Blob): Promise<Blob> {
+    await this.load();
+    const ffmpeg = this.ensureLoaded();
+    const frameNames: string[] = [];
+    const audioName = 'audio.mp3';
+    const outName = 'out.mp4';
+    try {
+      // 写入帧序列 frame000.png ...
+      const padLen = String(frames.length).length;
+      for (let i = 0; i < frames.length; i++) {
+        const name = `frame${String(i).padStart(padLen, '0')}.png`;
+        await this.writeFile(name, frames[i]);
+        frameNames.push(name);
+      }
+
+      const args: string[] = [
+        '-framerate', String(fps),
+        '-i', `frame%0${padLen}d.png`,
+      ];
+
+      if (audio) {
+        await this.writeFile(audioName, audio);
+        args.push('-i', audioName);
+        args.push(
+          '-c:v', 'libx264',
+          '-crf', '23',
+          '-preset', 'fast',
+          '-c:a', 'aac',
+          '-map', '0:v:0',
+          '-map', '1:a:0',
+          '-shortest',
+        );
+      } else {
+        args.push(
+          '-c:v', 'libx264',
+          '-crf', '23',
+          '-preset', 'fast',
+        );
+      }
+      args.push(outName);
+      await ffmpeg.exec(args);
+      return await this.readFile(outName);
+    } finally {
+      for (const n of frameNames) await this.safeDelete(n);
+      await this.safeDelete(audioName);
+      await this.safeDelete(outName);
+    }
+  }
+
   private buildAtempoFilter(speed: number): string {
     const filters: string[] = [];
     let remaining = speed;

@@ -5,6 +5,7 @@
 import React from 'react';
 import { ALL_LEVELS, type LogFilter } from '../../hooks/useLogStore';
 import type { LogLevel } from '../../../domain/ports/CrossCuttingPorts';
+import { TEXT_LIMITS } from '../../../domain/constants/textLimits';
 
 interface Props {
   filter: LogFilter;
@@ -31,6 +32,7 @@ export const LogFilterBar: React.FC<Props> = ({ filter, onChange, services }) =>
         placeholder="搜索 message / context 关键字..."
         value={filter.keyword}
         onChange={e => onChange({ keyword: e.target.value })}
+        maxLength={TEXT_LIMITS.LOG_SEARCH_MAX}
       />
 
       {ALL_LEVELS.map(level => (

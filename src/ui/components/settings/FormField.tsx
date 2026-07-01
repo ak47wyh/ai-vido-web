@@ -17,6 +17,8 @@ interface FormFieldProps {
   showKeyIcon?: boolean;
   disabled?: boolean;
   options?: FormFieldOption[];
+  /** 输入字符上限，设置后显示计数器（仅对 text/password 生效） */
+  maxLength?: number;
 }
 
 export const FormField: React.FC<FormFieldProps> = ({
@@ -30,7 +32,19 @@ export const FormField: React.FC<FormFieldProps> = ({
   showKeyIcon = false,
   disabled = false,
   options,
+  maxLength,
 }) => {
+  const showCounter = maxLength !== undefined && type !== 'select';
+  const currentLength = typeof value === 'string' ? value.length : 0;
+  // 同时显示 key 图标和计数器时，预留更宽右侧空间
+  const paddingRight = showKeyIcon && showCounter
+    ? '5rem'
+    : showKeyIcon
+      ? '2.5rem'
+      : showCounter
+        ? '3.5rem'
+        : '0.75rem';
+
   return (
     <div className="form-group">
       <label className="form-label">{label}</label>
@@ -56,9 +70,8 @@ export const FormField: React.FC<FormFieldProps> = ({
             placeholder={placeholder}
             autoComplete={autoComplete}
             disabled={disabled}
-            style={{
-              paddingRight: showKeyIcon ? '2.5rem' : '0.75rem',
-            }}
+            maxLength={maxLength}
+            style={{ paddingRight }}
           />
         )}
         {showKeyIcon && type !== 'select' && (
@@ -66,13 +79,33 @@ export const FormField: React.FC<FormFieldProps> = ({
             size={15}
             style={{
               position: 'absolute',
-              right: '0.75rem',
+              right: showCounter ? '3rem' : '0.75rem',
               top: '50%',
               transform: 'translateY(-50%)',
               color: 'var(--text-muted)',
               pointerEvents: 'none',
             }}
           />
+        )}
+        {showCounter && (
+          <div
+            style={{
+              position: 'absolute',
+              right: '0.5rem',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              fontSize: '0.75rem',
+              color: maxLength && currentLength > maxLength
+                ? 'var(--color-danger)'
+                : 'var(--text-muted)',
+              pointerEvents: 'none',
+              background: 'rgba(0, 0, 0, 0.3)',
+              padding: '0.1rem 0.4rem',
+              borderRadius: 'var(--radius-sm)',
+            }}
+          >
+            {currentLength}/{maxLength}
+          </div>
         )}
       </div>
       {hint && (

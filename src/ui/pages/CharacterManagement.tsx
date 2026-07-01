@@ -16,6 +16,7 @@ import { AssetPicker } from '../components/AssetPicker';
 import { useAssetPicker } from '../hooks/useAssetPicker';
 import { TextAreaWithCounter } from '../components/TextAreaWithCounter';
 import { InputWithCounter } from '../components/InputWithCounter';
+import { TEXT_LIMITS } from '../../domain/constants/textLimits';
 
 export const CharacterManagement: React.FC = () => {
   const { t } = useTranslation();
@@ -177,7 +178,7 @@ export const CharacterManagement: React.FC = () => {
                   onChange={e => setName(e.target.value)}
                   required
                   placeholder={t('character.namePlaceholder')}
-                  maxLength={100}
+                  maxLength={TEXT_LIMITS.CHAR_NAME_MAX}
                 />
               </div>
             </div>
@@ -190,7 +191,7 @@ export const CharacterManagement: React.FC = () => {
                   onChange={e => setAppearance(e.target.value)}
                   placeholder={t('character.appearancePlaceholder')}
                   style={{ minHeight: '60px' }}
-                  maxLength={1000}
+                  maxLength={TEXT_LIMITS.CHAR_APPEARANCE_MAX}
                 />
                 <button type="button" className="btn btn-secondary character-form-refine-btn"
                   disabled={!appearance.trim() || refiningField === 'appearance'}
@@ -214,7 +215,7 @@ export const CharacterManagement: React.FC = () => {
                   onChange={e => setPersonality(e.target.value)}
                   placeholder={t('character.personalityPlaceholder')}
                   style={{ minHeight: '60px' }}
-                  maxLength={1000}
+                  maxLength={TEXT_LIMITS.CHAR_PERSONALITY_MAX}
                 />
                 <button type="button" className="btn btn-secondary character-form-refine-btn"
                   disabled={!personality.trim() || refiningField === 'personality'}
@@ -238,7 +239,7 @@ export const CharacterManagement: React.FC = () => {
                   onChange={e => setCharacterBackground(e.target.value)}
                   placeholder={t('character.backgroundPlaceholder')}
                   style={{ minHeight: '60px' }}
-                  maxLength={2000}
+                  maxLength={TEXT_LIMITS.CHAR_BACKGROUND_MAX}
                 />
               </div>
             </div>
@@ -282,7 +283,7 @@ export const CharacterManagement: React.FC = () => {
             </div>
             <div className="form-group">
               <label className="form-label" style={{ fontSize: '0.75rem' }}>{t('character.promptTextLabel')}</label>
-              <input className="form-input" value={promptText} onChange={e => setPromptText(e.target.value)} />
+              <InputWithCounter className="form-input" value={promptText} onChange={e => setPromptText(e.target.value)} maxLength={TEXT_LIMITS.VOICE_CLONE_PROMPT_MAX} />
             </div>
             <button type="button" className="btn btn-secondary btn-xs"
               disabled={isCloning || !cloneAudioFile}
@@ -310,12 +311,12 @@ export const CharacterManagement: React.FC = () => {
             </div>
             <div className="form-group">
               <label className="form-label" style={{ fontSize: '0.75rem' }}>{t('character.voiceDesignPromptLabel')}</label>
-              <input className="form-input" value={voiceDesignPrompt} onChange={e => setVoiceDesignPrompt(e.target.value)} placeholder={t('character.voiceDesignPromptPlaceholder')} />
+              <InputWithCounter className="form-input" value={voiceDesignPrompt} onChange={e => setVoiceDesignPrompt(e.target.value)} placeholder={t('character.voiceDesignPromptPlaceholder')} maxLength={TEXT_LIMITS.VOICE_DESIGN_PROMPT_MAX} />
               <p className="character-form-section-hint">{t('character.voiceDesignPromptHint')}</p>
             </div>
             <div className="form-group">
               <label className="form-label" style={{ fontSize: '0.75rem' }}>{t('character.voiceDesignPreviewLabel')}</label>
-              <input className="form-input" value={voiceDesignPreviewText} onChange={e => setVoiceDesignPreviewText(e.target.value)} />
+              <InputWithCounter className="form-input" value={voiceDesignPreviewText} onChange={e => setVoiceDesignPreviewText(e.target.value)} maxLength={TEXT_LIMITS.VOICE_DESIGN_PREVIEW_MAX} />
             </div>
             <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
               <button type="button" className="btn btn-secondary btn-xs"
@@ -357,7 +358,7 @@ export const CharacterManagement: React.FC = () => {
             </div>
             {imageInputMode === 'url' ? (
               <div className="form-group">
-                <input className="form-input" value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder={t('character.imagePlaceholder')} />
+                <InputWithCounter className="form-input" value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder={t('character.imagePlaceholder')} maxLength={TEXT_LIMITS.URL_MAX} />
               </div>
             ) : imageInputMode === 'upload' ? (
               <div className="form-group">

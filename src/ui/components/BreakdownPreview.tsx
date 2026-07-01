@@ -2,6 +2,9 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Sparkles, Users, ImagePlus, Check, CheckCircle2, Trash2, RefreshCw, Wand2 } from 'lucide-react';
 import type { CharacterDraft, BackgroundDraft, ImageGenerationContext } from '../../domain/ports/OutboundPorts';
+import { InputWithCounter } from './InputWithCounter';
+import { TextAreaWithCounter } from './TextAreaWithCounter';
+import { TEXT_LIMITS } from '../../domain/constants/textLimits';
 
 interface BreakdownPreviewProps {
   draftCharacters: CharacterDraft[];
@@ -98,7 +101,7 @@ export const BreakdownPreview: React.FC<BreakdownPreviewProps> = ({
                   transition: 'all 0.2s'
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                    <input className="form-input" style={{ fontSize: '0.8rem', padding: '0.3rem 0.5rem', flex: 1, marginRight: '0.5rem' }}
+                    <InputWithCounter maxLength={TEXT_LIMITS.DRAFT_NAME_MAX} className="form-input" style={{ fontSize: '0.8rem', padding: '0.3rem 0.5rem', flex: 1, marginRight: '0.5rem' }}
                       value={c.name} onChange={e => onUpdateDraftCharacter(i, 'name', e.target.value)}
                       placeholder={t('workbench.draftCharNamePlaceholder')} />
                     <div style={{ display: 'flex', gap: '0.25rem' }}>
@@ -113,7 +116,7 @@ export const BreakdownPreview: React.FC<BreakdownPreviewProps> = ({
                       </button>
                     </div>
                   </div>
-                  <textarea className="form-textarea" style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem', minHeight: '40px', width: '100%', marginBottom: '0.3rem' }}
+                  <TextAreaWithCounter maxLength={TEXT_LIMITS.DRAFT_PROMPT_MAX} className="form-textarea" style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem', minHeight: '40px', width: '100%', marginBottom: '0.3rem' }}
                     value={c.appearancePrompt} onChange={e => onUpdateDraftCharacter(i, 'appearancePrompt', e.target.value)}
                     placeholder={t('workbench.draftAppearancePlaceholder')} />
                   <button type="button" className="btn btn-secondary" style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.2rem', color: '#a78bfa' }}
@@ -122,7 +125,7 @@ export const BreakdownPreview: React.FC<BreakdownPreviewProps> = ({
                     {refiningDraftCharField?.index === i && refiningDraftCharField?.field === 'appearance' ? <RefreshCw size={10} className="spin" /> : <Wand2 size={10} />}
                     {refiningDraftCharField?.index === i && refiningDraftCharField?.field === 'appearance' ? t('textAI.refiningPrompt') : t('textAI.refineCharAppearance')}
                   </button>
-                  <textarea className="form-textarea" style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem', minHeight: '40px', width: '100%', marginBottom: '0.3rem' }}
+                  <TextAreaWithCounter maxLength={TEXT_LIMITS.DRAFT_PROMPT_MAX} className="form-textarea" style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem', minHeight: '40px', width: '100%', marginBottom: '0.3rem' }}
                     value={c.personalityPrompt} onChange={e => onUpdateDraftCharacter(i, 'personalityPrompt', e.target.value)}
                     placeholder={t('workbench.draftPersonalityPlaceholder')} />
                   <button type="button" className="btn btn-secondary" style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.2rem', color: '#a78bfa' }}
@@ -176,7 +179,7 @@ export const BreakdownPreview: React.FC<BreakdownPreviewProps> = ({
                   transition: 'all 0.2s'
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                    <input className="form-input" style={{ fontSize: '0.8rem', padding: '0.3rem 0.5rem', flex: 1, marginRight: '0.5rem' }}
+                    <InputWithCounter maxLength={TEXT_LIMITS.DRAFT_NAME_MAX} className="form-input" style={{ fontSize: '0.8rem', padding: '0.3rem 0.5rem', flex: 1, marginRight: '0.5rem' }}
                       value={bg.name} onChange={e => onUpdateDraftBackground(i, 'name', e.target.value)}
                       placeholder={t('workbench.draftBgNamePlaceholder')} />
                     <div style={{ display: 'flex', gap: '0.25rem' }}>
@@ -191,7 +194,7 @@ export const BreakdownPreview: React.FC<BreakdownPreviewProps> = ({
                       </button>
                     </div>
                   </div>
-                  <textarea className="form-textarea" style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem', minHeight: '50px', width: '100%', marginBottom: '0.3rem' }}
+                  <TextAreaWithCounter maxLength={TEXT_LIMITS.DRAFT_PROMPT_MAX} className="form-textarea" style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem', minHeight: '50px', width: '100%', marginBottom: '0.3rem' }}
                     value={bg.environmentPrompt} onChange={e => onUpdateDraftBackground(i, 'environmentPrompt', e.target.value)}
                     placeholder={t('workbench.draftEnvPlaceholder')} />
                   <button type="button" className="btn btn-secondary" style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.2rem', color: '#f472b6' }}

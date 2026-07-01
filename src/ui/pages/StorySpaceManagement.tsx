@@ -7,6 +7,9 @@ import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useAllSpaces } from '../hooks/useSpaceScopedQuery';
 import type { StorySpace } from '../../domain/entities/models';
+import { InputWithCounter } from '../components/InputWithCounter';
+import { TextAreaWithCounter } from '../components/TextAreaWithCounter';
+import { TEXT_LIMITS } from '../../domain/constants/textLimits';
 
 export const StorySpaceManagement: React.FC = () => {
   const { t } = useTranslation();
@@ -125,11 +128,11 @@ export const StorySpaceManagement: React.FC = () => {
           <h3 style={{ marginBottom: '0.75rem' }}>{t('space.createTitle')}</h3>
           <div className="form-group">
             <label className="form-label">{t('space.nameLabel')}</label>
-            <input className="form-input" value={newName} onChange={e => setNewName(e.target.value)} required placeholder={t('space.namePlaceholder')} />
+            <InputWithCounter className="form-input" value={newName} onChange={e => setNewName(e.target.value)} required placeholder={t('space.namePlaceholder')} maxLength={TEXT_LIMITS.SPACE_NAME_MAX} />
           </div>
           <div className="form-group">
             <label className="form-label">{t('space.descLabel')}</label>
-            <textarea className="form-textarea" value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder={t('space.descPlaceholder')} />
+            <TextAreaWithCounter className="form-textarea" value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder={t('space.descPlaceholder')} maxLength={TEXT_LIMITS.SPACE_DESC_MAX} />
           </div>
           <div className="flex gap-4">
             <button type="submit" className="btn btn-primary">{t('space.saveBtn')}</button>
@@ -144,11 +147,11 @@ export const StorySpaceManagement: React.FC = () => {
           <h3 style={{ marginBottom: '0.75rem' }}>{t('space.editTitle')}</h3>
           <div className="form-group">
             <label className="form-label">{t('space.nameLabel')}</label>
-            <input className="form-input" value={editName} onChange={e => setEditName(e.target.value)} required placeholder={t('space.namePlaceholder')} />
+            <InputWithCounter className="form-input" value={editName} onChange={e => setEditName(e.target.value)} required placeholder={t('space.namePlaceholder')} maxLength={TEXT_LIMITS.SPACE_NAME_MAX} />
           </div>
           <div className="form-group">
             <label className="form-label">{t('space.descLabel')}</label>
-            <textarea className="form-textarea" value={editDesc} onChange={e => setEditDesc(e.target.value)} placeholder={t('space.descPlaceholder')} />
+            <TextAreaWithCounter className="form-textarea" value={editDesc} onChange={e => setEditDesc(e.target.value)} placeholder={t('space.descPlaceholder')} maxLength={TEXT_LIMITS.SPACE_DESC_MAX} />
           </div>
           <div className="flex gap-4">
             <button type="submit" className="btn btn-primary">{t('space.saveBtn')}</button>

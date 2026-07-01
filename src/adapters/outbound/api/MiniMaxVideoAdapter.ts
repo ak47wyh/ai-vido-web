@@ -2,6 +2,7 @@ import type { IVideoGeneratorPort, VideoPromptContext, VideoTaskResult, VideoDow
 import { ApiConfigStore } from '../config/ApiConfigStore';
 import { getMiniMaxErrorMessage } from './MiniMaxErrorUtils';
 import axios from 'axios';
+import { ADAPTER_TEXT_LIMITS } from '../../../domain/constants/textLimits';
 
 /**
  * Adapter for MiniMax Video Generation API.
@@ -36,7 +37,11 @@ export class MiniMaxVideoAdapter implements IVideoGeneratorPort {
     }
 
     // ── Build prompt from legacy fields if prompt not directly provided ─────
-    const prompt = context.prompt || this.buildPrompt(context);
+    const rawPrompt = context.prompt || this.buildPrompt(context);
+    // MiniMax 视频官方硬限：最大支持 2000 字符
+    const prompt = rawPrompt.length > ADAPTER_TEXT_LIMITS.MINIMAX_VIDEO_PROMPT_MAX
+      ? rawPrompt.slice(0, ADAPTER_TEXT_LIMITS.MINIMAX_VIDEO_PROMPT_MAX)
+      : rawPrompt;
 
     // ── Determine mode and model ────────────────────────────────────────────
     const mode = context.mode || this.inferMode(context);

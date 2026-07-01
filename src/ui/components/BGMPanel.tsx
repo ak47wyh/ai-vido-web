@@ -1,6 +1,9 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Music, RefreshCw, Sparkles, Wand2 } from 'lucide-react';
+import { InputWithCounter } from './InputWithCounter';
+import { TextAreaWithCounter } from './TextAreaWithCounter';
+import { TEXT_LIMITS } from '../../domain/constants/textLimits';
 
 interface BGMPanelProps {
   bgmPrompt: string;
@@ -93,9 +96,10 @@ export const BGMPanel: React.FC<BGMPanelProps> = ({
         </button>
       </div>
 
-      <input className="form-input" style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem', width: '100%', marginBottom: '0.5rem' }}
+      <InputWithCounter className="form-input" style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem', width: '100%', marginBottom: '0.5rem' }}
         value={bgmPrompt} onChange={e => onBgmPromptChange(e.target.value)}
-        placeholder={t('music.promptPlaceholder')} />
+        placeholder={t('music.promptPlaceholder')}
+        maxLength={TEXT_LIMITS.BGM_PROMPT_MAX} />
 
       {bgmMode !== 'instrumental' && (
         <div style={{ marginBottom: '0.5rem' }}>
@@ -108,17 +112,19 @@ export const BGMPanel: React.FC<BGMPanelProps> = ({
               </button>
             )}
           </div>
-          <textarea className="form-textarea" style={{ fontSize: '0.7rem', padding: '0.3rem 0.5rem', minHeight: '60px', width: '100%' }}
+          <TextAreaWithCounter className="form-textarea" style={{ fontSize: '0.7rem', padding: '0.3rem 0.5rem', minHeight: '60px', width: '100%' }}
             value={bgmLyrics} onChange={e => onBgmLyricsChange(e.target.value)}
-            placeholder={t('music.lyricsPlaceholder')} />
+            placeholder={t('music.lyricsPlaceholder')}
+            maxLength={TEXT_LIMITS.BGM_LYRICS_MAX} />
         </div>
       )}
 
       {bgmMode === 'cover' && (
         <div style={{ marginBottom: '0.5rem' }}>
-          <input className="form-input" style={{ fontSize: '0.7rem', padding: '0.3rem 0.5rem', width: '100%' }} type="url"
+          <InputWithCounter className="form-input" style={{ fontSize: '0.7rem', padding: '0.3rem 0.5rem', width: '100%' }} type="url"
             value={bgmCoverAudioUrl} onChange={e => onBgmCoverAudioUrlChange(e.target.value)}
-            placeholder={t('music.coverAudioPlaceholder')} />
+            placeholder={t('music.coverAudioPlaceholder')}
+            maxLength={TEXT_LIMITS.URL_MAX} />
           <p style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>{t('music.coverAudioHint')}</p>
         </div>
       )}

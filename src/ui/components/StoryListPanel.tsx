@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BookOpen, Spline, Sparkles, Trash2, Pencil, RefreshCw, Wand2 } from 'lucide-react';
 import type { Story } from '../../domain/entities/models';
+import { InputWithCounter } from './InputWithCounter';
+import { TextAreaWithCounter } from './TextAreaWithCounter';
+import { TEXT_LIMITS } from '../../domain/constants/textLimits';
 
 interface StoryListPanelProps {
   stories: Story[] | undefined;
@@ -64,10 +67,10 @@ export const StoryListPanel: React.FC<StoryListPanelProps> = ({
       <div style={{ padding: '1rem' }}>
         <h3 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0 }}>{t('workbench.newStory')}</h3>
         <div className="form-group" style={{ marginTop: '0.75rem' }}>
-          <input className="form-input" placeholder={t('workbench.storyTitlePlaceholder')} value={title} onChange={e => setTitle(e.target.value)} />
+          <InputWithCounter maxLength={TEXT_LIMITS.STORY_TITLE_MAX} className="form-input" placeholder={t('workbench.storyTitlePlaceholder')} value={title} onChange={e => setTitle(e.target.value)} />
         </div>
         <div className="form-group">
-          <textarea className="form-textarea" placeholder={t('workbench.storyContentPlaceholder')} value={originalText} onChange={e => setOriginalText(e.target.value)} />
+          <TextAreaWithCounter maxLength={TEXT_LIMITS.STORY_CONTENT_MAX} className="form-textarea" placeholder={t('workbench.storyContentPlaceholder')} value={originalText} onChange={e => setOriginalText(e.target.value)} />
         </div>
         <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.4rem' }}>
           <button
@@ -111,10 +114,10 @@ export const StoryListPanel: React.FC<StoryListPanelProps> = ({
               {editingStoryId === s.id ? (
                 <div className="glass-panel" style={{ padding: '0.75rem' }}>
                   <div className="form-group" style={{ marginBottom: '0.5rem' }}>
-                    <input className="form-input" value={editTitle} onChange={e => setEditTitle(e.target.value)} placeholder={t('workbench.storyTitlePlaceholder')} />
+                    <InputWithCounter maxLength={TEXT_LIMITS.STORY_TITLE_MAX} className="form-input" value={editTitle} onChange={e => setEditTitle(e.target.value)} placeholder={t('workbench.storyTitlePlaceholder')} />
                   </div>
                   <div className="form-group" style={{ marginBottom: '0.5rem' }}>
-                    <textarea className="form-textarea" value={editOriginalText} onChange={e => setEditOriginalText(e.target.value)} placeholder={t('workbench.storyContentPlaceholder')} style={{ minHeight: '60px' }} />
+                    <TextAreaWithCounter maxLength={TEXT_LIMITS.STORY_CONTENT_MAX} className="form-textarea" value={editOriginalText} onChange={e => setEditOriginalText(e.target.value)} placeholder={t('workbench.storyContentPlaceholder')} style={{ minHeight: '60px' }} />
                   </div>
                   <div style={{ display: 'flex', gap: '0.4rem' }}>
                     <button className="btn btn-primary btn-xs" onClick={handleSaveEdit}>{t('workbench.saveEditBtn')}</button>

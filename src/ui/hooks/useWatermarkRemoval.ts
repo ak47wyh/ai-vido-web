@@ -5,11 +5,13 @@ import type {
   InpaintAlgorithm,
   PdfOptions,
   VideoOptions,
+  VideoInpaintMode,
 } from '../../domain/ports/WatermarkRemovalPorts';
 import {
   imageInpaintAdapter,
   pdfWatermarkAdapter,
-  videoInpaintAdapter,
+  delogoVideoInpaintAdapter,
+  qualityVideoInpaintAdapter,
 } from '../../dependencies';
 
 /** 处理类型 */
@@ -22,6 +24,7 @@ interface LastProcessParams {
   regions: InpaintRegion[];
   algorithm?: InpaintAlgorithm; // 图片
   dpi?: number; // PDF
+  videoMode?: VideoInpaintMode; // 视频
 }
 
 /** 备选算法链：当主算法失败时按顺序自动尝试其他算法 */
@@ -61,7 +64,7 @@ interface UseWatermarkRemovalResult {
   /** 执行 PDF 去水印 */
   processPdf: (file: File, regions: InpaintRegion[], dpi: number) => Promise<void>;
   /** 执行视频去水印 */
-  processVideo: (file: File, regions: InpaintRegion[]) => Promise<void>;
+  processVideo: (file: File, regions: InpaintRegion[], mode: VideoInpaintMode) => Promise<void>;
   /** 使用上次参数重试（手动触发） */
   retry: () => Promise<void>;
   /** 取消处理 */
@@ -115,6 +118,7 @@ export function useWatermarkRemoval(): UseWatermarkRemovalResult {
     regions: InpaintRegion[],
     algorithm: InpaintAlgorithm | undefined,
     dpi: number | undefined,
+    videoMode: VideoInpaintMode | undefined,
   ): Promise<void> => {
     setIsProcessing(true);
     setError(null);
@@ -124,7 +128,7 @@ export function useWatermarkRemoval(): UseWatermarkRemovalResult {
     cancelledRef.current = false;
 
     // 保存参数快照供手动重试
-    lastParamsRef.current = { type, file, regions, algorithm, dpi };
+    lastParamsRef.current = { type, file, regions, algorithm, dpi, videoMode };
 
     // 图片类型支持算法降级；PDF/视频固定算法
     const algorithmChain: (InpaintAlgorithm | undefined)[] =
@@ -174,12 +178,16 @@ export function useWatermarkRemoval(): UseWatermarkRemovalResult {
               setProgress(p);
             });
           } else if (type === 'video') {
+            const mode = videoMode ?? 'quality';
             const options: VideoOptions = {
               watermarkType: 'static',
               sampleStrategy: 'keyframes_only',
               outputCodec: 'h264',
+              mode,
             };
-            blob = await videoInpaintAdapter.inpaintVideo(file, regions, options, (p) => {
+            // 根据 mode 选择适配器：fast → delogo，quality → 逐帧
+            const adapter = mode === 'fast' ? delogoVideoInpaintAdapter : qualityVideoInpaintAdapter;
+            blob = await adapter.inpaintVideo(file, regions, options, (p) => {
               if (cancelledRef.current) throw new Error('CANCELLED');
               setProgress(p);
             });
@@ -224,7 +232,7 @@ export function useWatermarkRemoval(): UseWatermarkRemovalResult {
     regions: InpaintRegion[],
     algorithm: InpaintAlgorithm,
   ): Promise<void> => {
-    await processWithRetry('image', file, regions, algorithm, undefined);
+    await processWithRetry('image', file, regions, algorithm, undefined, undefined);
   }, [processWithRetry]);
 
   const processPdf = useCallback(async (
@@ -232,14 +240,15 @@ export function useWatermarkRemoval(): UseWatermarkRemovalResult {
     regions: InpaintRegion[],
     dpi: number,
   ): Promise<void> => {
-    await processWithRetry('pdf', file, regions, undefined, dpi);
+    await processWithRetry('pdf', file, regions, undefined, dpi, undefined);
   }, [processWithRetry]);
 
   const processVideo = useCallback(async (
     file: File,
     regions: InpaintRegion[],
+    mode: VideoInpaintMode,
   ): Promise<void> => {
-    await processWithRetry('video', file, regions, undefined, undefined);
+    await processWithRetry('video', file, regions, undefined, undefined, mode);
   }, [processWithRetry]);
 
   /** 手动重试：使用上次的参数重新执行 */
@@ -253,8 +262,8 @@ export function useWatermarkRemoval(): UseWatermarkRemovalResult {
       await processImage(params.file, params.regions, params.algorithm);
     } else if (params.type === 'pdf' && params.dpi !== undefined) {
       await processPdf(params.file, params.regions, params.dpi);
-    } else if (params.type === 'video') {
-      await processVideo(params.file, params.regions);
+    } else if (params.type === 'video' && params.videoMode) {
+      await processVideo(params.file, params.regions, params.videoMode);
     }
   }, [processImage, processPdf, processVideo]);
 

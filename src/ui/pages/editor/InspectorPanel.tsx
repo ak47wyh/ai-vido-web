@@ -14,6 +14,7 @@ import React from 'react';
 import { Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { TimelineClip, TransitionType } from '../../../domain/ports/PostProcessPorts';
+import { TEXT_LIMITS } from '../../../domain/constants/textLimits';
 
 const TRANSITIONS: Array<{ value: TransitionType | 'none'; label: string }> = [
   { value: 'none', label: '无' },
@@ -140,6 +141,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({ clip, onPatch, o
             value={clip.text ?? ''}
             onChange={e => onPatch(clip.id, { text: e.target.value })}
             placeholder={t('editor.inspector.textPlaceholder', '输入字幕文本...')}
+            maxLength={TEXT_LIMITS.SUBTITLE_CLIP_TEXT_MAX}
           />
         </Field>
       )}

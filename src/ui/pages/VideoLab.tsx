@@ -14,6 +14,8 @@ import { LabPageLayout } from '../components/LabPageLayout';
 import { ApiConfigStore } from '../../adapters/outbound/config/ApiConfigStore';
 import { hasCapability } from '../../domain/services/platformCapabilities';
 import { TextAreaWithCounter } from '../components/TextAreaWithCounter';
+import { InputWithCounter } from '../components/InputWithCounter';
+import { TEXT_LIMITS } from '../../domain/constants/textLimits';
 
 type VideoLabTab = 't2v' | 'i2v' | 'fl2v' | 's2v' | 'agent' | 'tasks';
 
@@ -438,7 +440,7 @@ export const VideoLab: React.FC = () => {
               value={t2vPrompt}
               onChange={e => setT2vPrompt(e.target.value)}
               placeholder="描述你想要生成的视频内容，支持 [运镜指令] 语法，例如：一个人拿起一本书 [推进], 然后阅读 [固定]"
-              maxLength={2000}
+              maxLength={TEXT_LIMITS.VIDEO_PROMPT_MAX}
             />
             {MODEL_CONFIG[t2vModel]?.supportsCameraDirective && (
               <CameraDirectivePanel onInsert={d => insertDirective(setT2vPrompt, d)} style={{ marginTop: '0.5rem' }} />
@@ -484,7 +486,7 @@ export const VideoLab: React.FC = () => {
               value={i2vPrompt}
               onChange={e => setI2vPrompt(e.target.value)}
               placeholder="描述视频内容，支持 [运镜指令]"
-              maxLength={2000}
+              maxLength={TEXT_LIMITS.VIDEO_PROMPT_MAX}
             />
             {MODEL_CONFIG[i2vModel]?.supportsCameraDirective && (
               <CameraDirectivePanel onInsert={d => insertDirective(setI2vPrompt, d)} style={{ marginTop: '0.5rem' }} />
@@ -550,7 +552,7 @@ export const VideoLab: React.FC = () => {
               value={fl2vPrompt}
               onChange={e => setFl2vPrompt(e.target.value)}
               placeholder="描述视频内容，支持 [运镜指令]"
-              maxLength={2000}
+              maxLength={TEXT_LIMITS.VIDEO_PROMPT_MAX}
             />
             <CameraDirectivePanel onInsert={d => insertDirective(setFl2vPrompt, d)} style={{ marginTop: '0.5rem' }} />
           </div>
@@ -598,7 +600,7 @@ export const VideoLab: React.FC = () => {
               value={s2vPrompt}
               onChange={e => setS2vPrompt(e.target.value)}
               placeholder="描述视频内容"
-              maxLength={2000}
+              maxLength={TEXT_LIMITS.VIDEO_PROMPT_MAX}
             />
           </div>
 
@@ -642,7 +644,7 @@ export const VideoLab: React.FC = () => {
 
           <div>
             <label className="form-label">描述文本</label>
-            <input className="form-input" value={agentTextInput} onChange={e => setAgentTextInput(e.target.value)} placeholder="输入描述文本" />
+            <InputWithCounter className="form-input" value={agentTextInput} onChange={e => setAgentTextInput(e.target.value)} placeholder="输入描述文本" maxLength={2000} />
           </div>
 
           <div>

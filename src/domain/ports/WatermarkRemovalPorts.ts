@@ -44,11 +44,19 @@ export type VideoSampleStrategy = 'all_frames' | 'keyframes_only';
 /** 视频输出编码 */
 export type VideoOutputCodec = 'h264' | 'vp9';
 
+/** 视频去水印处理模式
+ * - fast: 快速模式（FFmpeg delogo 滤镜单次执行，仅矩形）
+ * - quality: 高质量模式（逐帧 Canvas inpaint，支持涂抹）
+ */
+export type VideoInpaintMode = 'fast' | 'quality';
+
 /** 视频去水印选项 */
 export interface VideoOptions {
   watermarkType: VideoWatermarkType;
   sampleStrategy: VideoSampleStrategy;
   outputCodec: VideoOutputCodec;
+  /** 处理模式，默认 quality */
+  mode?: VideoInpaintMode;
 }
 
 /** 进度回调 */
@@ -91,4 +99,34 @@ export interface IVideoInpaintPort {
     options: VideoOptions,
     onProgress?: ProgressCallback,
   ): Promise<Blob>;
+}
+
+// ==================== 视频地址解析端口 ====================
+
+/** 视频地址类型（前端识别用） */
+export type VideoAddressType = 'direct' | 'share' | 'local';
+
+/** 解析后的视频源 */
+export interface ResolvedVideoSource {
+  /** 无水印直链 */
+  directUrl: string;
+  /** 视频标题 */
+  title?: string;
+  /** 缩略图 URL */
+  thumbnailUrl?: string;
+  /** 来源平台标识（如 douyin / bilibili） */
+  sourcePlatform?: string;
+}
+
+/**
+ * 视频地址解析端口
+ *
+ * 用于将平台分享链接（抖音 / B站等）解析为可下载的无水印直链。
+ * 该端口需要后端服务支持（涉及跨域请求与服务端解析）。
+ * 当前 ai-vido-web 为纯前端项目，默认实现为 NotImplementedVideoAddressResolver，
+ * 未来接入后端时仅需替换适配器实现。
+ */
+export interface IVideoAddressResolverPort {
+  /** 解析分享链接，返回无水印直链 */
+  resolve(shareUrl: string): Promise<ResolvedVideoSource>;
 }

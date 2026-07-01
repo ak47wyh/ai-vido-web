@@ -6,6 +6,7 @@ import { useToast } from '../contexts/ToastContext';
 import { getErrorMessage } from '../utils/errorUtils';
 import type { AgentMessage } from '../../domain/services/AgentService';
 import { TextAreaWithCounter } from './TextAreaWithCounter';
+import { TEXT_LIMITS } from '../../domain/constants/textLimits';
 
 interface AgentChatMessage {
   id: string;
@@ -183,7 +184,7 @@ export const AgentChatPanel: React.FC = () => {
           rows={2}
           style={{ resize: 'none', flex: 1, fontSize: '0.875rem' }}
           disabled={isLoading}
-          maxLength={500}
+          maxLength={TEXT_LIMITS.AGENT_INPUT_MAX}
         />
         <button
           className="btn btn-primary"

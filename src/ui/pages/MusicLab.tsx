@@ -18,6 +18,9 @@ import { LabPageLayout } from '../components/LabPageLayout';
 import { AudioPreviewPlayer } from '../components/AudioPreviewPlayer';
 import { AudioUploadField } from '../components/AudioUploadField';
 import { LyricsDisplay } from '../components/LyricsDisplay';
+import { TextAreaWithCounter } from '../components/TextAreaWithCounter';
+import { InputWithCounter } from '../components/InputWithCounter';
+import { TEXT_LIMITS } from '../../domain/constants/textLimits';
 
 type MusicLabTab = 'compose' | 'lyrics' | 'cover';
 
@@ -308,15 +311,14 @@ export const MusicLab: React.FC = () => {
           {/* 歌曲描述 */}
           <div>
             <label className="form-label">{t('musicLab.prompt', '歌曲描述 (Prompt)')}</label>
-            <textarea
+            <TextAreaWithCounter
               className="form-input lab-textarea-compact"
               rows={3}
               placeholder={t('musicLab.promptPlaceholder', '描述你想要的音乐风格、情绪、场景，例如：轻快的电子流行曲，夏日海滩氛围...')}
               value={composePrompt}
               onChange={e => setComposePrompt(e.target.value)}
-              maxLength={1000}
+              maxLength={TEXT_LIMITS.MUSIC_PROMPT_MAX}
             />
-            <div className="lab-char-count">{composePrompt.length} / 1000</div>
           </div>
 
           {/* 歌词 */}
@@ -333,7 +335,7 @@ export const MusicLab: React.FC = () => {
                 {t('musicLab.instrumental', '纯音乐（无歌词）')}
               </label>
             </div>
-            <textarea
+            <TextAreaWithCounter
               className="form-input lab-textarea-compact"
               rows={6}
               placeholder={isInstrumental
@@ -343,6 +345,7 @@ export const MusicLab: React.FC = () => {
               onChange={e => setComposeLyrics(e.target.value)}
               disabled={isInstrumental}
               style={{ opacity: isInstrumental ? 0.5 : 1 }}
+              maxLength={TEXT_LIMITS.MUSIC_LYRICS_MAX}
             />
           </div>
 
@@ -470,12 +473,13 @@ export const MusicLab: React.FC = () => {
           {/* 歌曲标题 */}
           <div>
             <label className="form-label">{t('musicLab.songTitle', '歌曲标题（可选）')}</label>
-            <input
+            <InputWithCounter
               type="text"
               className="form-input"
               placeholder={t('musicLab.songTitlePlaceholder', '给这首歌起个名字')}
               value={lyricsTitle}
               onChange={e => setLyricsTitle(e.target.value)}
+              maxLength={TEXT_LIMITS.SONG_TITLE_MAX}
             />
           </div>
 
@@ -483,23 +487,25 @@ export const MusicLab: React.FC = () => {
           {lyricsMode === 'write_full_song' ? (
             <div>
               <label className="form-label">{t('musicLab.lyricsPrompt', '歌曲描述')}</label>
-              <textarea
+              <TextAreaWithCounter
                 className="form-input lab-textarea-compact"
                 rows={4}
                 placeholder={t('musicLab.lyricsPromptPlaceholder', '描述你想要的歌曲主题、风格、情绪，例如：一首关于夏日告别的抒情流行歌...')}
                 value={lyricsPrompt}
                 onChange={e => setLyricsPrompt(e.target.value)}
+                maxLength={TEXT_LIMITS.MUSIC_LYRICS_PROMPT_MAX}
               />
             </div>
           ) : (
             <div>
               <label className="form-label">{t('musicLab.lyricsInput', '需要修改的歌词')}</label>
-              <textarea
+              <TextAreaWithCounter
                 className="form-input lab-textarea-compact"
                 rows={8}
                 placeholder={t('musicLab.lyricsInputPlaceholder', '粘贴你已有的歌词，AI 将帮你润色修改...')}
                 value={lyricsInput}
                 onChange={e => setLyricsInput(e.target.value)}
+                maxLength={TEXT_LIMITS.MUSIC_LYRICS_INPUT_MAX}
               />
             </div>
           )}
@@ -609,25 +615,27 @@ export const MusicLab: React.FC = () => {
                 {/* 翻唱风格 */}
                 <div>
                   <label className="form-label">{t('musicLab.coverPrompt', '翻唱风格描述')}</label>
-                  <textarea
+                  <TextAreaWithCounter
                     className="form-input lab-textarea-compact"
                     rows={2}
                     placeholder={t('musicLab.coverPromptPlaceholder', '描述翻唱风格，例如：用爵士风格重新演绎，节奏放缓，加入钢琴伴奏...')}
                     value={coverPrompt}
                     onChange={e => setCoverPrompt(e.target.value)}
+                    maxLength={TEXT_LIMITS.MUSIC_COVER_PROMPT_MAX}
                   />
                 </div>
 
                 {/* 歌词（可编辑预处理结果） */}
                 <div>
                   <label className="form-label">{t('musicLab.coverLyrics', '歌词（可编辑预处理结果）')}</label>
-                  <textarea
+                  <TextAreaWithCounter
                     className="form-input lab-textarea-compact"
                     rows={8}
                     placeholder={t('musicLab.coverLyricsPlaceholder', '歌词将自动从预处理结果填入，可按需修改...')}
                     value={coverLyrics}
                     onChange={e => setCoverLyrics(e.target.value)}
                     style={{ fontFamily: 'monospace' }}
+                    maxLength={TEXT_LIMITS.MUSIC_COVER_LYRICS_MAX}
                   />
                 </div>
 

@@ -5,6 +5,7 @@ import type {
 import type { ApiConfig } from '../../config/ApiConfigStore';
 import { ViduHttpClient } from './ViduHttpClient';
 import { withRetry } from './ViduErrorUtils';
+import { ADAPTER_TEXT_LIMITS } from '../../../../domain/constants/textLimits';
 
 /**
  * Vidu 视频生成适配器（生数科技）。
@@ -115,7 +116,10 @@ export class ViduVideoAdapter implements IVideoGeneratorPort {
 
     const input: Record<string, unknown> = {
       type: typeMap[mode] || 'text',
-      prompt: context.prompt,
+      // Vidu 官方硬限：字符长度不能超过 1500 个字符
+      prompt: context.prompt.length > ADAPTER_TEXT_LIMITS.VIDU_VIDEO_PROMPT_MAX
+        ? context.prompt.slice(0, ADAPTER_TEXT_LIMITS.VIDU_VIDEO_PROMPT_MAX)
+        : context.prompt,
     };
 
     // 图片输入

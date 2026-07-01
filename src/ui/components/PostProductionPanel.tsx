@@ -5,6 +5,8 @@ import { postProcessService, subtitleService, autoEditService, cinematographySer
 import type { ShotType, CameraMovement } from '../../domain/services/CinematographyService';
 import { useToast } from '../contexts/ToastContext';
 import { getErrorMessage } from '../utils/errorUtils';
+import { TextAreaWithCounter } from './TextAreaWithCounter';
+import { TEXT_LIMITS } from '../../domain/constants/textLimits';
 
 interface PostProductionPanelProps {
   videoBlob: Blob | null;
@@ -304,8 +306,9 @@ export const PostProductionPanel: React.FC<PostProductionPanelProps> = ({
             </button>
           </div>
           {cinematographyPrompt && (
-            <textarea className="form-textarea" style={{ fontSize: '0.75rem', width: '100%', minHeight: '60px' }}
-              value={cinematographyPrompt} onChange={e => setCinematographyPrompt(e.target.value)} />
+            <TextAreaWithCounter className="form-textarea" style={{ fontSize: '0.75rem', width: '100%', minHeight: '60px' }}
+              value={cinematographyPrompt} onChange={e => setCinematographyPrompt(e.target.value)}
+              maxLength={TEXT_LIMITS.CINEMATOGRAPHY_PROMPT_MAX} />
           )}
         </div>
       )}

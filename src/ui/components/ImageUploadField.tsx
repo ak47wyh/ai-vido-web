@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Upload, Link, X } from 'lucide-react';
 import { fileToBase64, validateImageFile, IMAGE_MAX_SIZE_MB } from '../utils/imageUtils';
+import { TEXT_LIMITS } from '../../domain/constants/textLimits';
 
 // 递增 ID 用于图片上传 input
 let imageUploadCounter = 0;
@@ -88,6 +89,7 @@ export const ImageUploadField: React.FC<ImageUploadFieldProps> = ({
             onChange={e => setUrlInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleUrlConfirm()}
             style={{ flex: 1, fontSize: '0.85rem' }}
+            maxLength={TEXT_LIMITS.URL_MAX}
           />
           <button className="btn btn-secondary" style={{ fontSize: '0.8rem' }} onClick={handleUrlConfirm} disabled={!urlInput.trim()}>确认</button>
         </div>

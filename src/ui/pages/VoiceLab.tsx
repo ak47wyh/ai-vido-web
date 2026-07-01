@@ -12,6 +12,7 @@ import { AudioPreviewPlayer } from '../components/AudioPreviewPlayer';
 import { LabPageLayout } from '../components/LabPageLayout';
 import { TextAreaWithCounter } from '../components/TextAreaWithCounter';
 import { InputWithCounter } from '../components/InputWithCounter';
+import { TEXT_LIMITS } from '../../domain/constants/textLimits';
 
 type VoiceLabTab = 'tts' | 'clone' | 'design' | 'async' | 'manage';
 
@@ -442,7 +443,7 @@ export const VoiceLab: React.FC = () => {
               rows={4}
               value={ttsText}
               onChange={e => setTtsText(e.target.value)}
-              maxLength={5000}
+              maxLength={TEXT_LIMITS.TTS_TEXT_MAX}
             />
             {/* 语气词快捷插入 */}
             <div style={{ display: 'flex', gap: '0.3rem', marginTop: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -599,7 +600,7 @@ export const VoiceLab: React.FC = () => {
                 placeholder="示例音频对应文本（可选）"
                 value={promptText}
                 onChange={e => setPromptText(e.target.value)}
-                maxLength={500}
+                maxLength={TEXT_LIMITS.VOICE_CLONE_PROMPT_MAX}
               />
             )}
           </div>
@@ -613,7 +614,7 @@ export const VoiceLab: React.FC = () => {
                 placeholder="给这个新声音起个名字"
                 value={cloneName}
                 onChange={e => setCloneName(e.target.value)}
-                maxLength={100}
+                maxLength={TEXT_LIMITS.VOICE_NAME_MAX}
               />
             </div>
           </div>
@@ -626,7 +627,7 @@ export const VoiceLab: React.FC = () => {
               value={cloneText}
               onChange={e => setCloneText(e.target.value)}
               placeholder="将用克隆出的声音朗读这段话"
-              maxLength={500}
+              maxLength={TEXT_LIMITS.TTS_TEXT_MAX}
             />
           </div>
 
@@ -688,23 +689,25 @@ export const VoiceLab: React.FC = () => {
         <div className="glass-panel slide-up lab-tab-panel">
           <div>
             <label className="form-label">音色描述</label>
-            <textarea
+            <TextAreaWithCounter
               className="form-input"
               rows={3}
               value={designPrompt}
               onChange={e => setDesignPrompt(e.target.value)}
               placeholder="描述你想要的声音特征，例如：温柔的女声，像春风一样，语速适中，适合讲故事"
+              maxLength={TEXT_LIMITS.VOICE_DESIGN_PROMPT_MAX}
             />
           </div>
 
           <div>
-            <label className="form-label">试听文本 ({designPreviewText.length}/500)</label>
-            <textarea
+            <label className="form-label">试听文本</label>
+            <TextAreaWithCounter
               className="form-input"
               rows={3}
               value={designPreviewText}
-              onChange={e => setDesignPreviewText(e.target.value.substring(0, 500))}
+              onChange={e => setDesignPreviewText(e.target.value)}
               placeholder="输入试听文本，将用设计的音色朗读"
+              maxLength={TEXT_LIMITS.VOICE_DESIGN_PREVIEW_MAX}
             />
           </div>
 
@@ -755,15 +758,15 @@ export const VoiceLab: React.FC = () => {
       {activeTab === 'async' && (
         <div className="glass-panel slide-up lab-tab-panel">
           <div>
-            <label className="form-label">长文本内容（≤ 50,000 字符）</label>
-            <textarea
+            <label className="form-label">长文本内容（≤ {TEXT_LIMITS.TTS_ASYNC_TEXT_MAX.toLocaleString()} 字符）</label>
+            <TextAreaWithCounter
               className="form-input lab-textarea-compact"
               rows={8}
               value={asyncText}
               onChange={e => setAsyncText(e.target.value)}
               placeholder="输入或粘贴长文本内容，适合整篇故事、有声书等场景..."
+              maxLength={TEXT_LIMITS.TTS_ASYNC_TEXT_MAX}
             />
-            <div className="lab-char-count">当前字数: {asyncText.length} / 50000</div>
           </div>
 
           <div className="form-section">
@@ -844,7 +847,7 @@ export const VoiceLab: React.FC = () => {
           <div className="lab-manage-toolbar">
             <div className="lab-search-bar">
               <Search size={16} className="lab-search-bar-icon" />
-              <input className="form-input" placeholder="搜索音色..." value={voiceSearch} onChange={e => setVoiceSearch(e.target.value)} />
+              <input className="form-input" placeholder="搜索音色..." value={voiceSearch} onChange={e => setVoiceSearch(e.target.value)} maxLength={TEXT_LIMITS.SEARCH_KEYWORD_MAX} />
             </div>
             <select className="form-select" value={voiceFilter} onChange={e => { setVoiceFilter(e.target.value as typeof voiceFilter); loadVoices(); }}>
               <option value="all">全部</option>

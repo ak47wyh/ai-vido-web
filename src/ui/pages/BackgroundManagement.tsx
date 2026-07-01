@@ -13,6 +13,7 @@ import { useImageUpload, useCopyToSpace } from '../hooks/useSharedForm';
 import { getErrorMessage } from '../utils/errorUtils';
 import { TextAreaWithCounter } from '../components/TextAreaWithCounter';
 import { InputWithCounter } from '../components/InputWithCounter';
+import { TEXT_LIMITS } from '../../domain/constants/textLimits';
 
 export const BackgroundManagement: React.FC = () => {
   const { t } = useTranslation();
@@ -149,7 +150,7 @@ export const BackgroundManagement: React.FC = () => {
               onChange={e => setName(e.target.value)}
               required
               placeholder={t('background.namePlaceholder')}
-              maxLength={100}
+              maxLength={TEXT_LIMITS.BG_NAME_MAX}
             />
           </div>
           <div className="form-group">
@@ -159,7 +160,7 @@ export const BackgroundManagement: React.FC = () => {
               value={environmentPrompt}
               onChange={e => setEnvironmentPrompt(e.target.value)}
               placeholder={t('background.envPlaceholder')}
-              maxLength={1000}
+              maxLength={TEXT_LIMITS.BG_ENV_PROMPT_MAX}
             />
             <button
               type="button"
@@ -198,7 +199,7 @@ export const BackgroundManagement: React.FC = () => {
           {imageInputMode === 'url' ? (
             <div className="form-group">
               <label className="form-label">{t('background.imageLabel')}</label>
-              <input className="form-input" value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder={t('background.imagePlaceholder')} />
+              <InputWithCounter className="form-input" value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder={t('background.imagePlaceholder')} maxLength={TEXT_LIMITS.URL_MAX} />
             </div>
           ) : imageInputMode === 'upload' ? (
             <div className="form-group">

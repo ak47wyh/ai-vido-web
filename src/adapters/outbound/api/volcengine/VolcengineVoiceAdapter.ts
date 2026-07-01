@@ -6,6 +6,7 @@ import type {
 import type { ApiConfig } from '../../config/ApiConfigStore';
 import { VolcengineHttpClient } from './VolcengineHttpClient';
 import { withRetry } from './VolcengineErrorUtils';
+import { ADAPTER_TEXT_LIMITS } from '../../../../domain/constants/textLimits';
 
 /**
  * 火山引擎语音合成适配器（豆包 TTS）。
@@ -81,17 +82,23 @@ export class VolcengineVoiceAdapter implements IVoicePort {
       };
     }
 
+    // 火山异步长文本上限：100000 字符
+    const rawText = context.text ?? '';
+    const text = rawText.length > ADAPTER_TEXT_LIMITS.VOLC_TTS_ASYNC_MAX
+      ? rawText.slice(0, ADAPTER_TEXT_LIMITS.VOLC_TTS_ASYNC_MAX)
+      : rawText;
+
     const result = await withRetry(() =>
       this.http.post<{ id: string }>('/audio/async/create', {
         model: context.model ?? 'doubao-tts-pro',
-        input: context.text,
+        input: text,
         voice: context.voiceId ?? 'zh_male_narration',
         response_format: 'mp3',
       }),
     );
     return {
       taskId: result.id,
-      usageCharacters: (context.text ?? '').length,
+      usageCharacters: text.length,
     };
   }
 

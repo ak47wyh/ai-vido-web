@@ -375,11 +375,20 @@ export const assetExportPort: import('./domain/ports/DomainServicePorts').IAsset
 import { CanvasInpaintAdapter } from './adapters/outbound/api/inpaint/CanvasInpaintAdapter';
 import { PdfWatermarkAdapter } from './adapters/outbound/api/inpaint/PdfWatermarkAdapter';
 import { FFmpegVideoInpaintAdapter } from './adapters/outbound/api/inpaint/FFmpegVideoInpaintAdapter';
-import type { IImageInpaintPort, IPdfWatermarkPort, IVideoInpaintPort } from './domain/ports/WatermarkRemovalPorts';
+import { DelogoVideoInpaintAdapter } from './adapters/outbound/api/inpaint/DelogoVideoInpaintAdapter';
+import { NotImplementedVideoAddressResolver } from './adapters/outbound/api/inpaint/NotImplementedVideoAddressResolver';
+import type { IImageInpaintPort, IPdfWatermarkPort, IVideoInpaintPort, IVideoAddressResolverPort } from './domain/ports/WatermarkRemovalPorts';
 
 export const imageInpaintAdapter: IImageInpaintPort = new CanvasInpaintAdapter();
 export const pdfWatermarkAdapter: IPdfWatermarkPort = new PdfWatermarkAdapter();
-export const videoInpaintAdapter: IVideoInpaintPort = new FFmpegVideoInpaintAdapter(ffmpegAdapter);
+// 视频去水印 - 高质量模式（方案 B 修复版）
+export const qualityVideoInpaintAdapter: IVideoInpaintPort = new FFmpegVideoInpaintAdapter(ffmpegAdapter, logger);
+// 视频去水印 - 快速模式（方案 A：delogo 滤镜）
+export const delogoVideoInpaintAdapter: IVideoInpaintPort = new DelogoVideoInpaintAdapter(ffmpegAdapter, logger);
+// 默认别名（兼容现有引用，指向高质量模式）
+export const videoInpaintAdapter: IVideoInpaintPort = qualityVideoInpaintAdapter;
+// 视频地址解析（平台分享链接 - 占位实现，需后端服务）
+export const videoAddressResolver: IVideoAddressResolverPort = new NotImplementedVideoAddressResolver(logger);
 
 // ========================================
 // 清晰度提升服务（浏览器端本地处理）

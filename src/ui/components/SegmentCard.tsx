@@ -7,6 +7,8 @@ import { BGMPanel } from './BGMPanel';
 import { AssetPicker } from './AssetPicker';
 import { useAssetPicker } from '../hooks/useAssetPicker';
 import { useSpace } from '../contexts/SpaceContext';
+import { InputWithCounter } from './InputWithCounter';
+import { TEXT_LIMITS } from '../../domain/constants/textLimits';
 
 interface SegmentCardProps {
   segment: StorySegment;
@@ -160,7 +162,8 @@ export const SegmentCard: React.FC<SegmentCardProps> = React.memo(({
                 <label>
                   {t('workbench.actionContent', '运镜与动作提示词 (Action / Camera)')}
                 </label>
-                <input
+                <InputWithCounter
+                  maxLength={TEXT_LIMITS.SEGMENT_ACTION_MAX}
                   type="text"
                   className="form-input"
                   placeholder={t('workbench.actionContentPlaceholder', '例如：向左平移，特写镜头')}
@@ -173,7 +176,8 @@ export const SegmentCard: React.FC<SegmentCardProps> = React.memo(({
                 <label>
                   <ImageIcon size={14} /> {t('workbench.firstFrameImage', '视频参考图 (首帧/尾帧 URL)')}
                 </label>
-                <input
+                <InputWithCounter
+                  maxLength={TEXT_LIMITS.URL_MAX}
                   type="text"
                   className="form-input"
                   placeholder={t('workbench.firstFrameImagePlaceholder', '输入图片链接 (可选)')}

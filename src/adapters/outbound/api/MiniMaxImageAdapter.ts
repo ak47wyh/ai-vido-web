@@ -2,6 +2,7 @@ import type { IImageGeneratorPort, ImageGenerationContext, ImageGenerationResult
 import { ApiConfigStore } from '../config/ApiConfigStore';
 import { getMiniMaxErrorMessage } from './MiniMaxErrorUtils';
 import axios from 'axios';
+import { ADAPTER_TEXT_LIMITS } from '../../../domain/constants/textLimits';
 
 /**
  * Adapter for MiniMax Image Generation API.
@@ -31,7 +32,7 @@ export class MiniMaxImageAdapter implements IImageGeneratorPort {
     // ── Build request payload ──────────────────────────────────────────────
     const model = context.model || 'image-01';
     const responseFormat = context.responseFormat || 'url';
-    const MAX_PROMPT_LENGTH = 1500;
+    const MAX_PROMPT_LENGTH = ADAPTER_TEXT_LIMITS.MINIMAX_IMAGE_PROMPT_MAX;
 
     // Truncate prompt to API limit
     let prompt = context.prompt;

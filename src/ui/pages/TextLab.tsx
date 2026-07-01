@@ -15,6 +15,8 @@ import { AssetSaveDialog } from '../components/AssetPicker';
 import { ThinkingBlock } from '../components/ThinkingBlock';
 import { TokenUsageBar } from '../components/TokenUsageBar';
 import { LabPageLayout } from '../components/LabPageLayout';
+import { TextAreaWithCounter } from '../components/TextAreaWithCounter';
+import { TEXT_LIMITS } from '../../domain/constants/textLimits';
 
 type TextLabTab = 'chat' | 'refine' | 'models';
 
@@ -381,7 +383,7 @@ export const TextLab: React.FC = () => {
             {/* Input — compact */}
             <div className="chat-input-area">
               <div className="chat-input-row">
-                <textarea
+                <TextAreaWithCounter
                   className="form-input"
                   style={{ flex: 1, resize: 'none', padding: '0.5rem', fontSize: '0.9rem' }}
                   rows={1}
@@ -389,6 +391,7 @@ export const TextLab: React.FC = () => {
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
+                  maxLength={TEXT_LIMITS.CHAT_INPUT_MAX}
                 />
                 <button
                   className="btn btn-primary btn-sm"
@@ -423,13 +426,14 @@ export const TextLab: React.FC = () => {
               ))}
             </div>
 
-            <textarea
+            <TextAreaWithCounter
               className="form-input"
               rows={8}
               placeholder={t('textLab.refineInputPlaceholder', '粘贴或输入需要润色的文本...')}
               value={refineInput}
               onChange={e => setRefineInput(e.target.value)}
               style={{ fontSize: '0.85rem', padding: '0.6rem' }}
+              maxLength={TEXT_LIMITS.REFINE_INPUT_MAX}
             />
 
             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
