@@ -8,7 +8,7 @@
  */
 
 import React from 'react';
-import { Save, RefreshCw, Download, Loader2, Check } from 'lucide-react';
+import { Save, RefreshCw, Download, Loader2, Check, Upload } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { Story } from '../../../domain/entities/models';
 
@@ -20,10 +20,11 @@ interface EditorToolbarProps {
   onSave: () => void;
   onRebuild: () => void;
   onExport: () => void;
+  onImportVideo: () => void;
 }
 
 export const EditorToolbar: React.FC<EditorToolbarProps> = ({
-  stories, storyId, onStoryChange, saving, onSave, onRebuild, onExport,
+  stories, storyId, onStoryChange, saving, onSave, onRebuild, onExport, onImportVideo,
 }) => {
   const { t } = useTranslation();
 
@@ -75,6 +76,11 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
         title={t('editor.rebuild', '从分镜重新铺轨')}
       >
         <RefreshCw size={14} />
+      </button>
+
+      <button className="btn btn-secondary" onClick={onImportVideo} title={t('editor.media.import.title', '导入视频')}>
+        <Upload size={14} />
+        {t('editor.media.import.title', '导入视频')}
       </button>
 
       <button className="btn btn-primary" onClick={onExport} disabled={!storyId}>

@@ -376,7 +376,7 @@ import { CanvasInpaintAdapter } from './adapters/outbound/api/inpaint/CanvasInpa
 import { PdfWatermarkAdapter } from './adapters/outbound/api/inpaint/PdfWatermarkAdapter';
 import { FFmpegVideoInpaintAdapter } from './adapters/outbound/api/inpaint/FFmpegVideoInpaintAdapter';
 import { DelogoVideoInpaintAdapter } from './adapters/outbound/api/inpaint/DelogoVideoInpaintAdapter';
-import { NotImplementedVideoAddressResolver } from './adapters/outbound/api/inpaint/NotImplementedVideoAddressResolver';
+import { DouyinVideoAddressResolver } from './adapters/outbound/api/inpaint/DouyinVideoAddressResolver';
 import type { IImageInpaintPort, IPdfWatermarkPort, IVideoInpaintPort, IVideoAddressResolverPort } from './domain/ports/WatermarkRemovalPorts';
 
 export const imageInpaintAdapter: IImageInpaintPort = new CanvasInpaintAdapter();
@@ -387,8 +387,8 @@ export const qualityVideoInpaintAdapter: IVideoInpaintPort = new FFmpegVideoInpa
 export const delogoVideoInpaintAdapter: IVideoInpaintPort = new DelogoVideoInpaintAdapter(ffmpegAdapter, logger);
 // 默认别名（兼容现有引用，指向高质量模式）
 export const videoInpaintAdapter: IVideoInpaintPort = qualityVideoInpaintAdapter;
-// 视频地址解析（平台分享链接 - 占位实现，需后端服务）
-export const videoAddressResolver: IVideoAddressResolverPort = new NotImplementedVideoAddressResolver(logger);
+// 视频地址解析（直链 + 抖音分享链接纯前端解析）
+export const videoAddressResolver: IVideoAddressResolverPort = new DouyinVideoAddressResolver(logger);
 
 // ========================================
 // 清晰度提升服务（浏览器端本地处理）

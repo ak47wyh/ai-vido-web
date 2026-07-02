@@ -43,9 +43,19 @@ export const FileManager: React.FC = () => {
   // 加载缩略图 URL
   useEffect(() => {
     let cancelled = false;
+    const imgs = (allImages ?? []).filter(img => {
+      if (spaceFilter !== 'all' && img.spaceId !== spaceFilter) return false;
+      if (keyword) {
+        const kw = keyword.toLowerCase();
+        return img.name.toLowerCase().includes(kw)
+          || img.tags.some(tg => tg.toLowerCase().includes(kw))
+          || (img.prompt || '').toLowerCase().includes(kw);
+      }
+      return true;
+    });
     const localUrls: Record<string, string> = {};
     (async () => {
-      for (const img of filteredImages) {
+      for (const img of imgs) {
         try {
           localUrls[img.id] = await assetLibraryService.getImageBlobUrl(img);
         } catch {
@@ -58,7 +68,7 @@ export const FileManager: React.FC = () => {
       cancelled = true;
       Object.values(localUrls).forEach(u => { if (u) URL.revokeObjectURL(u); });
     };
-  }, [filteredImages]);
+  }, [allImages, spaceFilter, keyword]);
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds(prev => {

@@ -26,8 +26,11 @@ import { MediaPanel } from './editor/MediaPanel';
 import { PreviewStage } from './editor/PreviewStage';
 import { InspectorPanel } from './editor/InspectorPanel';
 import { ExportModal } from './editor/ExportModal';
+import { ImportVideoModal } from './editor/ImportVideoModal';
+import { WelcomePanel } from './editor/WelcomePanel';
 import type { Timeline, TimelineClip, TimelineClipSource } from '../../domain/ports/PostProcessPorts';
 import type { RenderExportOptions, RenderProgress } from '../../domain/ports/TimelineRenderPorts';
+import type { SavedVideo } from '../../domain/entities/models';
 
 export const VideoEditor: React.FC = () => {
   const { t } = useTranslation();
@@ -41,6 +44,7 @@ export const VideoEditor: React.FC = () => {
   const [storyId, setStoryId] = useState<string | null>(initialStoryId);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   // storyId 变化时同步 URL + 清空选中（在事件回调里重置，避免 effect 内 setState）
   const handleStoryChange = useCallback((sid: string) => {
@@ -146,6 +150,27 @@ export const VideoEditor: React.FC = () => {
     return exportTimeline(options, onProgress);
   }, [exportTimeline]);
 
+  const handleImportVideo = useCallback(() => {
+    if (!currentSpaceId) {
+      showToast('warning', t('editor.media.import.selectSpace', '请先选择一个空间'));
+      return;
+    }
+    setImportOpen(true);
+  }, [currentSpaceId, showToast, t]);
+
+  const handleImported = useCallback((video: SavedVideo) => {
+    showToast('success', t('editor.media.import.success', '导入成功'));
+    if (timeline) {
+      const source: TimelineClipSource = { kind: 'savedVideo', refId: video.id, storagePath: video.blobKey };
+      handleAddToTimeline(source, video.name, video.durationSec);
+    }
+  }, [timeline, handleAddToTimeline, showToast, t]);
+
+  const handleVideoSelect = useCallback((video: SavedVideo) => {
+    const source: TimelineClipSource = { kind: 'savedVideo', refId: video.id, storagePath: video.blobKey };
+    handleAddToTimeline(source, video.name, video.durationSec);
+  }, [handleAddToTimeline]);
+
   return (
     <div>
       <EditorToolbar
@@ -156,10 +181,15 @@ export const VideoEditor: React.FC = () => {
         onSave={handleSave}
         onRebuild={handleRebuild}
         onExport={() => setExportOpen(true)}
+        onImportVideo={handleImportVideo}
       />
 
       {!storyId ? (
-        <AsyncState empty emptyText={t('editor.selectStoryHint', '请在顶部选择一个故事开始剪辑')} />
+        <WelcomePanel
+          spaceId={currentSpaceId ?? ''}
+          onImportClick={handleImportVideo}
+          onVideoSelect={handleVideoSelect}
+        />
       ) : (
         <AsyncState loading={loading} error={error} onRetry={reload} empty={!timeline}>
           {timeline && currentSpaceId && (
@@ -185,6 +215,13 @@ export const VideoEditor: React.FC = () => {
         open={exportOpen}
         onClose={() => setExportOpen(false)}
         onExport={handleExport}
+      />
+
+      <ImportVideoModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        spaceId={currentSpaceId ?? ''}
+        onImported={handleImported}
       />
     </div>
   );

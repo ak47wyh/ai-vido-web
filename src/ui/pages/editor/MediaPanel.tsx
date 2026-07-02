@@ -11,12 +11,13 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Film, Mic, FolderOpen, Plus, Trash2, Film as FilmIcon } from 'lucide-react';
+import { Film, Mic, FolderOpen, Plus, Trash2, Film as FilmIcon, Link as LinkIcon, Loader, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { assetLibraryService, getFileStorage } from '../../../dependencies';
 import { useSpaceScopedFinalCuts } from '../../hooks/useSpaceScopedQuery';
 import { useSavedVoices, useSavedVideos } from '../../hooks/useSavedAssets';
 import { useVideoImport } from '../../hooks/useVideoImport';
+import { useLinkImport } from '../../hooks/useLinkImport';
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { useToast } from '../../contexts/ToastContext';
 import { VideoUploadField } from '../../components/VideoUploadField';
@@ -30,12 +31,14 @@ interface MediaPanelProps {
 }
 
 type Tab = 'videos' | 'finalcuts' | 'voices';
+type VideoSubTab = 'upload' | 'link';
 
 export const MediaPanel: React.FC<MediaPanelProps> = ({ spaceId, onAddToTimeline, timeline }) => {
   const { t } = useTranslation();
   const { showToast } = useToast();
   const { confirm } = useConfirm();
   const [tab, setTab] = useState<Tab>('videos');
+  const [videoSubTab, setVideoSubTab] = useState<VideoSubTab>('upload');
 
   const { videos, refetch: refetchVideos } = useSavedVideos(spaceId);
   const { voices } = useSavedVoices(spaceId);
@@ -43,6 +46,9 @@ export const MediaPanel: React.FC<MediaPanelProps> = ({ spaceId, onAddToTimeline
 
   const videoImport = useVideoImport();
   const { state: importState, progress, error: importError, importedName } = videoImport;
+
+  const linkImport = useLinkImport();
+  const { reset: resetLinkImport } = linkImport;
 
   // 派生 finalCuts 的 duration（来自 finalCut.duration，毫秒）
   const cutDurations = useMemo(() => {
@@ -111,33 +117,80 @@ export const MediaPanel: React.FC<MediaPanelProps> = ({ spaceId, onAddToTimeline
       <div style={{ flex: 1, overflowY: 'auto', padding: '0.5rem' }}>
         {tab === 'videos' && (
           <>
-            <VideoUploadField onFile={handleFile} disabled={isImporting} />
-            {isImporting && (
-              <div style={{
-                background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)',
-                padding: '0.5rem', marginBottom: '0.5rem',
-              }}>
-                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>
-                  {t('editor.media.import.uploading', '上传中：{{name}}', { name: importedName })}
-                </div>
-                <div style={{ height: 4, background: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden' }}>
-                  <div style={{ width: `${progress}%`, height: '100%', background: 'var(--primary-color)', transition: 'width 0.3s' }} />
-                </div>
-              </div>
+            {/* 视频子 Tab：本地上传 / 链接导入 */}
+            <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '0.5rem' }}>
+              <button
+                onClick={() => setVideoSubTab('upload')}
+                style={{
+                  flex: 1, padding: '0.35rem', fontSize: '0.7rem',
+                  background: videoSubTab === 'upload' ? 'var(--primary-color)' : 'rgba(255,255,255,0.05)',
+                  color: videoSubTab === 'upload' ? '#fff' : 'var(--text-muted)',
+                  border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem',
+                }}
+              >
+                <Film size={12} /> {t('editor.media.upload', '本地上传')}
+              </button>
+              <button
+                onClick={() => setVideoSubTab('link')}
+                style={{
+                  flex: 1, padding: '0.35rem', fontSize: '0.7rem',
+                  background: videoSubTab === 'link' ? 'var(--primary-color)' : 'rgba(255,255,255,0.05)',
+                  color: videoSubTab === 'link' ? '#fff' : 'var(--text-muted)',
+                  border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem',
+                }}
+              >
+                <LinkIcon size={12} /> {t('editor.media.linkImport', '链接导入')}
+              </button>
+            </div>
+
+            {/* 本地上传 */}
+            {videoSubTab === 'upload' && (
+              <>
+                <VideoUploadField onFile={handleFile} disabled={isImporting} />
+                {isImporting && (
+                  <div style={{
+                    background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)',
+                    padding: '0.5rem', marginBottom: '0.5rem',
+                  }}>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>
+                      {t('editor.media.import.uploading', '上传中：{{name}}', { name: importedName })}
+                    </div>
+                    <div style={{ height: 4, background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
+                      <div style={{ width: `${progress}%`, height: '100%', background: 'var(--primary-color)', transition: 'width 0.3s' }} />
+                    </div>
+                  </div>
+                )}
+                {importState === 'error' && (
+                  <div style={{
+                    background: 'rgba(239,68,68,0.1)', borderRadius: 'var(--radius-sm)',
+                    padding: '0.5rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem',
+                  }}>
+                    <span style={{ fontSize: '0.7rem', color: '#ef9999', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {t(importError ?? 'editor.media.import.failed', importError ?? '上传失败')}
+                    </span>
+                    <button className="btn btn-secondary" style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem', flexShrink: 0 }} onClick={() => videoImport.reset()}>
+                      {t('editor.media.import.retry', '重试')}
+                    </button>
+                  </div>
+                )}
+              </>
             )}
-            {importState === 'error' && (
-              <div style={{
-                background: 'rgba(239,68,68,0.1)', borderRadius: 'var(--radius-sm)',
-                padding: '0.5rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem',
-              }}>
-                <span style={{ fontSize: '0.7rem', color: '#ef9999', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {t(importError ?? 'editor.media.import.failed', importError ?? '上传失败')}
-                </span>
-                <button className="btn btn-secondary" style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem', flexShrink: 0 }} onClick={() => videoImport.reset()}>
-                  {t('editor.media.import.retry', '重试')}
-                </button>
-              </div>
+
+            {/* 链接导入 */}
+            {videoSubTab === 'link' && (
+              <LinkImportPanel
+                spaceId={spaceId}
+                linkImport={linkImport}
+                onImportSuccess={async () => {
+                  showToast('success', t('editor.media.linkImport.success', '导入成功'));
+                  await refetchVideos();
+                  resetLinkImport();
+                }}
+              />
             )}
+
             <MediaList
               items={videos.map(v => ({
                 id: v.id,
@@ -294,6 +347,153 @@ const VideoThumbnail: React.FC<{ blobKey?: string }> = ({ blobKey }) => {
   ) : (
     <div style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: 'rgba(255,255,255,0.05)', borderRadius: 'var(--radius-sm)' }}>
       <FilmIcon size={16} style={{ color: 'var(--text-muted)' }} />
+    </div>
+  );
+};
+
+// ============================================================
+// LinkImportPanel — 链接导入 Tab UI（PRD §4.1）
+// ============================================================
+interface LinkImportPanelProps {
+  spaceId: string;
+  linkImport: ReturnType<typeof useLinkImport>;
+  onImportSuccess: () => void;
+}
+
+const LinkImportPanel: React.FC<LinkImportPanelProps> = ({ spaceId, linkImport, onImportSuccess }) => {
+  const { t } = useTranslation();
+  const { state, progress, error, detectedPlatform, importFromUrl, reset } = linkImport;
+  const [urlInput, setUrlInput] = useState('');
+
+  const isProcessing = ['parsing', 'downloading', 'validating', 'probing', 'extracting', 'saving'].includes(state);
+  const isSuccess = state === 'success';
+  const isError = state === 'error';
+
+  const handleImport = async () => {
+    if (!urlInput.trim() || isProcessing) return;
+    const result = await importFromUrl(urlInput, spaceId);
+    if (result) {
+      onImportSuccess();
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleImport();
+    }
+  };
+
+  /** 状态文案（PRD §4.2） */
+  const stateLabel: Record<string, string> = {
+    parsing: t('editor.media.linkImport.parsing', '正在识别视频地址...'),
+    downloading: t('editor.media.linkImport.downloading', '下载中'),
+    validating: t('editor.media.linkImport.validating', '校验中'),
+    probing: t('editor.media.linkImport.probing', '读取视频信息...'),
+    extracting: t('editor.media.linkImport.extracting', '生成缩略图...'),
+    saving: t('editor.media.linkImport.saving', '保存到素材库...'),
+    success: t('editor.media.linkImport.success', '已导入，可在列表中查看'),
+    error: '',
+  };
+
+  return (
+    <div style={{ marginBottom: '0.5rem' }}>
+      {/* URL 输入框 */}
+      <input
+        type="text"
+        placeholder={t('editor.media.linkImport.placeholder', '粘贴视频链接或分享链接...')}
+        value={urlInput}
+        onChange={e => setUrlInput(e.target.value)}
+        onKeyDown={handleKeyDown}
+        disabled={isProcessing}
+        maxLength={2048}
+        style={{
+          width: '100%', boxSizing: 'border-box',
+          padding: '0.4rem 0.6rem',
+          fontSize: '0.75rem',
+          background: 'rgba(255,255,255,0.05)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: 'var(--radius-sm)',
+          color: 'var(--text-primary)',
+          outline: 'none',
+        }}
+      />
+
+      {/* 平台识别提示 */}
+      {detectedPlatform && !isProcessing && !isError && (
+        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+          <span>检测到：{detectedPlatform}</span>
+        </div>
+      )}
+
+      {/* 导入按钮 */}
+      <button
+        className="btn btn-primary"
+        onClick={handleImport}
+        disabled={!urlInput.trim() || isProcessing}
+        style={{ width: '100%', marginTop: '0.4rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.75rem' }}
+      >
+        {isProcessing ? (
+          <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+            <Loader size={12} className="spin" />
+            {stateLabel[state] || t('editor.media.linkImport.importing', '导入中')}
+          </span>
+        ) : isError ? (
+          <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+            <RefreshCw size={12} />
+            {t('editor.media.linkImport.retry', '重试')}
+          </span>
+        ) : (
+          <span>{t('editor.media.linkImport.importBtn', '解析并导入')}</span>
+        )}
+      </button>
+
+      {/* 进度条 */}
+      {isProcessing && (
+        <div style={{ marginTop: '0.4rem' }}>
+          <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>
+            {stateLabel[state]}
+          </div>
+          <div style={{ height: 3, background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
+            <div style={{ width: `${progress}%`, height: '100%', background: 'var(--primary-color)', transition: 'width 0.3s' }} />
+          </div>
+        </div>
+      )}
+
+      {/* 错误提示 */}
+      {isError && error && (
+        <div style={{
+          marginTop: '0.4rem',
+          padding: '0.4rem 0.5rem',
+          background: 'rgba(239,68,68,0.1)',
+          borderRadius: 'var(--radius-sm)',
+          fontSize: '0.65rem',
+          color: '#ef9999',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '0.5rem',
+        }}>
+          <span style={{ flex: 1 }}>{t(error, error)}</span>
+          <button className="btn btn-secondary" style={{ fontSize: '0.6rem', padding: '0.1rem 0.3rem', flexShrink: 0 }} onClick={reset}>
+            {t('editor.media.linkImport.clear', '清除')}
+          </button>
+        </div>
+      )}
+
+      {/* 成功提示 */}
+      {isSuccess && (
+        <div style={{
+          marginTop: '0.4rem',
+          padding: '0.4rem 0.5rem',
+          background: 'rgba(16,185,129,0.1)',
+          borderRadius: 'var(--radius-sm)',
+          fontSize: '0.65rem',
+          color: '#10b981',
+        }}>
+          ✓ {t('editor.media.linkImport.success', '已导入，可在列表中查看')}
+        </div>
+      )}
     </div>
   );
 };

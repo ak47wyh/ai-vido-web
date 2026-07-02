@@ -446,6 +446,70 @@ export class AssetLibraryService {
     return item;
   }
 
+  async saveVideoFromUrl(params: {
+    spaceId: string;
+    name: string;
+    videoUrl: string;
+    durationSec: number;
+    width?: number;
+    height?: number;
+    mimeType?: string;
+    tags?: string[];
+    sourceType: SavedVideoSource;
+    sourceId?: string;
+    thumbnailBlob?: Blob;
+  }): Promise<SavedVideo> {
+    let blob: Blob;
+    let mime: string;
+
+    if (params.videoUrl.startsWith('data:')) {
+      blob = this.dataUriToBlob(params.videoUrl);
+      mime = blob.type || 'video/mp4';
+    } else if (params.videoUrl.startsWith('blob:')) {
+      throw new Error(
+        '[AssetLibrary] videoUrl 是 blob: URL（仅在浏览器会话内有效）。' +
+        '请改用 saveVideoFromBlob 直接传入 Blob。'
+      );
+    } else if (/^https?:\/\//.test(params.videoUrl)) {
+      try {
+        const response = await fetch(params.videoUrl);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        blob = await response.blob();
+        mime = blob.type || 'video/mp4';
+      } catch (e) {
+        const reason = e instanceof Error ? e.message : String(e);
+        const isCors = reason.includes('CORS') || reason.includes('cors') || reason.includes('跨域');
+        if (isCors) {
+          throw new Error(
+            `[AssetLibrary] 视频链接跨域限制，无法直接下载：${params.videoUrl.slice(0, 80)}...。` +
+            '请先下载到本地后通过本地上传导入。',
+            { cause: e }
+          );
+        }
+        throw new Error(
+          `[AssetLibrary] 无法从 "${params.videoUrl.slice(0, 80)}..." 拉取视频：${reason}。`,
+          { cause: e }
+        );
+      }
+    } else {
+      throw new Error(`[AssetLibrary] 无法识别的 videoUrl 协议：${params.videoUrl.slice(0, 60)}...`);
+    }
+
+    return this.saveVideoFromBlob({
+      spaceId: params.spaceId,
+      name: params.name,
+      blob,
+      durationSec: params.durationSec,
+      width: params.width,
+      height: params.height,
+      mimeType: mime,
+      tags: params.tags,
+      sourceType: params.sourceType,
+      sourceId: params.sourceId,
+      thumbnailBlob: params.thumbnailBlob,
+    });
+  }
+
   async getVideoBlobUrl(savedVideo: SavedVideo): Promise<string> {
     const fileStorage = this.getFileStorage();
     return fileStorage.getObjectUrl(savedVideo.blobKey);

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { storySpaceService } from '../../dependencies';
-import { Plus, Pencil, Trash2, Copy, Layers } from 'lucide-react';
+import { Plus, Pencil, Trash2, Copy, Layers, ArrowRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useSpace } from '../contexts/SpaceContext';
 import { useToast } from '../contexts/ToastContext';
@@ -13,6 +14,7 @@ import { TEXT_LIMITS } from '../../domain/constants/textLimits';
 
 export const StorySpaceManagement: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const spaces = useAllSpaces();
   const { currentSpaceId, setCurrentSpaceId } = useSpace();
   const { showToast } = useToast();
@@ -206,6 +208,14 @@ export const StorySpaceManagement: React.FC = () => {
               <span>{t('space.storyCount', { count: counts[space.id]?.stories ?? 0 })}</span>
             </div>
             <div style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', display: 'flex', gap: '0.3rem' }}>
+              <button
+                className="btn btn-secondary"
+                style={{ padding: '0.3rem', border: 'none' }}
+                onClick={() => navigate(`/spaces/${space.id}`)}
+                title={t('space.viewDetail', '查看详情')}
+              >
+                <ArrowRight size={16} />
+              </button>
               <button
                 className="btn btn-secondary"
                 style={{ padding: '0.3rem', border: 'none' }}
